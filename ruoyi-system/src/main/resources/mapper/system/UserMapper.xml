@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.UserMapper">
+
+    <resultMap type="com.ruoyi.system.domain.User" id="UserResult">
+        <id     property="id"           column="id"            />
+        <result property="sysUserId"    column="sys_user_id"   />
+        <result property="username"     column="username"      />
+        <result property="password"     column="password"      />
+        <result property="email"        column="email"         />
+        <result property="realName"     column="real_name"     />
+        <result property="avatar"       column="avatar"        />
+        <result property="role"         column="role"          />
+        <result property="status"       column="status"        />
+        <result property="createTime"   column="create_time"   />
+        <result property="updateTime"   column="update_time"   />
+    </resultMap>
+
+    <sql id="selectUserVo">
+        select id, sys_user_id, username, password, email, real_name, avatar, role, status, create_time, update_time
+        from user
+    </sql>
+
+    <select id="selectUserBySysUserId" parameterType="Long" resultMap="UserResult">
+        <include refid="selectUserVo"/>
+        where sys_user_id = #{sysUserId}
+    </select>
+
+    <select id="selectUserByUsername" parameterType="String" resultMap="UserResult">
+        <include refid="selectUserVo"/>
+        where username = #{username}
+    </select>
+
+    <insert id="insertUser" parameterType="com.ruoyi.system.domain.User" useGeneratedKeys="true" keyProperty="id">
+        insert into user(
+            <if test="sysUserId != null">sys_user_id,</if>
+            <if test="username != null and username != ''">username,</if>
+            <if test="password != null and password != ''">password,</if>
+            <if test="email != null and email != ''">email,</if>
+            <if test="realName != null and realName != ''">real_name,</if>
+            <if test="avatar != null and avatar != ''">avatar,</if>
+            <if test="role != null and role != ''">role,</if>
+            <if test="status != null and status != ''">status,</if>
+            create_time,
+            update_time
+        ) values (
+            <if test="sysUserId != null">#{sysUserId},</if>
+            <if test="username != null and username != ''">#{username},</if>
+            <if test="password != null and password != ''">#{password},</if>
+            <if test="email != null and email != ''">#{email},</if>
+            <if test="realName != null and realName != ''">#{realName},</if>
+            <if test="avatar != null and avatar != ''">#{avatar},</if>
+            <if test="role != null and role != ''">#{role},</if>
+            <if test="status != null and status != ''">#{status},</if>
+            now(),
+            now()
+        )
+    </insert>
+
+    <update id="updateUser" parameterType="com.ruoyi.system.domain.User">
+        update user
+        <set>
+            <if test="sysUserId != null">sys_user_id = #{sysUserId},</if>
+            <if test="username != null and username != ''">username = #{username},</if>
+            <if test="password != null and password != ''">password = #{password},</if>
+            <if test="email != null and email != ''">email = #{email},</if>
+            <if test="realName != null and realName != ''">real_name = #{realName},</if>
+            <if test="avatar != null and avatar != ''">avatar = #{avatar},</if>
+            <if test="role != null and role != ''">role = #{role},</if>
+            <if test="status != null and status != ''">status = #{status},</if>
+            update_time = now()
+        </set>
+        where id = #{id}
+    </update>
+
+    <update id="updateUserBySysUserId" parameterType="com.ruoyi.system.domain.User">
+        update user
+        <set>
+            <if test="username != null and username != ''">username = #{username},</if>
+            <if test="password != null and password != ''">password = #{password},</if>
+            <if test="email != null and email != ''">email = #{email},</if>
+            <if test="realName != null and realName != ''">real_name = #{realName},</if>
+            <if test="avatar != null and avatar != ''">avatar = #{avatar},</if>
+            <if test="role != null and role != ''">role = #{role},</if>
+            <if test="status != null and status != ''">status = #{status},</if>
+            update_time = now()
+        </set>
+        where sys_user_id = #{sysUserId}
+    </update>
+
+    <delete id="deleteUserBySysUserId" parameterType="Long">
+        delete from user where sys_user_id = #{sysUserId}
+    </delete>
+
+</mapper>
+
