@@ -1,0 +1,75 @@
+package com.ruoyi.system.service;
+
+import java.util.List;
+import java.util.Map;
+import com.ruoyi.system.domain.Course;
+
+/**
+ * 课程 服务层
+ *
+ * @author ruoyi
+ */
+public interface ICourseService
+{
+    /**
+     * 查询课程信息
+     *
+     * @param id 课程ID
+     * @return 课程信息
+     */
+    public Course selectCourseById(Long id);
+
+    /**
+     * 查询课程列表
+     *
+     * @param course 课程信息
+     * @return 课程集合
+     */
+    public List<Course> selectCourseList(Course course);
+
+    /**
+     * 查询当前教师的课程列表
+     *
+     * @return 课程集合
+     */
+    public List<Course> selectMyCourseList();
+
+    /**
+     * 新增课程
+     *
+     * @param course 课程信息
+     * @return 结果
+     */
+    public int insertCourse(Course course);
+
+    /**
+     * 修改课程
+     *
+     * @param course 课程信息
+     * @return 结果
+     */
+    public int updateCourse(Course course);
+
+    /**
+     * 批量删除课程信息
+     *
+     * @param ids 需要删除的课程ID
+     * @return 结果
+     */
+    public int deleteCourseByIds(Long[] ids);
+
+    /**
+     * 删除课程信息
+     *
+     * @param id 课程ID
+     * @return 结果
+     */
+    public int deleteCourseById(Long id);
+
+    /**
+     * 查询课程统计信息
+     *
+     * @return 统计信息
+     */
+    public Map<String, Object> selectCourseStats();
+}
