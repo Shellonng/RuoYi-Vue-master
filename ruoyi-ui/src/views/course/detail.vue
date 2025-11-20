@@ -22,49 +22,51 @@
     <!-- 章节列表 -->
     <div class="chapter-list">
       <div v-for="(chapter, index) in chapterList" :key="chapter.id" class="chapter-card">
-        <div class="chapter-header">
+        <div class="chapter-header" @click="toggleChapter(chapter.id)">
+          <div class="chapter-toggle">
+            <i :class="expandedChapters.has(chapter.id) ? 'el-icon-arrow-down' : 'el-icon-arrow-right'"></i>
+          </div>
           <div class="chapter-number">{{ index + 1 }}</div>
           <div class="chapter-info">
             <h3 class="chapter-title">{{ chapter.title }}</h3>
             <p class="chapter-desc">{{ chapter.description }}</p>
           </div>
-          <div class="chapter-actions">
+          <div class="chapter-actions" @click.stop>
             <el-button size="small" icon="el-icon-plus" @click="handleAddSection(chapter)">添加小节</el-button>
             <el-button size="small" icon="el-icon-edit" @click="handleEditChapter(chapter)">编辑</el-button>
             <el-button size="small" type="danger" icon="el-icon-delete" @click="handleDeleteChapter(chapter)">删除</el-button>
           </div>
         </div>
 
-        <!-- 小节列表 -->
-        <div class="section-list">
-          <div v-for="section in chapter.sections" :key="section.id" class="section-item">
-            <div class="section-header">
-              <i :class="section.type === 'video' ? 'el-icon-video-camera' : 'el-icon-document'"></i>
-              <div class="section-info">
-                <h4 class="section-title">{{ section.title }}</h4>
-                <span class="section-duration">{{ section.duration }}</span>
+        <!-- 小节列表容器 -->
+        <transition name="section-list-expand" @enter="onSectionListEnter" @leave="onSectionListLeave" @after-leave="onSectionListAfterLeave">
+          <div v-if="expandedChapters.has(chapter.id)" class="section-list-wrapper">
+            <div class="section-list">
+            <div v-for="section in chapter.sections" :key="section.id" class="section-item">
+              <div class="section-header">
+                <i :class="section.type === 'video' ? 'el-icon-video-camera' : 'el-icon-document'"></i>
+                <div class="section-info">
+                  <h4 class="section-title">{{ section.title }}</h4>
+                  <span class="section-duration" v-if="section.duration">{{ formatDurationDisplay(section.duration) }}</span>
+                </div>
+                <div class="section-status">
+                  <el-tag v-if="section.completed" type="success" size="small">已完成</el-tag>
+                </div>
+                <div class="section-actions">
+                  <el-button-group>
+                    <el-tooltip content="编辑" placement="top">
+                      <el-button size="mini" icon="el-icon-edit" @click="handleEditSection(chapter, section)"></el-button>
+                    </el-tooltip>
+                    <el-tooltip content="删除" placement="top">
+                      <el-button size="mini" icon="el-icon-delete" @click="handleDeleteSection(chapter, section)"></el-button>
+                    </el-tooltip>
+                  </el-button-group>
+                </div>
               </div>
-              <div class="section-status">
-                <el-tag v-if="section.completed" type="success" size="small">已完成</el-tag>
-                <el-tag v-else type="warning" size="small">未完成</el-tag>
-              </div>
-              <div class="section-actions">
-                <el-button-group>
-                  <el-tooltip content="编辑" placement="top">
-                    <el-button size="mini" icon="el-icon-edit" @click="handleEditSection(chapter, section)"></el-button>
-                  </el-tooltip>
-                  <el-tooltip content="复制" placement="top">
-                    <el-button size="mini" icon="el-icon-document-copy" @click="handleCopySection(chapter, section)"></el-button>
-                  </el-tooltip>
-                  <el-tooltip content="删除" placement="top">
-                    <el-button size="mini" icon="el-icon-delete" @click="handleDeleteSection(chapter, section)"></el-button>
-                  </el-tooltip>
-                </el-button-group>
-              </div>
-              <el-button size="mini" icon="el-icon-more" circle @click="showSectionMenu(section, $event)"></el-button>
+            </div>
             </div>
           </div>
-        </div>
+        </transition>
       </div>
 
       <!-- 空状态 -->
@@ -110,14 +112,8 @@
         <el-form-item label="小节名称" prop="title">
           <el-input v-model="sectionForm.title" placeholder="请输入小节名称" />
         </el-form-item>
-        <el-form-item label="小节类型" prop="type">
-          <el-radio-group v-model="sectionForm.type">
-            <el-radio label="video">视频</el-radio>
-            <el-radio label="document">文档</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="时长" prop="duration">
-          <el-input v-model="sectionForm.duration" placeholder="如：45分钟" />
+        <el-form-item label="小节描述" prop="description">
+          <el-input v-model="sectionForm.description" type="textarea" :rows="3" placeholder="请输入小节描述" />
         </el-form-item>
       </el-form>
       <div slot="footer" class="dialog-footer">
@@ -130,6 +126,8 @@
 
 <script>
 import { getCourse } from "@/api/course/course";
+import { listChapterByCourse, addChapter, updateChapter, delChapter } from "@/api/course/chapter";
+import { listSectionByChapter, addSection, updateSection, delSection } from "@/api/course/section";
 
 export default {
   name: "CourseDetail",
@@ -145,13 +143,16 @@ export default {
       },
       // 章节列表
       chapterList: [],
+      // 用于记录哪些章节是展开的
+      expandedChapters: new Set(),
       // 章节对话框
       chapterDialogVisible: false,
       chapterDialogTitle: '添加章节',
       chapterForm: {
         id: null,
         title: '',
-        description: ''
+        description: '',
+        sortOrder: 0
       },
       chapterRules: {
         title: [
@@ -165,17 +166,17 @@ export default {
       sectionForm: {
         id: null,
         title: '',
-        type: 'video',
-        duration: ''
+        description: '',
+        chapterId: null,
+        sortOrder: 0
       },
       sectionRules: {
         title: [
           { required: true, message: '请输入小节名称', trigger: 'blur' }
-        ],
-        type: [
-          { required: true, message: '请选择小节类型', trigger: 'change' }
         ]
-      }
+      },
+      // 用于记录哪些章节是展开的
+      expandedChapters: new Set()
     };
   },
   created() {
@@ -192,59 +193,101 @@ export default {
     },
     /** 获取章节列表 */
     getChapterList() {
-      // TODO: 调用后端接口获取章节列表
-      // 临时使用模拟数据
-      this.chapterList = [
-        {
-          id: 1,
-          title: '数据分析概论',
-          description: '数据分析的基本概念和方法',
-          sections: [
-            {
-              id: 1,
-              title: '数据分析研究的对象和内容',
-              type: 'video',
-              duration: '45分钟',
-              completed: true
-            },
-            {
-              id: 2,
-              title: '设差求源和分类',
-              type: 'video',
-              duration: '50分钟',
-              completed: true
-            },
-            {
-              id: 3,
-              title: '绝对误差、相对误差与有效数字',
-              type: 'document',
-              duration: '30分钟',
-              completed: false
-            }
-          ]
-        },
-        {
-          id: 2,
-          title: '解线性方程组的直接方法',
-          description: 'LU三角分解法、Gauss消去法等',
-          sections: [
-            {
-              id: 4,
-              title: 'LU三角分解法',
-              type: 'video',
-              duration: '60分钟',
-              completed: false
-            },
-            {
-              id: 5,
-              title: 'Gauss消去法',
-              type: 'video',
-              duration: '55分钟',
-              completed: false
-            }
-          ]
+      listChapterByCourse(this.courseId).then(response => {
+        const chapters = response.data;
+        // 为每个章节加载其对应的小节
+        chapters.forEach(chapter => {
+          this.loadSectionsForChapter(chapter);
+          // 初始化时默认展开所有章节
+          this.expandedChapters.add(chapter.id);
+        });
+        this.chapterList = chapters;
+      }).catch(() => {
+        this.$message.error('获取章节列表失败');
+      });
+    },
+    /** 为指定章节加载小节 */
+    loadSectionsForChapter(chapter) {
+      listSectionByChapter(chapter.id).then(response => {
+        const sections = response.data;
+        // 这里可以根据实际业务逻辑设置小节的显示类型
+        sections.forEach(section => {
+          // 根据 videoUrl 判断类型
+          section.type = section.videoUrl ? 'video' : 'document';
+          // 保持时长为秒数，由formatDurationDisplay处理显示格式
+        });
+        // 使用 Vue.set 更新，确保响应式更新
+        this.$set(chapter, 'sections', sections);
+      }).catch(() => {
+        this.$set(chapter, 'sections', []);
+      });
+    },
+    /** 切换章节展开/收起状态 */
+    toggleChapter(chapterId) {
+      if (this.expandedChapters.has(chapterId)) {
+        this.expandedChapters.delete(chapterId);
+      } else {
+        this.expandedChapters.add(chapterId);
+      }
+      // 强制更新视图
+      this.$forceUpdate();
+    },
+    /** 格式化时长显示 */
+    formatDurationDisplay(duration) {
+      if (!duration && duration !== 0) return '';
+      if (duration === 0) return '0分0秒';
+      
+      // 如果是HH:mm:ss格式，先转为秒数
+      if (typeof duration === 'string' && duration.includes(':')) {
+        const parts = duration.split(':');
+        const hours = parseInt(parts[0]) || 0;
+        const minutes = parseInt(parts[1]) || 0;
+        const seconds = parseInt(parts[2]) || 0;
+        const totalSeconds = hours * 3600 + minutes * 60 + seconds;
+        duration = totalSeconds;
+      }
+      
+      // 将秒数转换为"xx时xx分xx秒"格式
+      if (typeof duration === 'number') {
+        const hours = Math.floor(duration / 3600);
+        const minutes = Math.floor((duration % 3600) / 60);
+        const seconds = duration % 60;
+        
+        let result = '';
+        if (hours > 0) {
+          result += `${hours}时`;
         }
-      ];
+        if (minutes > 0) {
+          result += `${minutes}分`;
+        }
+        if (seconds > 0 || result === '') {
+          result += `${seconds}秒`;
+        }
+        return result;
+      }
+      return duration;
+    },
+    /** 动画钩子 - 展开时 */
+    onSectionListEnter(el) {
+      el.style.height = '0';
+      el.style.overflow = 'hidden';
+      el.offsetHeight; // 强制重排
+      el.style.transition = 'height 0.3s ease';
+      el.style.height = el.scrollHeight + 'px';
+    },
+    /** 动画钩子 - 收起时 */
+    onSectionListLeave(el) {
+      el.style.height = el.scrollHeight + 'px';
+      el.style.overflow = 'hidden';
+      el.offsetHeight; // 强制重排
+      el.style.transition = 'height 0.3s ease';
+      el.style.height = '0';
+    },
+    /** 动画钩子 - 收起完成后 */
+    onSectionListAfterLeave(el) {
+      el.style.height = '';
+      el.style.overflow = '';
+      el.style.transition = '';
     },
     /** 返回 */
     goBack() {
@@ -256,7 +299,8 @@ export default {
       this.chapterForm = {
         id: null,
         title: '',
-        description: ''
+        description: '',
+        sortOrder: this.chapterList.length
       };
       this.chapterDialogVisible = true;
     },
@@ -266,7 +310,8 @@ export default {
       this.chapterForm = {
         id: chapter.id,
         title: chapter.title,
-        description: chapter.description
+        description: chapter.description,
+        sortOrder: chapter.sortOrder
       };
       this.chapterDialogVisible = true;
     },
@@ -277,23 +322,63 @@ export default {
         cancelButtonText: '取消',
         type: 'warning'
       }).then(() => {
-        // TODO: 调用后端接口删除
-        this.$message.success('删除成功');
-        this.getChapterList();
+        delChapter(chapter.id).then(response => {
+          this.$message.success('删除成功');
+          // 直接从列表中移除，不需要刷新整个列表
+          const index = this.chapterList.findIndex(c => c.id === chapter.id);
+          if (index > -1) {
+            this.chapterList.splice(index, 1);
+          }
+        }).catch(() => {
+          this.$message.error('删除失败');
+        });
       }).catch(() => {});
     },
     /** 提交章节表单 */
     submitChapterForm() {
       this.$refs.chapterForm.validate(valid => {
         if (valid) {
-          // TODO: 调用后端接口保存
+          const chapter = {
+            ...this.chapterForm,
+            courseId: this.courseId
+          };
           if (this.chapterForm.id) {
-            this.$message.success('修改成功');
+            // 修改
+            updateChapter(chapter).then(response => {
+              this.$message.success('修改成功');
+              this.chapterDialogVisible = false;
+              // 只更新修改的章节对象，不刷新整个列表
+              const index = this.chapterList.findIndex(c => c.id === chapter.id);
+              if (index > -1) {
+                this.$set(this.chapterList, index, {
+                  ...this.chapterList[index],
+                  title: chapter.title,
+                  description: chapter.description,
+                  sortOrder: chapter.sortOrder
+                });
+              }
+            }).catch(() => {
+              this.$message.error('修改失败');
+            });
           } else {
-            this.$message.success('新增成功');
+            // 新增
+            addChapter(chapter).then(response => {
+              this.$message.success('新增成功');
+              this.chapterDialogVisible = false;
+              // 直接添加到列表，不需要重新加载
+              const newChapter = {
+                ...response.data,  // 包含后端返回的ID
+                sections: []
+              };
+              this.chapterList.push(newChapter);
+              // 新章节默认展开
+              this.expandedChapters.add(newChapter.id);
+              // 为新章节加载小节（即使是空的）
+              this.loadSectionsForChapter(newChapter);
+            }).catch(() => {
+              this.$message.error('新增失败');
+            });
           }
-          this.chapterDialogVisible = false;
-          this.getChapterList();
         }
       });
     },
@@ -305,11 +390,13 @@ export default {
     handleAddSection(chapter) {
       this.currentChapter = chapter;
       this.sectionDialogTitle = '添加小节';
+      const nextSortOrder = chapter.sections ? chapter.sections.length : 0;
       this.sectionForm = {
         id: null,
         title: '',
-        type: 'video',
-        duration: ''
+        description: '',
+        chapterId: chapter.id,
+        sortOrder: nextSortOrder
       };
       this.sectionDialogVisible = true;
     },
@@ -320,14 +407,11 @@ export default {
       this.sectionForm = {
         id: section.id,
         title: section.title,
-        type: section.type,
-        duration: section.duration
+        description: section.description || '',
+        chapterId: chapter.id,
+        sortOrder: section.sortOrder
       };
       this.sectionDialogVisible = true;
-    },
-    /** 复制小节 */
-    handleCopySection(chapter, section) {
-      this.$message.info('复制小节功能开发中...');
     },
     /** 删除小节 */
     handleDeleteSection(chapter, section) {
@@ -336,33 +420,76 @@ export default {
         cancelButtonText: '取消',
         type: 'warning'
       }).then(() => {
-        // TODO: 调用后端接口删除
-        this.$message.success('删除成功');
-        this.getChapterList();
+        delSection(section.id).then(response => {
+          this.$message.success('删除成功');
+          // 直接从章节的小节列表中移除
+          if (chapter.sections) {
+            const index = chapter.sections.findIndex(s => s.id === section.id);
+            if (index > -1) {
+              chapter.sections.splice(index, 1);
+            }
+          }
+        }).catch(() => {
+          this.$message.error('删除失败');
+        });
       }).catch(() => {});
     },
     /** 提交小节表单 */
     submitSectionForm() {
       this.$refs.sectionForm.validate(valid => {
         if (valid) {
-          // TODO: 调用后端接口保存
+          const section = {
+            id: this.sectionForm.id,
+            title: this.sectionForm.title,
+            description: this.sectionForm.description,
+            chapterId: this.currentChapter.id,
+            sortOrder: this.sectionForm.sortOrder
+          };
+          
           if (this.sectionForm.id) {
-            this.$message.success('修改成功');
+            // 修改
+            updateSection(section).then(response => {
+              this.$message.success('修改成功');
+              this.sectionDialogVisible = false;
+              // 只更新修改的小节对象
+              if (this.currentChapter.sections) {
+                const index = this.currentChapter.sections.findIndex(s => s.id === section.id);
+                if (index > -1) {
+                  this.$set(this.currentChapter.sections, index, {
+                    ...this.currentChapter.sections[index],
+                    title: section.title,
+                    description: section.description,
+                    sortOrder: section.sortOrder
+                  });
+                }
+              }
+            }).catch(() => {
+              this.$message.error('修改失败');
+            });
           } else {
-            this.$message.success('新增成功');
+            // 新增
+            addSection(section).then(response => {
+              this.$message.success('新增成功');
+              this.sectionDialogVisible = false;
+              // 直接添加到列表，不需要重新加载
+              const newSection = {
+                ...response.data,  // 包含后端返回的ID
+                description: section.description
+              };
+              if (!this.currentChapter.sections) {
+                this.$set(this.currentChapter, 'sections', []);
+              }
+              this.currentChapter.sections.push(newSection);
+            }).catch(() => {
+              this.$message.error('新增失败');
+            });
           }
-          this.sectionDialogVisible = false;
-          this.getChapterList();
         }
       });
     },
     /** 关闭小节对话框 */
     handleSectionDialogClose() {
       this.$refs.sectionForm.resetFields();
-    },
-    /** 显示小节菜单 */
-    showSectionMenu(section, event) {
-      // TODO: 显示右键菜单
     }
   }
 };
@@ -430,7 +557,33 @@ export default {
     align-items: center;
     padding: 16px 20px;
     background: #f8f9fa;
-    border-bottom: 1px solid #e4e7ed;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    user-select: none;
+
+    &:hover {
+      background-color: #f0f2f5;
+    }
+
+    .chapter-toggle {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: #303133;
+      margin-right: 8px;
+      font-size: 16px;
+
+      i {
+        transition: transform 0.2s ease;
+      }
+
+      &:hover i {
+        color: #409eff;
+      }
+    }
 
     .chapter-number {
       width: 32px;
@@ -467,6 +620,11 @@ export default {
       gap: 8px;
     }
   }
+}
+
+/* 小节列表容器 */
+.section-list-wrapper {
+  border-bottom: 1px solid #e4e7ed;
 }
 
 /* 小节列表 */
@@ -526,5 +684,19 @@ export default {
       }
     }
   }
+}
+
+/* 小节列表展开/收起动画 */
+.section-list-expand-enter-active,
+.section-list-expand-leave-active {
+  transition: none;
+}
+
+.section-list-expand-enter {
+  opacity: 1;
+}
+
+.section-list-expand-leave {
+  opacity: 1;
 }
 </style>

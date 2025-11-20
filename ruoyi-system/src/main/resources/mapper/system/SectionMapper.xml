@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.SectionMapper">
+
+    <resultMap type="Section" id="SectionResult">
+        <result property="id"           column="id"           />
+        <result property="chapterId"    column="chapter_id"   />
+        <result property="title"        column="title"        />
+        <result property="description"  column="description"  />
+        <result property="videoUrl"     column="video_url"    />
+        <result property="duration"     column="duration"     />
+        <result property="sortOrder"    column="sort_order"   />
+        <result property="createTime"   column="create_time"  />
+        <result property="updateTime"   column="update_time"  />
+        <result property="isDeleted"    column="is_deleted"   />
+        <result property="deleteTime"   column="delete_time"  />
+    </resultMap>
+
+    <sql id="selectSectionVo">
+        select id, chapter_id, title, description, video_url, duration, sort_order,
+               create_time, update_time, is_deleted, delete_time
+        from section
+    </sql>
+
+    <select id="selectSectionById" parameterType="Long" resultMap="SectionResult">
+        <include refid="selectSectionVo"/>
+        where id = #{id} and is_deleted = 0
+    </select>
+
+    <select id="selectSectionList" parameterType="Section" resultMap="SectionResult">
+        <include refid="selectSectionVo"/>
+        <where>
+            is_deleted = 0
+            <if test="chapterId != null">
+                AND chapter_id = #{chapterId}
+            </if>
+            <if test="title != null and title != ''">
+                AND title like concat('%', #{title}, '%')
+            </if>
+        </where>
+        order by sort_order asc, create_time desc
+    </select>
+
+    <select id="selectSectionListByChapterId" parameterType="Long" resultMap="SectionResult">
+        <include refid="selectSectionVo"/>
+        where chapter_id = #{chapterId} and is_deleted = 0
+        order by sort_order asc, create_time desc
+    </select>
+
+    <insert id="insertSection" parameterType="Section" useGeneratedKeys="true" keyProperty="id">
+        insert into section (
+            <if test="chapterId != null">chapter_id, </if>
+            <if test="title != null and title != ''">title, </if>
+            <if test="description != null">description, </if>
+            <if test="videoUrl != null and videoUrl != ''">video_url, </if>
+            <if test="duration != null">duration, </if>
+            <if test="sortOrder != null">sort_order, </if>
+            create_time,
+            is_deleted
+        )values(
+            <if test="chapterId != null">#{chapterId}, </if>
+            <if test="title != null and title != ''">#{title}, </if>
+            <if test="description != null">#{description}, </if>
+            <if test="videoUrl != null and videoUrl != ''">#{videoUrl}, </if>
+            <if test="duration != null">#{duration}, </if>
+            <if test="sortOrder != null">#{sortOrder}, </if>
+            sysdate(),
+            0
+        )
+    </insert>
+
+    <update id="updateSection" parameterType="Section">
+        update section
+        <set>
+            <if test="title != null and title != ''">title = #{title}, </if>
+            <if test="description != null">description = #{description}, </if>
+            <if test="videoUrl != null and videoUrl != ''">video_url = #{videoUrl}, </if>
+            <if test="duration != null">duration = #{duration}, </if>
+            <if test="sortOrder != null">sort_order = #{sortOrder}, </if>
+            update_time = sysdate()
+        </set>
+        where id = #{id} and is_deleted = 0
+    </update>
+
+    <delete id="deleteSectionById" parameterType="Long">
+        update section set is_deleted = 1, delete_time = sysdate() where id = #{id}
+    </delete>
+
+    <delete id="deleteSectionByIds" parameterType="Long">
+        update section set is_deleted = 1, delete_time = sysdate() where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+</mapper>

@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.ChapterMapper">
+
+    <resultMap type="Chapter" id="ChapterResult">
+        <result property="id"           column="id"           />
+        <result property="courseId"     column="course_id"    />
+        <result property="title"        column="title"        />
+        <result property="description"  column="description"  />
+        <result property="sortOrder"    column="sort_order"   />
+        <result property="createTime"   column="create_time"  />
+        <result property="updateTime"   column="update_time"  />
+        <result property="isDeleted"    column="is_deleted"   />
+        <result property="deleteTime"   column="delete_time"  />
+    </resultMap>
+
+    <sql id="selectChapterVo">
+        select id, course_id, title, description, sort_order,
+               create_time, update_time, is_deleted, delete_time
+        from chapter
+    </sql>
+
+    <select id="selectChapterById" parameterType="Long" resultMap="ChapterResult">
+        <include refid="selectChapterVo"/>
+        where id = #{id} and is_deleted = 0
+    </select>
+
+    <select id="selectChapterList" parameterType="Chapter" resultMap="ChapterResult">
+        <include refid="selectChapterVo"/>
+        <where>
+            is_deleted = 0
+            <if test="courseId != null">
+                AND course_id = #{courseId}
+            </if>
+            <if test="title != null and title != ''">
+                AND title like concat('%', #{title}, '%')
+            </if>
+        </where>
+        order by sort_order asc, create_time desc
+    </select>
+
+    <select id="selectChapterListByCourseId" parameterType="Long" resultMap="ChapterResult">
+        <include refid="selectChapterVo"/>
+        where course_id = #{courseId} and is_deleted = 0
+        order by sort_order asc, create_time desc
+    </select>
+
+    <insert id="insertChapter" parameterType="Chapter" useGeneratedKeys="true" keyProperty="id">
+        insert into chapter (
+            <if test="courseId != null">course_id, </if>
+            <if test="title != null and title != ''">title, </if>
+            <if test="description != null">description, </if>
+            <if test="sortOrder != null">sort_order, </if>
+            create_time,
+            is_deleted
+        )values(
+            <if test="courseId != null">#{courseId}, </if>
+            <if test="title != null and title != ''">#{title}, </if>
+            <if test="description != null">#{description}, </if>
+            <if test="sortOrder != null">#{sortOrder}, </if>
+            sysdate(),
+            0
+        )
+    </insert>
+
+    <update id="updateChapter" parameterType="Chapter">
+        update chapter
+        <set>
+            <if test="title != null and title != ''">title = #{title}, </if>
+            <if test="description != null">description = #{description}, </if>
+            <if test="sortOrder != null">sort_order = #{sortOrder}, </if>
+            update_time = sysdate()
+        </set>
+        where id = #{id} and is_deleted = 0
+    </update>
+
+    <delete id="deleteChapterById" parameterType="Long">
+        update chapter set is_deleted = 1, delete_time = sysdate() where id = #{id}
+    </delete>
+
+    <delete id="deleteChapterByIds" parameterType="Long">
+        update chapter set is_deleted = 1, delete_time = sysdate() where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+</mapper>
