@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.SectionKpMapper">
+
+    <resultMap type="SectionKp" id="SectionKpResult">
+        <result property="id"           column="id"           />
+        <result property="sectionId"    column="section_id"   />
+        <result property="kpId"         column="kp_id"        />
+        <result property="sequence"     column="sequence"     />
+        <result property="createTime"   column="create_time"  />
+    </resultMap>
+
+    <!-- 带知识点详情的结果映射 -->
+    <resultMap type="SectionKp" id="SectionKpWithKnowledgePointResult" extends="SectionKpResult">
+        <association property="knowledgePoint" javaType="KnowledgePoint">
+            <result property="id"               column="kp_real_id"         />
+            <result property="courseId"         column="kp_course_id"       />
+            <result property="title"            column="kp_title"           />
+            <result property="description"      column="kp_description"     />
+            <result property="level"            column="kp_level"           />
+            <result property="creatorUserId"    column="kp_creator_user_id" />
+            <result property="createTime"       column="kp_create_time"     />
+        </association>
+    </resultMap>
+
+    <sql id="selectSectionKpVo">
+        select id, section_id, kp_id, sequence, create_time
+        from section_kp
+    </sql>
+
+    <select id="selectSectionKpById" parameterType="Long" resultMap="SectionKpResult">
+        <include refid="selectSectionKpVo"/>
+        where id = #{id}
+    </select>
+
+    <select id="selectSectionKpList" parameterType="SectionKp" resultMap="SectionKpResult">
+        <include refid="selectSectionKpVo"/>
+        <where>
+            <if test="sectionId != null">
+                AND section_id = #{sectionId}
+            </if>
+            <if test="kpId != null">
+                AND kp_id = #{kpId}
+            </if>
+        </where>
+        order by section_id, sequence asc
+    </select>
+
+    <!-- 根据小节ID查询关联的知识点列表（含知识点详情） -->
+    <select id="selectSectionKpListBySectionId" parameterType="Long" resultMap="SectionKpWithKnowledgePointResult">
+        select 
+            sk.id, sk.section_id, sk.kp_id, sk.sequence, sk.create_time,
+            kp.id as kp_real_id, kp.course_id as kp_course_id, kp.title as kp_title, 
+            kp.description as kp_description, kp.level as kp_level, 
+            kp.creator_user_id as kp_creator_user_id, kp.create_time as kp_create_time
+        from section_kp sk
+        left join knowledge_point kp on sk.kp_id = kp.id
+        where sk.section_id = #{sectionId} and (kp.is_deleted = 0 or kp.is_deleted is null)
+        order by sk.sequence asc
+    </select>
+
+    <!-- 根据知识点ID查询关联的小节列表 -->
+    <select id="selectSectionKpListByKpId" parameterType="Long" resultMap="SectionKpResult">
+        <include refid="selectSectionKpVo"/>
+        where kp_id = #{kpId}
+        order by sequence asc
+    </select>
+
+    <!-- 检查小节和知识点是否已关联 -->
+    <select id="checkSectionKpExists" resultMap="SectionKpResult">
+        <include refid="selectSectionKpVo"/>
+        where section_id = #{sectionId} and kp_id = #{kpId}
+        limit 1
+    </select>
+
+    <insert id="insertSectionKp" parameterType="SectionKp" useGeneratedKeys="true" keyProperty="id">
+        insert into section_kp (
+            <if test="sectionId != null">section_id, </if>
+            <if test="kpId != null">kp_id, </if>
+            <if test="sequence != null">sequence, </if>
+            create_time
+        )values(
+            <if test="sectionId != null">#{sectionId}, </if>
+            <if test="kpId != null">#{kpId}, </if>
+            <if test="sequence != null">#{sequence}, </if>
+            sysdate()
+        )
+    </insert>
+
+    <!-- 批量插入小节知识点关联（用于AI生成） -->
+    <insert id="batchInsertSectionKp" parameterType="java.util.List" useGeneratedKeys="true" keyProperty="id">
+        insert into section_kp (section_id, kp_id, sequence, create_time)
+        values
+        <foreach collection="list" item="item" separator=",">
+            (#{item.sectionId}, #{item.kpId}, #{item.sequence}, sysdate())
+        </foreach>
+    </insert>
+
+    <delete id="deleteSectionKpById" parameterType="Long">
+        delete from section_kp where id = #{id}
+    </delete>
+
+    <delete id="deleteSectionKpByIds" parameterType="Long">
+        delete from section_kp where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <delete id="deleteSectionKpBySectionId" parameterType="Long">
+        delete from section_kp where section_id = #{sectionId}
+    </delete>
+
+    <delete id="deleteSectionKpByKpId" parameterType="Long">
+        delete from section_kp where kp_id = #{kpId}
+    </delete>
+
+    <!-- 根据小节ID查询关联列表（简化版，用于删除时查找关联的知识点） -->
+    <select id="selectSectionKpListBySection" parameterType="Long" resultMap="SectionKpResult">
+        <include refid="selectSectionKpVo"/>
+        where section_id = #{sectionId}
+        order by sequence asc
+    </select>
+
+    <!-- 统计某个知识点被多少个小节引用 -->
+    <select id="countSectionsByKpId" parameterType="Long" resultType="int">
+        select count(*) from section_kp where kp_id = #{kpId}
+    </select>
+
+</mapper>

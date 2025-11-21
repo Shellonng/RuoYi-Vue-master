@@ -63,9 +63,26 @@
       <el-tab-pane label="章节管理" name="chapters">
         <div class="tab-content">
           <div class="tab-header">
+            <div class="add-ai-btn-wrapper">
+              <el-button type="primary" size="small" icon="el-icon-magic-stick" @click="openAIGenerateDialog">一键生成课程结构</el-button>
+            </div>
             <div class="add-chapter-btn-wrapper">
               <el-button type="primary" size="small" icon="el-icon-setting" @click="openChapterManageDialog">章节管理</el-button>
             </div>
+          </div>
+
+          <!-- 课程结构思维导图 -->
+          <div class="course-structure-container" :class="{ 'is-fullscreen': isStructureFullscreen }">
+            <el-button 
+              class="fullscreen-btn" 
+              :icon="isStructureFullscreen ? 'el-icon-close' : 'el-icon-full-screen'"
+              type="primary"
+              size="small"
+              circle
+              @click="toggleStructureFullscreen"
+              :title="isStructureFullscreen ? '退出全屏' : '全屏显示'"
+            ></el-button>
+            <div id="mindmap-container" class="mindmap-wrapper"></div>
           </div>
 
           <!-- 章节列表 -->
@@ -168,10 +185,121 @@
       <!-- 课程图谱标签页 -->
       <el-tab-pane label="课程图谱" name="knowledge">
         <div class="tab-content">
-          <el-empty description="课程图谱建设中..."></el-empty>
+          <div class="knowledge-graph-container" :class="{ 'is-fullscreen': isGraphFullscreen }">
+            <el-button 
+              class="fullscreen-btn" 
+              :icon="isGraphFullscreen ? 'el-icon-close' : 'el-icon-full-screen'"
+              type="primary"
+              size="small"
+              circle
+              @click="toggleGraphFullscreen"
+              :title="isGraphFullscreen ? '退出全屏' : '全屏显示'"
+            ></el-button>
+            <div id="knowledge-graph" style="width: 100%; height: 700px;"></div>
+          </div>
         </div>
       </el-tab-pane>
     </el-tabs>
+
+    <!-- 小节详情抽屉 -->
+    <el-drawer
+      :title="selectedSection ? selectedSection.title : '小节详情'"
+      :visible.sync="sectionDrawerVisible"
+      direction="rtl"
+      size="420px"
+      custom-class="section-drawer"
+      :modal="false"
+      :append-to-body="true"
+      :before-close="handleSectionDrawerClose"
+    >
+      <div v-if="selectedSection" class="section-detail-content">
+        <!-- 小节信息 -->
+        <div class="section-info">
+          <div class="info-header">
+            <i class="el-icon-folder-opened"></i>
+            <span class="chapter-name">{{ selectedSection.chapterName }}</span>
+          </div>
+          <p class="section-desc" v-if="selectedSection.description">{{ selectedSection.description }}</p>
+        </div>
+
+        <!-- 知识点列表 -->
+        <div class="knowledge-section">
+          <div class="section-title">
+            <i class="el-icon-collection-tag"></i>
+            <span>知识点（{{ getKnowledgePointsCount(selectedSection) }}）</span>
+          </div>
+          <div class="knowledge-list">
+            <el-empty v-if="getKnowledgePointsCount(selectedSection) === 0" 
+              description="暂无知识点" 
+              :image-size="60"
+            ></el-empty>
+            <div v-else class="knowledge-items-list">
+              <div v-for="(point, index) in getKnowledgePointsList(selectedSection)" :key="index" class="knowledge-row">
+                <span class="knowledge-name">{{ point.name }}</span>
+                <el-tag v-if="point.level" size="mini" effect="plain" :type="getLevelTagType(point.level)">{{ point.level }}</el-tag>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 资源统计 -->
+        <div class="resource-section">
+          <div class="section-title">
+            <i class="el-icon-files"></i>
+            <span>包含知识点资源（{{ getTotalResources(selectedSection) }}）</span>
+          </div>
+          <div class="resource-stats">
+            <div class="stat-item">
+              <i class="el-icon-reading stat-icon" style="color: #409EFF;"></i>
+              <div class="stat-content">
+                <div class="stat-value">{{ selectedSection.learningMaterials || 0 }}</div>
+                <div class="stat-label">学习内容</div>
+              </div>
+            </div>
+            <div class="stat-item">
+              <i class="el-icon-document stat-icon" style="color: #E6A23C;"></i>
+              <div class="stat-content">
+                <div class="stat-value">{{ selectedSection.materials || 0 }}</div>
+                <div class="stat-label">资料</div>
+              </div>
+            </div>
+            <div class="stat-item">
+              <i class="el-icon-video-camera stat-icon" style="color: #67C23A;"></i>
+              <div class="stat-content">
+                <div class="stat-value">{{ selectedSection.activities || 0 }}</div>
+                <div class="stat-label">活动</div>
+              </div>
+            </div>
+            <div class="stat-item">
+              <i class="el-icon-edit-outline stat-icon" style="color: #909399;"></i>
+              <div class="stat-content">
+                <div class="stat-value">{{ selectedSection.assignments || 0 }}</div>
+                <div class="stat-label">作业</div>
+              </div>
+            </div>
+            <div class="stat-item">
+              <i class="el-icon-medal stat-icon" style="color: #F56C6C;"></i>
+              <div class="stat-content">
+                <div class="stat-value">{{ selectedSection.tests || 0 }}</div>
+                <div class="stat-label">测验</div>
+              </div>
+            </div>
+            <div class="stat-item">
+              <i class="el-icon-tickets stat-icon" style="color: #C71585;"></i>
+              <div class="stat-content">
+                <div class="stat-value">{{ selectedSection.exams || 0 }}</div>
+                <div class="stat-label">考试</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 操作按钮 -->
+        <div class="drawer-footer">
+          <el-button size="small" type="primary" icon="el-icon-edit" @click="editSection">课程内容编辑</el-button>
+        </div>
+      </div>
+    </el-drawer>
 
     <!-- 添加/编辑章节对话框 -->
     <el-dialog
@@ -230,16 +358,16 @@
     <el-dialog
       title="章节管理"
       :visible.sync="chapterManageDialogVisible"
-      width="700px"
+      width="900px"
       @close="handleChapterManageDialogClose"
     >
       <!-- 添加新章节 -->
       <div class="manage-section">
         <div class="manage-header">
-          <h4 class="manage-title">{{ editingChapter ? '设置章节' : '添加章节' }}</h4>
+          <h4 class="manage-title">{{ editingChapter ? '编辑章节' : editingSection ? '编辑小节' : '添加章节/小节' }}</h4>
           <div class="manage-actions">
             <el-button
-              v-if="!editingChapter"
+              v-if="!editingChapter && !editingSection"
               type="primary"
               size="small"
               icon="el-icon-plus"
@@ -249,7 +377,9 @@
             </el-button>
           </div>
         </div>
-        <el-form ref="addChapterForm" :model="newChapterForm" label-width="80px">
+        
+        <!-- 章节表单 -->
+        <el-form v-if="!editingSection" ref="addChapterForm" :model="newChapterForm" label-width="80px">
           <el-form-item label="章节名称">
             <el-input v-model="newChapterForm.title" placeholder="请输入章节名称" />
           </el-form-item>
@@ -264,7 +394,7 @@
           <el-form-item label="章节顺序">
             <el-input-number v-model="newChapterForm.sortOrder" :min="0" controls-position="right" />
           </el-form-item>
-          <!-- 操作按钮行 -->
+          <!-- 章节操作按钮 -->
           <div class="form-actions">
             <el-button
               v-if="editingChapter"
@@ -289,7 +419,7 @@
               icon="el-icon-edit"
               @click="editSelectedChapter"
             >
-              编辑
+              编辑章节
             </el-button>
             <el-button
               v-if="!editingChapter && selectedChapters.length > 0"
@@ -298,31 +428,213 @@
               icon="el-icon-delete"
               @click="batchDeleteChapters"
             >
-              删除选中（{{ selectedChapters.length }}）
+              删除选中章节（{{ selectedChapters.length }}）
+            </el-button>
+          </div>
+        </el-form>
+        
+        <!-- 小节表单 -->
+        <el-form v-if="editingSection" ref="editSectionForm" :model="newSectionForm" label-width="80px">
+          <el-form-item label="所属章节">
+            <el-input :value="editingSectionChapter ? editingSectionChapter.title : ''" disabled />
+          </el-form-item>
+          <el-form-item label="小节名称">
+            <el-input v-model="newSectionForm.title" placeholder="请输入小节名称" />
+          </el-form-item>
+          <el-form-item label="小节描述">
+            <el-input
+              v-model="newSectionForm.description"
+              type="textarea"
+              :rows="2"
+              placeholder="请输入小节描述"
+            />
+          </el-form-item>
+          <el-form-item label="小节顺序">
+            <el-input-number v-model="newSectionForm.sortOrder" :min="0" controls-position="right" />
+          </el-form-item>
+          <!-- 小节操作按钮 -->
+          <div class="form-actions">
+            <el-button
+              type="success"
+              size="small"
+              icon="el-icon-check"
+              @click="saveEditedSection"
+            >
+              保存
+            </el-button>
+            <el-button
+              size="small"
+              @click="cancelEditSection"
+            >
+              取消
+            </el-button>
+            <el-button
+              v-if="selectedSections.length > 0"
+              type="danger"
+              size="small"
+              icon="el-icon-delete"
+              @click="batchDeleteSections"
+            >
+              删除选中小节（{{ selectedSections.length }}）
             </el-button>
           </div>
         </el-form>
       </div>
 
-      <!-- 现有章节列表（支持批量删除） -->
+      <!-- 现有章节和小节列表 -->
       <div class="manage-section">
-        <h4 class="manage-title">现有章节</h4>
+        <h4 class="manage-title">现有章节与小节</h4>
         <el-table
           :data="chapterList"
           stripe
           @selection-change="onChapterSelectionChange"
           style="width: 100%"
           row-key="id"
+          :expand-row-keys="expandedChaptersInDialog"
+          @expand-change="handleChapterExpand"
         >
+          <el-table-column type="expand">
+            <template slot-scope="props">
+              <div class="section-table-wrapper" :data-chapter-id="props.row.id">
+                <div class="section-header">
+                  <span class="section-title">{{ props.row.title }} - 小节列表</span>
+                  <div class="section-actions">
+                    <el-button
+                      v-if="selectedSections.length > 0 && editingSectionChapter && editingSectionChapter.id === props.row.id"
+                      size="mini"
+                      type="danger"
+                      icon="el-icon-delete"
+                      @click="batchDeleteSections"
+                    >
+                      删除选中（{{ selectedSections.length }}）
+                    </el-button>
+                    <el-button
+                      size="mini"
+                      type="primary"
+                      icon="el-icon-plus"
+                      @click="addSectionToChapter(props.row)"
+                    >
+                      添加小节
+                    </el-button>
+                  </div>
+                </div>
+                <el-table
+                  :data="props.row.sections || []"
+                  size="small"
+                  @selection-change="(val) => onSectionSelectionChange(val, props.row)"
+                >
+                  <el-table-column type="selection" width="50" align="center"></el-table-column>
+                  <el-table-column label="顺序" width="60">
+                    <template slot-scope="scope">
+                      {{ scope.$index + 1 }}
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="title" label="小节名称" min-width="150"></el-table-column>
+                  <el-table-column prop="description" label="描述" min-width="180" show-overflow-tooltip></el-table-column>
+                  <el-table-column label="操作" width="150" align="center">
+                    <template slot-scope="scope">
+                      <el-button
+                        size="mini"
+                        type="text"
+                        icon="el-icon-edit"
+                        @click="editSectionInDialog(props.row, scope.row)"
+                      >
+                        编辑
+                      </el-button>
+                      <el-button
+                        size="mini"
+                        type="text"
+                        style="color: #f56c6c;"
+                        icon="el-icon-delete"
+                        @click="deleteSectionInDialog(props.row, scope.row)"
+                      >
+                        删除
+                      </el-button>
+                    </template>
+                  </el-table-column>
+                </el-table>
+                <el-empty v-if="!props.row.sections || props.row.sections.length === 0" description="暂无小节" :image-size="80"></el-empty>
+              </div>
+            </template>
+          </el-table-column>
           <el-table-column type="selection" width="50" align="center"></el-table-column>
-          <el-table-column prop="sortOrder" label="顺序" width="60"></el-table-column>
-          <el-table-column prop="title" label="名称" min-width="150"></el-table-column>
+          <el-table-column label="顺序" width="60">
+            <template slot-scope="scope">
+              {{ scope.$index + 1 }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="title" label="章节名称" min-width="150"></el-table-column>
           <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip></el-table-column>
+          <el-table-column label="小节数" width="80" align="center">
+            <template slot-scope="scope">
+              {{ scope.row.sections ? scope.row.sections.length : 0 }}
+            </template>
+          </el-table-column>
         </el-table>
       </div>
 
       <div slot="footer" class="dialog-footer">
         <el-button @click="chapterManageDialogVisible = false">关闭</el-button>
+      </div>
+    </el-dialog>
+
+    <!-- AI生成课程结构对话框 -->
+    <el-dialog
+      title="AI生成课程结构"
+      :visible.sync="aiGenerateDialogVisible"
+      width="600px"
+      @close="handleAIGenerateDialogClose"
+    >
+      <div class="ai-generate-content">
+        <h4 class="content-title">请上传课程相关资料</h4>
+        <p class="content-desc">教师需要上传课程相关资料，AI将根据资料内容自动生成课程结构：</p>
+        
+        <div class="upload-item">
+          <el-icon class="upload-icon">
+            <svg viewBox="0 0 1024 1024"><path d="M512 64C264.6 64 64 264.6 64 512s200.6 448 448 448 448-200.6 448-448S759.4 64 512 64zm0 820c-205.4 0-372-166.6-372-372s166.6-372 372-372 372 166.6 372 372-166.6 372-372 372z"/></svg>
+          </el-icon>
+          <div class="upload-info">
+            <h5>课程资料</h5>
+            <p>上传Word、PDF、PPT等格式的课程文件</p>
+            <el-upload
+              action="#"
+              :auto-upload="false"
+              :on-change="handleOutlineUpload"
+              :file-list="outlineFiles"
+            >
+              <el-button size="small" type="primary">选择文件</el-button>
+            </el-upload>
+            <span v-if="outlineFiles.length > 0" class="upload-status">✓ 已选择</span>
+          </div>
+        </div>
+
+        <div class="upload-item">
+          <el-icon class="upload-icon">
+            <svg viewBox="0 0 1024 1024"><path d="M512 64C264.6 64 64 264.6 64 512s200.6 448 448 448 448-200.6 448-448S759.4 64 512 64zm0 820c-205.4 0-372-166.6-372-372s166.6-372 372-372 372 166.6 372 372-166.6 372-372 372z"/></svg>
+          </el-icon>
+          <div class="upload-info">
+            <h5>长文本</h5>
+            <p>输入或粘贴课程文本内容</p>
+            <el-input
+              v-model="courseTextContent"
+              type="textarea"
+              :rows="4"
+              placeholder="请粘贴课程相关的文本内容..."
+            />
+          </div>
+        </div>
+      </div>
+
+      <div slot="footer" class="dialog-footer">
+        <el-button @click="aiGenerateDialogVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          @click="generateCourseStructure"
+          :loading="isGenerating"
+          :disabled="!outlineFiles.length && !courseTextContent.trim()"
+        >
+          AI生成课程结构
+        </el-button>
       </div>
     </el-dialog>
   </div>
@@ -332,6 +644,8 @@
 import { getCourse } from "@/api/course/course";
 import { listChapterByCourse, addChapter, updateChapter, delChapter } from "@/api/course/chapter";
 import { listSectionByChapter, addSection, updateSection, delSection } from "@/api/course/section";
+import { listKnowledgePointBySection } from "@/api/course/knowledgePoint";
+import { uploadAndGenerate } from "@/api/course/generation";
 import Sortable from 'sortablejs';
 
 export default {
@@ -394,7 +708,35 @@ export default {
         sortOrder: 0
       },
       selectedChapters: [],
-      editingChapter: null
+      editingChapter: null,
+      // 小节管理（在章节管理对话框中）
+      editingSection: null,
+      editingSectionChapter: null,
+      newSectionForm: {
+        title: '',
+        description: '',
+        sortOrder: 0
+      },
+      selectedSections: [],
+      expandedChaptersInDialog: [], // 对话框中展开的章节ID列表
+      chapterSortable: null, // 章节拖拽排序实例
+      sectionSortables: {}, // 小节拖拽排序实例（按章节ID存储）
+      // AI生成对话框
+      aiGenerateDialogVisible: false,
+      outlineFiles: [],
+      courseTextContent: '',
+      isGenerating: false,
+      // 思维导图
+      mindmapInstance: null,
+      expandedSections: new Set(), // 已展开知识点的小节ID集合
+      isProgressiveRendering: false, // 是否正在渐进式渲染
+      renderingChapterIndex: 0, // 当前渲染的章节索引
+      renderingSectionIndex: 0, // 当前渲染的小节索引
+      knowledgeGraphChart: null, // 课程图谱实例
+      isGraphFullscreen: false, // 知识图谱是否全屏
+      isStructureFullscreen: false, // 课程结构是否全屏
+      sectionDrawerVisible: false, // 小节详情抽屉显示状态
+      selectedSection: null, // 当前选中的小节
     };
   },
   created() {
@@ -408,6 +750,15 @@ export default {
       if (newVal) {
         this.$nextTick(() => {
           this.initChapterTableSort();
+        });
+      }
+    });
+    
+    // 监听activeTab变化，切换到课程图谱时渲染
+    this.$watch('activeTab', (newVal) => {
+      if (newVal === 'knowledge') {
+        this.$nextTick(() => {
+          this.renderKnowledgeGraph();
         });
       }
     });
@@ -492,34 +843,63 @@ export default {
       });
     },
     /** 获取章节列表 */
-    getChapterList() {
-      listChapterByCourse(this.courseId).then(response => {
+    getChapterList(animated = false) {
+      listChapterByCourse(this.courseId).then(async response => {
         const chapters = response.data;
-        // 为每个章节加载其对应的小节
-        chapters.forEach(chapter => {
-          this.loadSectionsForChapter(chapter);
-          // 初始化时默认展开所有章节
+        // 为每个章节加载其对应的小节(并行加载)，初次加载时跳过渲染
+        const loadPromises = chapters.map(chapter => {
           this.expandedChapters.add(chapter.id);
+          return this.loadSectionsForChapter(chapter, true); // 传递true跳过渲染
         });
+        
+        // 等待所有小节和知识点加载完成
+        await Promise.all(loadPromises);
+        
         this.chapterList = chapters;
+        
+        // 数据加载完成后渲染思维导图(初次加载带逐节动画)
+        this.$nextTick(() => {
+          this.renderMindmap(true); // 初次加载使用动画
+        });
       }).catch(() => {
         this.$message.error('获取章节列表失败');
       });
     },
     /** 为指定章节加载小节 */
-    loadSectionsForChapter(chapter) {
-      listSectionByChapter(chapter.id).then(response => {
+    loadSectionsForChapter(chapter, skipRender = false) {
+      return listSectionByChapter(chapter.id).then(response => {
         const sections = response.data;
+        // 按 sortOrder 排序
+        sections.sort((a, b) => a.sortOrder - b.sortOrder);
         // 这里可以根据实际业务逻辑设置小节的显示类型
         sections.forEach(section => {
           // 根据 videoUrl 判断类型
           section.type = section.videoUrl ? 'video' : 'document';
           // 保持时长为秒数，由formatDurationDisplay处理显示格式
+          // 加载该小节的知识点（传递skipRender参数）
+          this.loadKnowledgePointsForSection(section, skipRender);
         });
         // 使用 Vue.set 更新，确保响应式更新
         this.$set(chapter, 'sections', sections);
+        return sections;
       }).catch(() => {
         this.$set(chapter, 'sections', []);
+        return [];
+      });
+    },
+    /** 为指定小节加载知识点 */
+    loadKnowledgePointsForSection(section, skipRender = false) {
+      listKnowledgePointBySection(section.id).then(response => {
+        // response.data 是 SectionKp 对象数组，包含 knowledgePoint 字段
+        const sectionKps = response.data || [];
+        const knowledgePoints = sectionKps.map(sk => sk.knowledgePoint).filter(kp => kp);
+        this.$set(section, 'knowledgePoints', knowledgePoints);
+        // 重新渲染思维导图（初次加载时跳过，避免覆盖渐进式渲染）
+        if (!skipRender) {
+          this.renderMindmap();
+        }
+      }).catch(() => {
+        console.warn('获取小节知识点失败: section.id=' + section.id);
       });
     },
     /** 切换章节展开/收起状态 */
@@ -637,6 +1017,12 @@ export default {
           const index = this.chapterList.findIndex(c => c.id === chapter.id);
           if (index > -1) {
             this.chapterList.splice(index, 1);
+            console.log('删除章节后,章节列表:', this.chapterList);
+            // 重新渲染思维导图
+            this.$nextTick(() => {
+              console.log('准备更新思维导图');
+              this.renderMindmap();
+            });
           }
         }).catch(() => {
           this.$message.error('删除失败');
@@ -656,16 +1042,24 @@ export default {
             updateChapter(chapter).then(response => {
               this.$message.success('修改成功');
               this.chapterDialogVisible = false;
-              // 只更新修改的章节对象，不刷新整个列表
+              // 只更新修改的章节对象，保留sections等其他属性
               const index = this.chapterList.findIndex(c => c.id === chapter.id);
               if (index > -1) {
-                this.$set(this.chapterList, index, {
-                  ...this.chapterList[index],
+                // 使用$set更新,保留原有的sections和其他属性
+                const updatedChapter = {
+                  ...this.chapterList[index],  // 保留所有原有属性(包括sections)
                   title: chapter.title,
                   description: chapter.description,
                   sortOrder: chapter.sortOrder
-                });
+                };
+                this.$set(this.chapterList, index, updatedChapter);
+                console.log('章节修改后,章节数据:', updatedChapter);
               }
+              // 更新思维导图
+              this.$nextTick(() => {
+                console.log('准备更新思维导图,当前章节列表:', this.chapterList);
+                this.renderMindmap();
+              });
             }).catch(() => {
               this.$message.error('修改失败');
             });
@@ -680,10 +1074,17 @@ export default {
                 sections: []
               };
               this.chapterList.push(newChapter);
+              console.log('新增章节后,章节列表:', this.chapterList);
               // 新章节默认展开
               this.expandedChapters.add(newChapter.id);
               // 为新章节加载小节（即使是空的）
-              this.loadSectionsForChapter(newChapter);
+              this.loadSectionsForChapter(newChapter).then(() => {
+                // 更新思维导图
+                this.$nextTick(() => {
+                  console.log('准备更新思维导图');
+                  this.renderMindmap();
+                });
+              });
             }).catch(() => {
               this.$message.error('新增失败');
             });
@@ -736,6 +1137,8 @@ export default {
             const index = chapter.sections.findIndex(s => s.id === section.id);
             if (index > -1) {
               chapter.sections.splice(index, 1);
+              // 重新渲染思维导图
+              this.renderMindmap();
             }
           }
         }).catch(() => {
@@ -772,6 +1175,10 @@ export default {
                   });
                 }
               }
+              // 更新思维导图
+              this.$nextTick(() => {
+                this.renderMindmap();
+              });
             }).catch(() => {
               this.$message.error('修改失败');
             });
@@ -790,8 +1197,14 @@ export default {
                 this.$set(this.currentChapter, 'sections', []);
               }
               this.currentChapter.sections.push(newSection);
+              // 更新思维导图
+              this.$nextTick(() => {
+                this.renderMindmap();
+              });
               // 强制更新视图
               this.$forceUpdate();
+              // 重新渲染思维导图
+              this.renderMindmap();
             }).catch(() => {
               this.$message.error('新增失败');
             });
@@ -811,6 +1224,14 @@ export default {
         sortOrder: this.chapterList.length + 1
       };
       this.selectedChapters = [];
+      
+      // 确保所有章节的小节都按 sortOrder 排序
+      this.chapterList.forEach(chapter => {
+        if (chapter.sections && chapter.sections.length > 0) {
+          chapter.sections.sort((a, b) => a.sortOrder - b.sortOrder);
+        }
+      });
+      
       this.chapterManageDialogVisible = true;
     },
     /** 关闭章节管理对话框 */
@@ -822,6 +1243,25 @@ export default {
       };
       this.selectedChapters = [];
       this.editingChapter = null;
+      this.editingSection = null;
+      this.editingSectionChapter = null;
+      this.newSectionForm = {
+        title: '',
+        description: '',
+        sortOrder: 0
+      };
+      this.selectedSections = [];
+      this.expandedChaptersInDialog = [];
+      
+      // 清理拖拽排序实例
+      if (this.chapterSortable) {
+        this.chapterSortable.destroy();
+        this.chapterSortable = null;
+      }
+      Object.values(this.sectionSortables).forEach(sortable => {
+        if (sortable) sortable.destroy();
+      });
+      this.sectionSortables = {};
     },
     /** 提交新章节 */
     submitNewChapter() {
@@ -861,7 +1301,12 @@ export default {
             // 新章节默认展开
             this.expandedChapters.add(newChapter.id);
             // 为新章节加载小节
-            this.loadSectionsForChapter(newChapter);
+            this.loadSectionsForChapter(newChapter).then(() => {
+              // 更新思维导图
+              this.$nextTick(() => {
+                this.renderMindmap();
+              });
+            });
             // 重置表单
             this.newChapterForm = {
               title: '',
@@ -888,11 +1333,18 @@ export default {
             sections: []
           };
           this.chapterList.push(newChapter);
-          this.chapterList.sort((a, b) => a.sortOrder - b.sortOrder);
+          const sortedList = [...this.chapterList].sort((a, b) => a.sortOrder - b.sortOrder);
+          this.chapterList = sortedList;
+          // 新章节默认展开erList = sortedList;
           // 新章节默认展开
           this.expandedChapters.add(newChapter.id);
           // 为新章节加载小节
-          this.loadSectionsForChapter(newChapter);
+          this.loadSectionsForChapter(newChapter).then(() => {
+            // 更新思维导图
+            this.$nextTick(() => {
+              this.renderMindmap();
+            });
+          });
           // 重置表单
           this.newChapterForm = {
             title: '',
@@ -932,6 +1384,10 @@ export default {
             chapter => !this.selectedChapters.find(selected => selected.id === chapter.id)
           );
           this.selectedChapters = [];
+          // 更新思维导图
+          this.$nextTick(() => {
+            this.renderMindmap();
+          });
         }).catch(() => {
           this.$message.error('删除失败');
         });
@@ -989,6 +1445,10 @@ export default {
               this.$set(this.chapterList, index, updatedChapter);
             }
             this.chapterList.sort((a, b) => a.sortOrder - b.sortOrder);
+            // 更新思维导图
+            this.$nextTick(() => {
+              this.renderMindmap();
+            });
             this.cancelEditChapter();
           }).catch(() => {
             this.$message.error('保存失败');
@@ -1006,6 +1466,10 @@ export default {
             this.$set(this.chapterList, index, updatedChapter);
           }
           this.chapterList.sort((a, b) => a.sortOrder - b.sortOrder);
+          // 更新思维导图
+          this.$nextTick(() => {
+            this.renderMindmap();
+          });
           this.cancelEditChapter();
         }).catch(() => {
           this.$message.error('保存失败');
@@ -1033,45 +1497,1092 @@ export default {
       }
     },
     initChapterTableSort() {
-      const tableBody = document.querySelector('.el-table__body-wrapper tbody');
+      const tableBody = document.querySelector('.manage-section .el-table__body-wrapper tbody');
       if (!tableBody) return;
       
-      Sortable.create(tableBody, {
+      // 销毁旧的sortable实例（如果存在）
+      if (this.chapterSortable) {
+        this.chapterSortable.destroy();
+      }
+      
+      this.chapterSortable = Sortable.create(tableBody, {
         handle: '.el-table__row',
         animation: 150,
         ghostClass: 'sortable-ghost',
         onEnd: (evt) => {
-          // 拖拽完成后更新序号
           const { oldIndex, newIndex } = evt;
-          const movedChapter = this.chapterList[oldIndex];
           
-          // 移除原位置的元素
-          this.chapterList.splice(oldIndex, 1);
-          // 插入新位置
-          this.chapterList.splice(newIndex, 0, movedChapter);
+          if (oldIndex === newIndex) return;
           
-          // 更新所有章节的序号
+          // 更新数据
+          const newList = [...this.chapterList];
+          const movedChapter = newList.splice(oldIndex, 1)[0];
+          newList.splice(newIndex, 0, movedChapter);
+          
+          // 更新所有章节的序号（按新位置）
           const updatePromises = [];
-          this.chapterList.forEach((chapter, index) => {
-            const newSortOrder = index + 1;
-            if (chapter.sortOrder !== newSortOrder) {
-              chapter.sortOrder = newSortOrder;
-              updatePromises.push(updateChapter(chapter));
-            }
+          newList.forEach((chapter, index) => {
+            chapter.sortOrder = index + 1;
+            updatePromises.push(updateChapter(chapter));
           });
+          
+          // 更新列表
+          this.chapterList = newList;
           
           if (updatePromises.length > 0) {
             Promise.all(updatePromises).then(() => {
-              this.$message.success('排序已更新');
+              this.$message.success('章节排序已更新');
+              this.renderMindmap();
             }).catch(() => {
               this.$message.error('更新排序失败');
             });
           }
         }
       });
+    },
+    /** 初始化小节表格拖拽排序 */
+    initSectionTableSort(chapter) {
+      this.$nextTick(() => {
+        // 找到对应章节的小节表格
+        const expandedRow = document.querySelector(`.section-table-wrapper[data-chapter-id="${chapter.id}"] .el-table__body-wrapper tbody`);
+        if (!expandedRow) return;
+        
+        // 销毁该章节旧的sortable实例（如果存在）
+        if (!this.sectionSortables) {
+          this.sectionSortables = {};
+        }
+        if (this.sectionSortables[chapter.id]) {
+          this.sectionSortables[chapter.id].destroy();
+        }
+        
+        this.sectionSortables[chapter.id] = Sortable.create(expandedRow, {
+          handle: '.el-table__row',
+          animation: 150,
+          ghostClass: 'sortable-ghost',
+          onEnd: (evt) => {
+            const { oldIndex, newIndex } = evt;
+            
+            if (oldIndex === newIndex) return;
+            
+            // 从 chapterList 中找到对应的章节
+            const targetChapter = this.chapterList.find(c => c.id === chapter.id);
+            if (!targetChapter || !targetChapter.sections) return;
+            
+            // 更新数据
+            const newSections = [...targetChapter.sections];
+            const movedSection = newSections.splice(oldIndex, 1)[0];
+            newSections.splice(newIndex, 0, movedSection);
+            
+            // 更新所有小节的序号（按新位置）
+            const updatePromises = [];
+            newSections.forEach((section, index) => {
+              section.sortOrder = index + 1;
+              updatePromises.push(updateSection(section));
+            });
+            
+            // 更新小节列表
+            this.$set(targetChapter, 'sections', newSections);
+            
+            if (updatePromises.length > 0) {
+              Promise.all(updatePromises).then(() => {
+                this.$message.success('小节排序已更新');
+                this.renderMindmap();
+              }).catch(() => {
+                this.$message.error('更新排序失败');
+                this.loadSectionsForChapter(targetChapter);
+              });
+            }
+          }
+        });
+      });
+    },
+    /** 生成思维导图 Markdown */
+    generateMindmapMarkdown(includeKnowledgePoints = true, upToChapter = null, upToSection = null) {
+      let markdown = `# ${this.courseInfo.title || '课程标题'}\n\n`;
+      
+      // 如果upToChapter为-1，只返回标题（用于渐进式渲染的初始状态）
+      if (upToChapter === -1) {
+        return markdown;
+      }
+      
+      this.chapterList.forEach((chapter, chapterIndex) => {
+        // 如果指定了章节限制，超出则跳过
+        if (upToChapter !== null && chapterIndex > upToChapter) {
+          return;
+        }
+        
+        markdown += `## ${chapter.title}\n\n`;
+        
+        // 如果是当前章节且upToSection为-1，只显示章节标题，不显示小节
+        if (chapterIndex === upToChapter && upToSection === -1) {
+          return;
+        }
+        
+        if (chapter.sections && chapter.sections.length > 0) {
+          chapter.sections.forEach((section, sectionIndex) => {
+            // 如果是当前章节且指定了小节限制，超出则跳过
+            if (chapterIndex === upToChapter && upToSection !== null && upToSection >= 0 && sectionIndex > upToSection) {
+              return;
+            }
+            
+            markdown += `### ${section.title}\n\n`;
+            // 显示所有知识点(不需要展开操作)
+            if (includeKnowledgePoints && section.knowledgePoints && section.knowledgePoints.length > 0) {
+              section.knowledgePoints.forEach(kp => {
+                markdown += `- ${kp.title}\n`;
+              });
+              markdown += '\n';
+            }
+          });
+        }
+      });
+      
+      return markdown;
+    },
+    /** 渲染思维导图(带渐进式动画) */
+    renderMindmap(animated = false) {
+      console.log('=== 开始渲染思维导图 ===');
+      console.log('当前章节列表:', JSON.parse(JSON.stringify(this.chapterList)));
+      console.log('animated:', animated);
+      console.log('是否使用渐进式渲染:', animated);
+      
+      // 如果需要动画，使用渐进式渲染
+      if (animated) {
+        this.startProgressiveRendering();
+        return;
+      }
+      
+      // 否则停止渐进式渲染，立即渲染完整内容
+      this.isProgressiveRendering = false;
+      this.renderMindmapComplete();
+    },
+    /** 开始渐进式渲染 */
+    startProgressiveRendering() {
+      console.log('开始渐进式渲染');
+      this.isProgressiveRendering = true;
+      this.renderingChapterIndex = -1; // 从-1开始，先显示空的课程标题
+      this.renderingSectionIndex = -1;
+      
+      // 先渲染只有课程标题的思维导图
+      this.$nextTick(() => {
+        const emptyMarkdown = `# ${this.courseInfo.title || '课程标题'}\n\n`;
+        this.updateMindmapWithMarkdown(emptyMarkdown);
+        
+        // 延迟后添加第一个章节标题
+        setTimeout(() => {
+          this.renderingChapterIndex = 0;
+          this.renderNextSection();
+        }, 600);
+      });
+    },
+    /** 渲染下一个小节 */
+    renderNextSection() {
+      if (!this.isProgressiveRendering) return;
+      
+      // 如果已经渲染完所有章节
+      if (this.renderingChapterIndex >= this.chapterList.length) {
+        console.log('所有章节渲染完成');
+        this.isProgressiveRendering = false;
+        return;
+      }
+      
+      const currentChapter = this.chapterList[this.renderingChapterIndex];
+      
+      // 如果当前章节没有小节，跳到下一章
+      if (!currentChapter.sections || currentChapter.sections.length === 0) {
+        // 先显示章节标题
+        if (this.renderingSectionIndex === -1) {
+          console.log(`渲染章节 ${this.renderingChapterIndex + 1} 标题(无小节)`);
+          this.$nextTick(() => {
+            this.updateMindmapWithMarkdown(
+              this.generateMindmapMarkdown(true, this.renderingChapterIndex, -1)
+            );
+            setTimeout(() => {
+              this.renderingChapterIndex++;
+              this.renderingSectionIndex = -1;
+              this.renderNextSection();
+            }, 600);
+          });
+        } else {
+          this.renderingChapterIndex++;
+          this.renderingSectionIndex = -1;
+          this.renderNextSection();
+        }
+        return;
+      }
+      
+      // 如果是-1，先显示章节标题(不带小节)
+      if (this.renderingSectionIndex === -1) {
+        console.log(`渲染章节 ${this.renderingChapterIndex + 1} 标题`);
+        this.$nextTick(() => {
+          this.updateMindmapWithMarkdown(
+            this.generateMindmapMarkdown(true, this.renderingChapterIndex, -1)
+          );
+          
+          // 章节标题显示后，开始添加第一个小节
+          setTimeout(() => {
+            this.renderingSectionIndex = 0;
+            this.renderNextSection();
+          }, 600);
+        });
+        return;
+      }
+      
+      // 如果当前章节的所有小节都已渲染，跳到下一章
+      if (this.renderingSectionIndex >= currentChapter.sections.length) {
+        this.renderingChapterIndex++;
+        this.renderingSectionIndex = -1; // 重置为-1，先显示下一章标题
+        this.renderNextSection();
+        return;
+      }
+      
+      console.log(`渲染章节 ${this.renderingChapterIndex + 1}, 小节 ${this.renderingSectionIndex + 1}`);
+      
+      // 渲染到当前小节为止的内容
+      this.$nextTick(() => {
+        this.updateMindmapWithMarkdown(
+          this.generateMindmapMarkdown(true, this.renderingChapterIndex, this.renderingSectionIndex)
+        );
+        
+        // 移动到下一个小节
+        this.renderingSectionIndex++;
+        
+        // 延迟后渲染下一个小节
+        setTimeout(() => {
+          this.renderNextSection();
+        }, 600); // 每个小节间隔600ms
+      });
+    },
+    /** 更新思维导图内容 */
+    updateMindmapWithMarkdown(markdown) {
+      this.$nextTick(() => {
+        const container = document.getElementById('mindmap-container');
+        
+        if (!container) {
+          console.warn('思维导图容器未找到');
+          return;
+        }
+        
+        // 检查 markmap 是否已加载
+        if (!window.markmap) {
+          console.warn('Markmap 尚未加载,等待加载...');
+          setTimeout(() => this.updateMindmapWithMarkdown(markdown), 500);
+          return;
+        }
+        
+        try {
+          const { Transformer, Markmap } = window.markmap;
+          
+          const transformer = new Transformer();
+          const { root } = transformer.transform(markdown);
+          
+          // 如果实例已存在，使用 setData 更新
+          if (this.mindmapInstance) {
+            this.mindmapInstance.setData(root);
+            this.mindmapInstance.fit();
+          } else {
+            // 首次创建实例
+            container.style.opacity = '0';
+            container.innerHTML = '';
+            
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            const width = container.clientWidth || 800;
+            const height = container.clientHeight || 600;
+            svg.setAttribute('width', width);
+            svg.setAttribute('height', height);
+            svg.style.width = '100%';
+            svg.style.height = '100%';
+            container.appendChild(svg);
+            
+            const options = {
+              duration: 400,
+              autoFit: true,
+              fitRatio: 0.9,
+              spacingHorizontal: 150,
+              spacingVertical: 15,
+            };
+            
+            this.mindmapInstance = Markmap.create(svg, options, root);
+            
+            setTimeout(() => {
+              container.style.opacity = '1';
+            }, 500);
+            
+            this.addMindmapClickHandler(svg);
+          }
+          
+          console.log('思维导图更新成功');
+        } catch (e) {
+          console.error('思维导图更新失败:', e);
+        }
+      });
+    },
+    /** 完整渲染思维导图(不带动画) */
+    renderMindmapComplete() {
+      this.$nextTick(() => {
+        const container = document.getElementById('mindmap-container');
+        
+        if (!container) {
+          console.warn('思维导图容器未找到');
+          return;
+        }
+        
+        if (!window.markmap) {
+          console.warn('Markmap 尚未加载,等待加载...');
+          setTimeout(() => this.renderMindmapComplete(), 500);
+          return;
+        }
+        
+        try {
+          const { Transformer, Markmap } = window.markmap;
+          
+          const markdown = this.generateMindmapMarkdown();
+          console.log('生成的markdown内容:', markdown);
+          console.log('当前章节列表长度:', this.chapterList.length);
+          const transformer = new Transformer();
+          const { root } = transformer.transform(markdown);
+          
+          // 如果实例已存在，使用 setData 平滑更新
+          if (this.mindmapInstance) {
+            try {
+              this.mindmapInstance.setData(root);
+              this.mindmapInstance.fit();
+              console.log('思维导图使用setData更新成功');
+              return;
+            } catch (e) {
+              console.warn('使用setData更新失败，将重新创建:', e);
+              // 如果更新失败，销毁并重新创建
+              try {
+                this.mindmapInstance.destroy();
+              } catch (destroyError) {
+                console.warn('销毁旧实例失败:', destroyError);
+              }
+              this.mindmapInstance = null;
+            }
+          }
+          
+          // 首次创建时才需要重建
+          container.innerHTML = '';
+          
+          const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          const width = container.clientWidth || 800;
+          const height = container.clientHeight || 600;
+          svg.setAttribute('width', width);
+          svg.setAttribute('height', height);
+          svg.style.width = '100%';
+          svg.style.height = '100%';
+          container.appendChild(svg);
+          
+          const options = {
+            duration: 300,
+            autoFit: true,
+            fitRatio: 0.9,
+            spacingHorizontal: 150,
+            spacingVertical: 15,
+          };
+          
+          this.mindmapInstance = Markmap.create(svg, options, root);
+          
+          this.addMindmapClickHandler(svg);
+          
+          console.log('思维导图完整渲染成功');
+        } catch (e) {
+          console.error('思维导图渲染失败:', e);
+        }
+      });
+    },
+    /** 添加思维导图节点点击事件 */
+    addMindmapClickHandler(svg) {
+      const self = this;
+      
+      svg.addEventListener('click', (event) => {
+        const target = event.target;
+        
+        // 查找最近的 g.markmap-node 元素
+        let node = target.closest('g.markmap-node');
+        
+        if (!node) return;
+        
+        // 获取节点文本
+        const textElement = node.querySelector('text');
+        if (!textElement) return;
+        
+        const nodeText = textElement.textContent.trim();
+        
+        // 判断是否是小节节点(通过匹配章节中的小节)
+        let foundSection = null;
+        for (const chapter of self.chapterList) {
+          if (chapter.sections) {
+            const section = chapter.sections.find(s => s.title === nodeText);
+            if (section && section.knowledgePoints && section.knowledgePoints.length > 0) {
+              foundSection = section;
+              break;
+            }
+          }
+        }
+        
+        // 只有小节节点才响应点击
+        if (foundSection) {
+          console.log('点击小节:', foundSection.title);
+          
+          // 切换展开状态
+          if (self.expandedSections.has(foundSection.id)) {
+            self.expandedSections.delete(foundSection.id);
+            console.log('折叠知识点');
+          } else {
+            self.expandedSections.add(foundSection.id);
+            console.log('展开知识点');
+          }
+          
+          // 重新渲染
+          self.renderMindmap(false);
+        }
+      });
+    },
+    
+    /** 打开AI生成对话框 */
+    openAIGenerateDialog() {
+      this.outlineFiles = [];
+      this.courseTextContent = '';
+      this.aiGenerateDialogVisible = true;
+    },
+    /** 关闭AI生成对话框 */
+    handleAIGenerateDialogClose() {
+      this.outlineFiles = [];
+      this.courseTextContent = '';
+    },
+    /** 处理文件上传 */
+    handleOutlineUpload(file) {
+      this.outlineFiles = [file];
+    },
+    /** 章节展开/收起 */
+    handleChapterExpand(row, expandedRows) {
+      this.expandedChaptersInDialog = expandedRows.map(r => r.id);
+      // 如果是展开操作，初始化该章节的小节拖拽排序
+      if (expandedRows.find(r => r.id === row.id)) {
+        this.initSectionTableSort(row);
+      }
+    },
+    /** 添加小节到指定章节 */
+    addSectionToChapter(chapter) {
+      this.editingSection = null;
+      this.editingSectionChapter = chapter;
+      const nextSortOrder = chapter.sections ? chapter.sections.length + 1 : 1;
+      this.newSectionForm = {
+        id: null,
+        title: '',
+        description: '',
+        chapterId: chapter.id,
+        sortOrder: nextSortOrder
+      };
+      this.selectedSections = [];
+      // 进入编辑模式但实际是新增
+      this.editingSection = { isNew: true };
+    },
+    /** 编辑小节 */
+    editSectionInDialog(chapter, section) {
+      this.editingSection = section;
+      this.editingSectionChapter = chapter;
+      this.newSectionForm = {
+        id: section.id,
+        title: section.title,
+        description: section.description || '',
+        chapterId: chapter.id,
+        sortOrder: section.sortOrder
+      };
+      this.selectedSections = [section];
+    },
+    /** 保存编辑的小节 */
+    saveEditedSection() {
+      if (!this.newSectionForm.title.trim()) {
+        this.$message.error('请输入小节名称');
+        return;
+      }
+      
+      const section = {
+        id: this.newSectionForm.id,
+        title: this.newSectionForm.title,
+        description: this.newSectionForm.description,
+        chapterId: this.editingSectionChapter.id,
+        sortOrder: this.newSectionForm.sortOrder
+      };
+      
+      if (this.editingSection.isNew) {
+        // 新增小节
+        console.log('准备添加小节:', section);
+        addSection(section).then(response => {
+          console.log('添加小节成功，返回数据:', response);
+          this.$message.success('新增成功');
+          const newSection = {
+            ...response.data,
+            type: response.data.videoUrl ? 'video' : 'document'
+          };
+          console.log('新小节对象:', newSection);
+          if (!this.editingSectionChapter.sections) {
+            this.$set(this.editingSectionChapter, 'sections', []);
+          }
+          this.editingSectionChapter.sections.push(newSection);
+          this.cancelEditSection();
+          // 更新思维导图
+          this.$nextTick(() => {
+            this.renderMindmap();
+          });
+        }).catch(error => {
+          console.error('添加小节失败:', error);
+          this.$message.error('新增失败: ' + (error.message || '未知错误'));
+        });
+      } else {
+        // 修改小节
+        updateSection(section).then(() => {
+          this.$message.success('修改成功');
+          // 更新列表中的小节
+          const index = this.editingSectionChapter.sections.findIndex(s => s.id === section.id);
+          if (index > -1) {
+            this.$set(this.editingSectionChapter.sections, index, {
+              ...this.editingSectionChapter.sections[index],
+              title: section.title,
+              description: section.description,
+              sortOrder: section.sortOrder
+            });
+          }
+          this.cancelEditSection();
+          // 更新思维导图
+          this.$nextTick(() => {
+            this.renderMindmap();
+          });
+        }).catch(() => {
+          this.$message.error('修改失败');
+        });
+      }
+    },
+    /** 取消编辑小节 */
+    cancelEditSection() {
+      this.editingSection = null;
+      this.editingSectionChapter = null;
+      this.newSectionForm = {
+        title: '',
+        description: '',
+        sortOrder: 0
+      };
+      this.selectedSections = [];
+    },
+    /** 删除小节 */
+    deleteSectionInDialog(chapter, section) {
+      this.$confirm('是否确认删除小节"' + section.title + '"？', '警告', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }).then(() => {
+        delSection(section.id).then(() => {
+          this.$message.success('删除成功');
+          // 从章节的小节列表中移除
+          const index = chapter.sections.findIndex(s => s.id === section.id);
+          if (index > -1) {
+            chapter.sections.splice(index, 1);
+          }
+          // 更新思维导图
+          this.$nextTick(() => {
+            this.renderMindmap();
+          });
+        }).catch(() => {
+          this.$message.error('删除失败');
+        });
+      }).catch(() => {});
+    },
+    /** 小节选择变化 */
+    onSectionSelectionChange(selection, chapter) {
+      this.selectedSections = selection;
+      this.editingSectionChapter = chapter;
+    },
+    /** 批量删除小节 */
+    batchDeleteSections() {
+      if (this.selectedSections.length === 0) {
+        this.$message.warning('请选择要删除的小节');
+        return;
+      }
+      this.$confirm(`是否确认删除选中的 ${this.selectedSections.length} 个小节？`, '警告', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }).then(() => {
+        const deletePromises = this.selectedSections.map(section => delSection(section.id));
+        Promise.all(deletePromises).then(() => {
+          this.$message.success('删除成功');
+          // 从章节中移除已删除的小节
+          if (this.editingSectionChapter && this.editingSectionChapter.sections) {
+            this.editingSectionChapter.sections = this.editingSectionChapter.sections.filter(
+              section => !this.selectedSections.find(selected => selected.id === section.id)
+            );
+          }
+          this.selectedSections = [];
+          // 更新思维导图
+          this.$nextTick(() => {
+            this.renderMindmap();
+          });
+        }).catch(() => {
+          this.$message.error('删除失败');
+        });
+      }).catch(() => {});
+    },
+    /** AI生成课程结构 */
+    generateCourseStructure() {
+      if (!this.outlineFiles.length) {
+        this.$message.warning('请上传教学大纲或教材文件');
+        return;
+      }
+      
+      this.isGenerating = true;
+      
+      const file = this.outlineFiles[0].raw || this.outlineFiles[0];
+      const courseName = this.courseInfo.title || '未命名课程';
+      
+      uploadAndGenerate(file, this.courseId, courseName)
+        .then(response => {
+          this.$message.success(response.msg || '课程结构已生成');
+          console.log('AI生成结果：', response);
+          // 清空知识点展开状态
+          this.expandedSections.clear();
+          // 刷新章节列表(带动画)
+          this.getChapterList(true);
+          // 关闭对话框
+          this.aiGenerateDialogVisible = false;
+        })
+        .catch(error => {
+          console.error('生成失败：', error);
+          this.$message.error('生成失败：' + (error.msg || error.message || '请重试'));
+        })
+        .finally(() => {
+          this.isGenerating = false;
+        });
+    },
+    /** 渲染课程知识图谱 */
+    renderKnowledgeGraph() {
+      const container = document.getElementById('knowledge-graph');
+      if (!container) {
+        console.warn('课程图谱容器未找到');
+        return;
+      }
+      
+      // 如果图表实例已存在，先销毁
+      if (this.knowledgeGraphChart) {
+        this.knowledgeGraphChart.dispose();
+      }
+      
+      // 导入 ECharts
+      const echarts = require('echarts');
+      this.knowledgeGraphChart = echarts.init(container);
+      
+      // 准备图谱数据
+      const graphData = this.prepareGraphData();
+      console.log('图谱数据:', graphData);
+      console.log('节点数量:', graphData.nodes.length);
+      console.log('连线数量:', graphData.links.length);
+      console.log('章节列表:', this.chapterList);
+      
+      // 配置选项
+      const option = {
+        title: {
+          text: '课程知识图谱',
+          left: 'center',
+          top: 20,
+          textStyle: {
+            fontSize: 20,
+            fontWeight: 'bold',
+            color: '#303133'
+          }
+        },
+        tooltip: {
+          trigger: 'item',
+          triggerOn: 'mousemove',
+          formatter: function(params) {
+            if (params.dataType === 'node') {
+              return params.data.name;
+            }
+            return '';
+          }
+        },
+        series: [{
+          type: 'graph',
+          layout: 'force',
+          data: graphData.nodes,
+          links: graphData.links,
+          categories: graphData.categories,
+          roam: true,
+          draggable: true,
+          zoom: 0.3,
+          center: ['50%', '50%'],
+          label: {
+            show: true,
+            position: 'bottom',
+            formatter: '{b}',
+            fontSize: 12
+          },
+          labelLayout: {
+            hideOverlap: true
+          },
+          force: {
+            repulsion: 1200,
+            gravity: 0.05,
+            edgeLength: [200, 300],
+            layoutAnimation: true,
+            friction: 0.6
+          },
+          emphasis: {
+            focus: 'none',
+            disabled: true
+          },
+          lineStyle: {
+            color: 'source',
+            curveness: 0.1,
+            width: 4
+          }
+        }]
+      };
+      
+      this.knowledgeGraphChart.setOption(option);
+      
+      // 添加点击事件处理
+      this.knowledgeGraphChart.on('click', (params) => {
+        if (params.dataType === 'node') {
+          // 判断是否为小节节点
+          if (params.data.id && params.data.id.startsWith('section-')) {
+            this.handleSectionNodeClick(params.data);
+            return;
+          }
+          
+          // 获取当前点击的节点
+          const nodeId = params.data.id;
+          
+          // 找到相邻的节点ID
+          const adjacentNodeIds = new Set([nodeId]);
+          graphData.links.forEach(link => {
+            if (link.source === nodeId) {
+              adjacentNodeIds.add(link.target);
+            }
+            if (link.target === nodeId) {
+              adjacentNodeIds.add(link.source);
+            }
+          });
+          
+          // 更新节点样式
+          const updatedNodes = graphData.nodes.map(node => {
+            const isAdjacent = adjacentNodeIds.has(node.id);
+            return {
+              ...node,
+              itemStyle: {
+                ...node.itemStyle,
+                opacity: isAdjacent ? 1 : 0.2
+              },
+              label: {
+                ...node.label,
+                opacity: isAdjacent ? 1 : 0.2
+              }
+            };
+          });
+          
+          // 更新连线样式
+          const updatedLinks = graphData.links.map(link => {
+            const isConnected = link.source === nodeId || link.target === nodeId;
+            return {
+              ...link,
+              lineStyle: {
+                ...link.lineStyle,
+                opacity: isConnected ? 0.8 : 0.1
+              }
+            };
+          });
+          
+          // 重新设置数据
+          this.knowledgeGraphChart.setOption({
+            series: [{
+              data: updatedNodes,
+              links: updatedLinks
+            }]
+          });
+        }
+      });
+      
+      // 双击或点击空白区域恢复
+      this.knowledgeGraphChart.on('dblclick', () => {
+        this.knowledgeGraphChart.setOption({
+          series: [{
+            data: graphData.nodes,
+            links: graphData.links
+          }]
+        });
+      });
+      
+      this.knowledgeGraphChart.getZr().on('click', (event) => {
+        if (!event.target) {
+          // 点击空白区域，恢复所有节点
+          this.knowledgeGraphChart.setOption({
+            series: [{
+              data: graphData.nodes,
+              links: graphData.links
+            }]
+          });
+        }
+      });
+      
+      // 监听窗口大小变化
+      window.addEventListener('resize', () => {
+        if (this.knowledgeGraphChart) {
+          this.knowledgeGraphChart.resize();
+        }
+      });
+    },
+    /** 准备图谱数据 */
+    prepareGraphData() {
+      const nodes = [];
+      const links = [];
+      const categories = [
+        { name: '课程' },
+        { name: '章节' },
+        { name: '小节' }
+      ];
+      
+      // 定义颜色方案
+      const chapterColors = [
+        '#5470c6', // 蓝色系
+        '#91cc75', // 绿色系
+        '#fac858', // 橙色系
+        '#ee6666', // 红色系
+        '#73c0de', // 青色系
+        '#9a60b4', // 紫色系
+        '#ea7ccc', // 粉色系
+      ];
+      
+      // 添加课程根节点
+      const courseNode = {
+        id: 'course-' + this.courseId,
+        name: this.courseInfo.title || '课程',
+        symbolSize: 80,
+        category: 0,
+        itemStyle: {
+          color: '#5470c6'
+        },
+        label: {
+          fontSize: 16,
+          fontWeight: 'bold'
+        }
+      };
+      nodes.push(courseNode);
+      
+      // 添加章节和小节节点
+      this.chapterList.forEach((chapter, chapterIndex) => {
+        const colorScheme = chapterColors[chapterIndex % chapterColors.length];
+        
+        // 添加章节节点
+        const chapterNode = {
+          id: 'chapter-' + chapter.id,
+          name: chapter.title,
+          symbolSize: 55,
+          category: 1,
+          itemStyle: {
+            color: colorScheme
+          },
+          label: {
+            fontSize: 13,
+            fontWeight: 'bold'
+          }
+        };
+        nodes.push(chapterNode);
+        
+        // 添加课程到章节的连线
+        links.push({
+          source: courseNode.id,
+          target: chapterNode.id,
+          lineStyle: {
+            color: colorScheme,
+            width: 5,
+            opacity: 0.8
+          }
+        });
+        
+        // 添加小节节点
+        if (chapter.sections && chapter.sections.length > 0) {
+          chapter.sections.forEach((section, sectionIndex) => {
+            // 小节使用稍浅的颜色
+            const lighterColor = this.lightenColor(colorScheme, 30);
+            
+            const sectionNode = {
+              id: 'section-' + section.id,
+              name: section.title,
+              symbolSize: 35,
+              category: 2,
+              itemStyle: {
+                color: lighterColor
+              },
+              label: {
+                fontSize: 11
+              }
+            };
+            nodes.push(sectionNode);
+            
+            // 添加章节到小节的连线
+            links.push({
+              source: chapterNode.id,
+              target: sectionNode.id,
+              lineStyle: {
+                color: lighterColor,
+                width: 3,
+                opacity: 0.7
+              }
+            });
+          });
+        }
+      });
+      
+      return { nodes, links, categories };
+    },
+    /** 颜色变浅工具函数 */
+    lightenColor(color, percent) {
+      const num = parseInt(color.replace('#', ''), 16);
+      const amt = Math.round(2.55 * percent);
+      const R = (num >> 16) + amt;
+      const G = (num >> 8 & 0x00FF) + amt;
+      const B = (num & 0x0000FF) + amt;
+      return '#' + (0x1000000 + (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 +
+        (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 +
+        (B < 255 ? B < 1 ? 0 : B : 255))
+        .toString(16).slice(1);
+    },
+    /** 切换知识图谱全屏 */
+    toggleGraphFullscreen() {
+      this.isGraphFullscreen = !this.isGraphFullscreen;
+      
+      // 延迟调整图表大小
+      this.$nextTick(() => {
+        if (this.knowledgeGraphChart) {
+          this.knowledgeGraphChart.resize();
+        }
+      });
+    },
+    /** 切换课程结构全屏 */
+    toggleStructureFullscreen() {
+      this.isStructureFullscreen = !this.isStructureFullscreen;
+      
+      // 延迟调整思维导图大小
+      this.$nextTick(() => {
+        if (this.mindmapInstance) {
+          this.mindmapInstance.fit();
+        }
+      });
+    },
+    /** 处理小节节点点击 */
+    handleSectionNodeClick(nodeData) {
+      // 从节点ID提取小节ID
+      const sectionId = parseInt(nodeData.id.replace('section-', ''));
+      
+      // 查找对应的小节数据
+      let foundSection = null;
+      let chapterName = '';
+      
+      for (const chapter of this.chapterList) {
+        if (chapter.sections) {
+          const section = chapter.sections.find(s => s.id === sectionId);
+          if (section) {
+            foundSection = section;
+            chapterName = chapter.title;
+            break;
+          }
+        }
+      }
+      
+      if (foundSection) {
+        // 模拟数据（实际项目中应该从 API 获取）
+        this.selectedSection = {
+          ...foundSection,
+          chapterName: chapterName,
+          knowledgePoints: foundSection.knowledgePoints || [
+            // 这里可以根据实际情况填充知识点
+          ],
+          learningMaterials: 0,
+          materials: 0,
+          activities: 0,
+          assignments: 0,
+          tests: 0,
+          exams: 0
+        };
+        
+        this.sectionDrawerVisible = true;
+      }
+    },
+    /** 关闭小节详情抽屉 */
+    handleSectionDrawerClose() {
+      this.sectionDrawerVisible = false;
+      this.selectedSection = null;
+    },
+    /** 获取资源总数 */
+    getTotalResources(section) {
+      if (!section) return 0;
+      return (section.learningMaterials || 0) + 
+             (section.materials || 0) + 
+             (section.activities || 0) + 
+             (section.assignments || 0) + 
+             (section.tests || 0) + 
+             (section.exams || 0);
+    },
+    /** 获取知识点数量 */
+    getKnowledgePointsCount(section) {
+      if (!section || !section.knowledgePoints) return 0;
+      if (Array.isArray(section.knowledgePoints)) {
+        return section.knowledgePoints.length;
+      }
+      return 0;
+    },
+    /** 获取知识点列表 */
+    getKnowledgePointsList(section) {
+      if (!section || !section.knowledgePoints) return [];
+      if (Array.isArray(section.knowledgePoints)) {
+        return section.knowledgePoints.map(point => {
+          if (typeof point === 'string') {
+            return { name: point, level: null };
+          }
+          if (typeof point === 'object') {
+            return {
+              name: point.name || point.title || JSON.stringify(point),
+              level: point.level ? this.getLevelChinese(point.level) : null
+            };
+          }
+          return { name: JSON.stringify(point), level: null };
+        });
+      }
+      return [];
+    },
+    /** 根据level获取标签类型 */
+    getLevelTagType(level) {
+      // 先转换为中文
+      const chineseLevel = this.getLevelChinese(level);
+      const levelMap = {
+        '基础': '',
+        '中级': 'warning',
+        '高级': 'danger',
+        '考点': 'warning'
+      };
+      return levelMap[chineseLevel] || 'info';
+    },
+    /** 将level英文转换为中文 */
+    getLevelChinese(level) {
+      if (!level) return '';
+      const levelMap = {
+        'BASIC': '基础',
+        'INTERMEDIATE': '中级',
+        'ADVANCED': '高级'
+      };
+      return levelMap[level.toUpperCase()] || level;
+    },
+    /** 查看小节详情 */
+    viewSectionDetail() {
+      this.$message.info('查看详情功能待实现');
+    },
+    /** 编辑小节 */
+    editSection() {
+      this.$message.info('编辑功能待实现');
     }
   }
-};</script>
+};
+</script>
 
 <style lang="scss" scoped>
 .course-detail-container {
@@ -1234,12 +2745,21 @@ export default {
 
 .tab-content {
   .tab-header {
-    display: flex;
-    justify-content: flex-end;
+    display: flex !important;
+    justify-content: space-between !important;
+    gap: 12px;
     margin-bottom: 16px;
+    align-items: center;
+
+    .add-ai-btn-wrapper {
+      display: flex;
+      order: 1;
+    }
 
     .add-chapter-btn-wrapper {
       display: flex;
+      order: 2;
+      margin-left: auto;
     }
   }
 }
@@ -1448,9 +2968,457 @@ export default {
   }
 }
 
+/* 小节表格样式 */
+.section-table-wrapper {
+  padding: 16px;
+  background: #f5f7fa;
+  border-radius: 4px;
+  
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    
+    .section-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #303133;
+    }
+    
+    .section-actions {
+      display: flex;
+      gap: 8px;
+    }
+  }
+  
+  .el-table {
+    background: white;
+  }
+}
+
 /* 拖拽排序样式 */
 ::v-deep .sortable-ghost {
   opacity: 0.5;
   background-color: #f0f2f5 !important;
+}
+
+/* 对话框顶部操作栏 */
+.dialog-top-bar {
+  display: flex;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e4e7ed;
+}
+
+/* AI生成对话框内容 */
+.ai-generate-content {
+  .content-title {
+    margin: 0 0 8px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #303133;
+  }
+
+  .content-desc {
+    margin: 0 0 20px 0;
+    font-size: 13px;
+    color: #606266;
+    line-height: 1.6;
+  }
+
+  .upload-item {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 24px;
+    padding: 16px;
+    background: #f5f7fa;
+    border-radius: 4px;
+
+    .upload-icon {
+      width: 40px;
+      height: 40px;
+      flex-shrink: 0;
+      color: #409eff;
+      opacity: 0.6;
+
+      svg {
+        width: 100%;
+        height: 100%;
+      }
+    }
+
+    .upload-info {
+      flex: 1;
+
+      h5 {
+        margin: 0 0 4px 0;
+        font-size: 14px;
+        font-weight: 600;
+        color: #303133;
+      }
+
+      p {
+        margin: 0 0 8px 0;
+        font-size: 12px;
+        color: #909399;
+      }
+
+      .upload-status {
+        display: inline-block;
+        margin-top: 8px;
+        font-size: 12px;
+        color: #67c23a;
+      }
+    }
+  }
+}
+
+/* 小节详情抽屉样式 */
+::v-deep .section-drawer {
+  height: 90vh !important;
+  top: 5vh !important;
+  right: 20px !important;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+  
+  .el-drawer__body {
+    overflow-y: auto;
+  }
+}
+
+/* 强制抽屉容器的 z-index 在全屏之上 */
+::v-deep .el-drawer__wrapper {
+  z-index: 10001 !important;
+}
+
+/* 全局抽屉容器样式 - 确保在body层级 */
+body > .el-drawer__wrapper {
+  z-index: 10001 !important;
+}
+
+.section-detail-content {
+  padding: 0 16px 16px;
+
+  .section-info {
+    margin-bottom: 20px;
+    padding: 12px;
+    background: #f5f7fa;
+    border-radius: 6px;
+
+    .info-header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 6px;
+      
+      i {
+        font-size: 16px;
+        color: #409EFF;
+        margin-right: 6px;
+      }
+
+      .chapter-name {
+        font-size: 13px;
+        color: #909399;
+        font-weight: 500;
+      }
+    }
+
+    .section-desc {
+      margin: 6px 0 0 0;
+      font-size: 13px;
+      color: #606266;
+      line-height: 1.5;
+    }
+  }
+
+  .knowledge-section,
+  .resource-section {
+    margin-bottom: 20px;
+  }
+
+  .section-title {
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #e4e7ed;
+
+    i {
+      font-size: 16px;
+      color: #409EFF;
+      margin-right: 6px;
+    }
+
+    span {
+      font-size: 14px;
+      font-weight: bold;
+      color: #303133;
+      flex: 1;
+    }
+
+    .el-tag {
+      margin-left: 6px;
+    }
+  }
+
+  .knowledge-list {
+    .knowledge-items-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .knowledge-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 12px;
+      background: #fff;
+      border: 1px solid #e4e7ed;
+      border-radius: 4px;
+      transition: all 0.3s;
+
+      &:hover {
+        background: #f5f7fa;
+        border-color: #c0c4cc;
+      }
+
+      .knowledge-name {
+        flex: 1;
+        font-size: 13px;
+        color: #606266;
+        line-height: 1.5;
+      }
+
+      .el-tag {
+        flex-shrink: 0;
+        margin-left: 12px;
+      }
+    }
+  }
+
+  .resource-stats {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+
+    .stat-item {
+      display: flex;
+      align-items: center;
+      padding: 12px;
+      background: #fff;
+      border: 1px solid #e4e7ed;
+      border-radius: 6px;
+      transition: all 0.3s;
+
+      &:hover {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        transform: translateY(-2px);
+      }
+
+      .stat-icon {
+        font-size: 24px;
+        margin-right: 10px;
+      }
+
+      .stat-content {
+        flex: 1;
+
+        .stat-value {
+          font-size: 20px;
+          font-weight: bold;
+          color: #303133;
+          line-height: 1;
+          margin-bottom: 2px;
+        }
+
+        .stat-label {
+          font-size: 11px;
+          color: #909399;
+        }
+      }
+    }
+  }
+
+  .drawer-footer {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid #e4e7ed;
+    
+    .el-button {
+      flex: 1;
+    }
+  }
+}
+
+/* 课程结构思维导图 */
+.course-structure-container {
+  position: relative;
+  margin: 24px 0;
+  padding: 20px;
+  background: #f5f7fa;
+  border-radius: 8px;
+  border: 1px solid #e4e7ed;
+  transition: all 0.3s ease;
+
+  .fullscreen-btn {
+    position: absolute;
+    top: 30px;
+    right: 30px;
+    z-index: 1000;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  }
+
+  .mindmap-wrapper {
+    width: 100%;
+    height: 400px;
+    background: white;
+    border-radius: 4px;
+    overflow: auto;
+    position: relative;
+    opacity: 1;
+    transition: opacity 0.3s ease;
+    
+    // 所有节点默认样式
+    ::v-deep g.markmap-node {
+      transition: all 0.3s ease;
+    }
+    
+    // 课程名节点(根节点)
+    ::v-deep g.markmap-node[data-depth="0"] text {
+      font-size: 18px;
+      font-weight: bold;
+      fill: #303133;
+    }
+    
+    // 章节节点
+    ::v-deep g.markmap-node[data-depth="1"] text {
+      font-size: 15px;
+      font-weight: 600;
+      fill: #409EFF;
+    }
+    
+    // 小节节点(可点击,有知识点的才可点击)
+    ::v-deep g.markmap-node[data-depth="2"] {
+      cursor: pointer;
+      
+      text {
+        font-size: 14px;
+        fill: #606266;
+      }
+      
+      &:hover text {
+        fill: #67C23A;
+        font-weight: 600;
+      }
+      
+      &:hover circle {
+        fill: #67C23A;
+        stroke: #67C23A;
+        stroke-width: 2;
+      }
+    }
+    
+    // 知识点节点
+    ::v-deep g.markmap-node[data-depth="3"] {
+      text {
+        font-size: 12px;
+        fill: #909399;
+      }
+      
+      circle {
+        fill: #E6A23C;
+        stroke: #E6A23C;
+      }
+    }
+  }
+  
+  // 全屏状态
+  &.is-fullscreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 9999;
+    margin: 0;
+    padding: 20px;
+    border-radius: 0;
+    background: #fff;
+    
+    .mindmap-wrapper {
+      height: calc(100vh - 40px) !important;
+    }
+    
+    .fullscreen-btn {
+      background-color: #f56c6c;
+      border-color: #f56c6c;
+      
+      &:hover {
+        background-color: #f78989;
+        border-color: #f78989;
+      }
+    }
+  }
+}
+
+/* 课程知识图谱样式 */
+.knowledge-graph-container {
+  position: relative;
+  padding: 20px;
+  background: #f5f7fa;
+  border-radius: 8px;
+  border: 1px solid #e4e7ed;
+  transition: all 0.3s ease;
+  
+  .fullscreen-btn {
+    position: absolute;
+    top: 30px;
+    right: 30px;
+    z-index: 1000;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  }
+  
+  #knowledge-graph {
+    background: white;
+    border-radius: 4px;
+    box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  }
+  
+  // 全屏状态
+  &.is-fullscreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 9999;
+    margin: 0;
+    padding: 20px;
+    border-radius: 0;
+    background: #fff;
+    
+    #knowledge-graph {
+      height: calc(100vh - 40px) !important;
+    }
+    
+    .fullscreen-btn {
+      background-color: #f56c6c;
+      border-color: #f56c6c;
+      
+      &:hover {
+        background-color: #f78989;
+        border-color: #f78989;
+      }
+    }
+  }
 }
 </style>

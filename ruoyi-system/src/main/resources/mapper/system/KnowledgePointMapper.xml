@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.KnowledgePointMapper">
+
+    <resultMap type="KnowledgePoint" id="KnowledgePointResult">
+        <result property="id"               column="id"               />
+        <result property="courseId"         column="course_id"        />
+        <result property="title"            column="title"            />
+        <result property="description"      column="description"      />
+        <result property="level"            column="level"            />
+        <result property="creatorUserId"    column="creator_user_id"  />
+        <result property="createTime"       column="create_time"      />
+        <result property="updateTime"       column="update_time"      />
+        <result property="isDeleted"        column="is_deleted"       />
+        <result property="deleteTime"       column="delete_time"      />
+    </resultMap>
+
+    <sql id="selectKnowledgePointVo">
+        select id, course_id, title, description, level, creator_user_id,
+               create_time, update_time, is_deleted, delete_time
+        from knowledge_point
+    </sql>
+
+    <select id="selectKnowledgePointById" parameterType="Long" resultMap="KnowledgePointResult">
+        <include refid="selectKnowledgePointVo"/>
+        where id = #{id} and is_deleted = 0
+    </select>
+
+    <select id="selectKnowledgePointList" parameterType="KnowledgePoint" resultMap="KnowledgePointResult">
+        <include refid="selectKnowledgePointVo"/>
+        <where>
+            is_deleted = 0
+            <if test="courseId != null">
+                AND course_id = #{courseId}
+            </if>
+            <if test="title != null and title != ''">
+                AND title like concat('%', #{title}, '%')
+            </if>
+            <if test="level != null and level != ''">
+                AND level = #{level}
+            </if>
+            <if test="creatorUserId != null">
+                AND creator_user_id = #{creatorUserId}
+            </if>
+        </where>
+        order by create_time desc
+    </select>
+
+    <select id="selectKnowledgePointListByCourseId" parameterType="Long" resultMap="KnowledgePointResult">
+        <include refid="selectKnowledgePointVo"/>
+        where course_id = #{courseId} and is_deleted = 0
+        order by create_time desc
+    </select>
+
+    <select id="selectKnowledgePointListByCourseIdAndLevel" resultMap="KnowledgePointResult">
+        <include refid="selectKnowledgePointVo"/>
+        where course_id = #{courseId} and level = #{level} and is_deleted = 0
+        order by create_time desc
+    </select>
+
+    <insert id="insertKnowledgePoint" parameterType="KnowledgePoint" useGeneratedKeys="true" keyProperty="id">
+        insert into knowledge_point (
+            <if test="courseId != null">course_id, </if>
+            <if test="title != null and title != ''">title, </if>
+            <if test="description != null">description, </if>
+            <if test="level != null and level != ''">level, </if>
+            <if test="creatorUserId != null">creator_user_id, </if>
+            create_time,
+            is_deleted
+        )values(
+            <if test="courseId != null">#{courseId}, </if>
+            <if test="title != null and title != ''">#{title}, </if>
+            <if test="description != null">#{description}, </if>
+            <if test="level != null and level != ''">#{level}, </if>
+            <if test="creatorUserId != null">#{creatorUserId}, </if>
+            sysdate(),
+            0
+        )
+    </insert>
+
+    <update id="updateKnowledgePoint" parameterType="KnowledgePoint">
+        update knowledge_point
+        <set>
+            <if test="title != null and title != ''">title = #{title}, </if>
+            <if test="description != null">description = #{description}, </if>
+            <if test="level != null and level != ''">level = #{level}, </if>
+            update_time = sysdate()
+        </set>
+        where id = #{id} and is_deleted = 0
+    </update>
+
+    <delete id="deleteKnowledgePointById" parameterType="Long">
+        update knowledge_point set is_deleted = 1, delete_time = sysdate() where id = #{id}
+    </delete>
+
+    <delete id="deleteKnowledgePointByIds" parameterType="Long">
+        update knowledge_point set is_deleted = 1, delete_time = sysdate() where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <!-- 批量插入知识点（用于AI生成课程结构） -->
+    <insert id="batchInsertKnowledgePoints" parameterType="java.util.List" useGeneratedKeys="true" keyProperty="id">
+        insert into knowledge_point (course_id, title, description, level, creator_user_id, create_time, is_deleted)
+        values
+        <foreach collection="list" item="item" separator=",">
+            (#{item.courseId}, #{item.title}, #{item.description}, #{item.level}, #{item.creatorUserId}, sysdate(), 0)
+        </foreach>
+    </insert>
+
+</mapper>
