@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.CourseResourceMapperRenwu3">
+    
+    <resultMap type="com.ruoyi.system.domain.CourseResourceRenwu3" id="CourseResourceResult">
+        <result property="id"    column="id"    />
+        <result property="courseId"    column="course_id"    />
+        <result property="name"    column="name"    />
+        <result property="fileType"    column="file_type"    />
+        <result property="fileSize"    column="file_size"    />
+        <result property="fileUrl"    column="file_url"    />
+        <result property="description"    column="description"    />
+        <result property="downloadCount"    column="download_count"    />
+        <result property="uploadUserId"    column="upload_user_id"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateTime"    column="update_time"    />
+    </resultMap>
+
+    <sql id="selectCourseResourceVo">
+        select id, course_id, name, file_type, file_size, file_url, description, download_count, upload_user_id, create_time, update_time from course_resource
+    </sql>
+
+    <select id="selectCourseResourceList" parameterType="com.ruoyi.system.domain.CourseResourceRenwu3" resultMap="CourseResourceResult">
+        <include refid="selectCourseResourceVo"/>
+        <where>  
+            <if test="courseId != null "> and course_id = #{courseId}</if>
+            <if test="name != null  and name != ''"> and name like concat('%', #{name}, '%')</if>
+            <if test="fileType != null  and fileType != ''"> and file_type = #{fileType}</if>
+            <if test="uploadUserId != null "> and upload_user_id = #{uploadUserId}</if>
+        </where>
+        order by create_time desc
+    </select>
+    
+    <select id="selectCourseResourceById" parameterType="Long" resultMap="CourseResourceResult">
+        <include refid="selectCourseResourceVo"/>
+        where id = #{id}
+    </select>
+        
+    <insert id="insertCourseResource" parameterType="com.ruoyi.system.domain.CourseResourceRenwu3" useGeneratedKeys="true" keyProperty="id">
+        insert into course_resource
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="courseId != null">course_id,</if>
+            <if test="name != null and name != ''">name,</if>
+            <if test="fileType != null and fileType != ''">file_type,</if>
+            <if test="fileSize != null">file_size,</if>
+            <if test="fileUrl != null and fileUrl != ''">file_url,</if>
+            <if test="description != null">description,</if>
+            <if test="downloadCount != null">download_count,</if>
+            <if test="uploadUserId != null">upload_user_id,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateTime != null">update_time,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="courseId != null">#{courseId},</if>
+            <if test="name != null and name != ''">#{name},</if>
+            <if test="fileType != null and fileType != ''">#{fileType},</if>
+            <if test="fileSize != null">#{fileSize},</if>
+            <if test="fileUrl != null and fileUrl != ''">#{fileUrl},</if>
+            <if test="description != null">#{description},</if>
+            <if test="downloadCount != null">#{downloadCount},</if>
+            <if test="uploadUserId != null">#{uploadUserId},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+         </trim>
+    </insert>
+
+    <update id="updateCourseResource" parameterType="com.ruoyi.system.domain.CourseResourceRenwu3">
+        update course_resource
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="courseId != null">course_id = #{courseId},</if>
+            <if test="name != null and name != ''">name = #{name},</if>
+            <if test="fileType != null and fileType != ''">file_type = #{fileType},</if>
+            <if test="fileSize != null">file_size = #{fileSize},</if>
+            <if test="fileUrl != null and fileUrl != ''">file_url = #{fileUrl},</if>
+            <if test="description != null">description = #{description},</if>
+            <if test="downloadCount != null">download_count = #{downloadCount},</if>
+            <if test="uploadUserId != null">upload_user_id = #{uploadUserId},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteCourseResourceById" parameterType="Long">
+        delete from course_resource where id = #{id}
+    </delete>
+
+    <delete id="deleteCourseResourceByIds" parameterType="String">
+        delete from course_resource where id in 
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>
