@@ -69,6 +69,9 @@ public class Course extends BaseEntity
     /** 课程进度（计算属性，不在数据库中） */
     private Integer progress;
 
+    /** 教师姓名（关联查询，不在数据库中） */
+    private String teacherName;
+
     public Long getId()
     {
         return id;
@@ -229,6 +232,16 @@ public class Course extends BaseEntity
     public void setProgress(Integer progress)
     {
         this.progress = progress;
+    }
+
+    public String getTeacherName()
+    {
+        return teacherName;
+    }
+
+    public void setTeacherName(String teacherName)
+    {
+        this.teacherName = teacherName;
     }
 
     @Override

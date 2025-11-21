@@ -22,47 +22,50 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="updateTime"     column="update_time"    />
         <result property="isDeleted"      column="is_deleted"     />
         <result property="deleteTime"     column="delete_time"    />
+        <result property="teacherName"    column="teacher_name"   />
     </resultMap>
 
     <sql id="selectCourseVo">
-        select id, title, description, cover_image, credit, course_type, start_time, end_time,
-               teacher_user_id, status, term, student_count, average_score,
-               create_time, update_time, is_deleted, delete_time
-        from course
+        select c.id, c.title, c.description, c.cover_image, c.credit, c.course_type, c.start_time, c.end_time,
+               c.teacher_user_id, c.status, c.term, c.student_count, c.average_score,
+               c.create_time, c.update_time, c.is_deleted, c.delete_time,
+               u.real_name as teacher_name
+        from course c
+        left join user u on c.teacher_user_id = u.id
     </sql>
 
     <select id="selectCourseById" parameterType="Long" resultMap="CourseResult">
         <include refid="selectCourseVo"/>
-        where id = #{id} and is_deleted = 0
+        where c.id = #{id} and c.is_deleted = 0
     </select>
 
     <select id="selectCourseList" parameterType="Course" resultMap="CourseResult">
         <include refid="selectCourseVo"/>
         <where>
-            is_deleted = 0
+            c.is_deleted = 0
             <if test="title != null and title != ''">
-                AND title like concat('%', #{title}, '%')
+                AND c.title like concat('%', #{title}, '%')
             </if>
             <if test="status != null and status != ''">
-                AND status = #{status}
+                AND c.status = #{status}
             </if>
             <if test="term != null and term != ''">
-                AND term = #{term}
+                AND c.term = #{term}
             </if>
             <if test="courseType != null and courseType != ''">
-                AND course_type = #{courseType}
+                AND c.course_type = #{courseType}
             </if>
             <if test="teacherUserId != null">
-                AND teacher_user_id = #{teacherUserId}
+                AND c.teacher_user_id = #{teacherUserId}
             </if>
         </where>
-        order by create_time desc
+        order by c.create_time desc
     </select>
 
     <select id="selectCourseListByTeacherId" parameterType="Long" resultMap="CourseResult">
         <include refid="selectCourseVo"/>
-        where teacher_user_id = #{teacherUserId} and is_deleted = 0
-        order by create_time desc
+        where c.teacher_user_id = #{teacherUserId} and c.is_deleted = 0
+        order by c.create_time desc
     </select>
 
     <insert id="insertCourse" parameterType="Course" useGeneratedKeys="true" keyProperty="id">
