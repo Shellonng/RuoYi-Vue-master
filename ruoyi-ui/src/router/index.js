@@ -87,21 +87,20 @@ export const constantRoutes = [
         meta: { title: '个人中心', icon: 'user' }
       }
     ]
+  },
+  {
+    path: '/system/resourceTaggingRenwu3',
+    component: Layout,
+    hidden: false,
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/system/resourceTaggingRenwu3'),
+        name: 'ResourceTaggingRenwu3',
+        meta: { title: '资源智能打标', icon: 'education' }
+      }
+    ]
   }
-  // {
-  //   path: '/course',
-  //   component: Layout,
-  //   hidden: true,
-  //   redirect: 'noredirect',
-  //   children: [
-  //     {
-  //       path: 'detail/:id',
-  //       component: () => import('@/views/course/detail'),
-  //       name: 'CourseDetail',
-  //       meta: { title: '课程详情', icon: 'education', activeMenu: '/course' }
-  //     }
-  //   ]
-  // }
 ]
 
 // 动态路由，基于用户权限动态去加载

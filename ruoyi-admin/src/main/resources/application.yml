@@ -16,7 +16,7 @@ ruoyi:
 # 开发环境配置
 server:
   # 服务器的HTTP端口，默认为8080
-  port: 8080
+  port: 8081
   servlet:
     # 应用的访问路径
     context-path: /
@@ -36,6 +36,8 @@ logging:
   level:
     com.ruoyi: debug
     org.springframework: warn
+    org.mybatis: debug
+    org.apache.ibatis: debug
 
 # 用户配置
 user:
@@ -119,6 +121,13 @@ swagger:
   # 请求前缀
   pathMapping: /dev-api
 
+# 防盗链配置
+referer:
+  # 防盗链开关
+  enabled: false
+  # 允许的域名列表
+  allowed-domains: localhost,127.0.0.1,ruoyi.vip,www.ruoyi.vip
+
 # 防止XSS攻击
 xss:
   # 过滤开关
@@ -127,3 +136,11 @@ xss:
   excludes: /system/notice
   # 匹配链接
   urlPatterns: /system/*,/monitor/*,/tool/*
+
+# Whisper API 配置
+whisper:
+  api:
+    # Whisper API 地址
+    url: http://localhost:8000/v1/audio/transcriptions
+    # API 密钥（本地部署不需要）
+    key:

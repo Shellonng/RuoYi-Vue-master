@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.KnowledgePointMapperRenwu3">
+    
+    <resultMap type="com.ruoyi.system.domain.KnowledgePointRenwu3" id="KnowledgePointResult">
+        <result property="id"    column="id"    />
+        <result property="courseId"    column="course_id"    />
+        <result property="title"    column="title"    />
+        <result property="description"    column="description"    />
+        <result property="level"    column="level"    />
+        <result property="creatorUserId"    column="creator_user_id"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="isDeleted"    column="is_deleted"    />
+        <result property="deleteTime"    column="delete_time"    />
+    </resultMap>
+
+    <sql id="selectKnowledgePointVo">
+        select id, course_id, title, description, level, creator_user_id, create_time, update_time, is_deleted, delete_time 
+        from knowledge_point
+    </sql>
+
+    <select id="selectKnowledgePointList" parameterType="com.ruoyi.system.domain.KnowledgePointRenwu3" resultMap="KnowledgePointResult">
+        <include refid="selectKnowledgePointVo"/>
+        <where>
+            is_deleted = 0
+            <if test="courseId != null "> and course_id = #{courseId}</if>
+            <if test="title != null  and title != ''"> and title like concat('%', #{title}, '%')</if>
+            <if test="level != null  and level != ''"> and level = #{level}</if>
+        </where>
+        order by create_time desc
+    </select>
+    
+    <select id="selectKnowledgePointById" parameterType="Long" resultMap="KnowledgePointResult">
+        <include refid="selectKnowledgePointVo"/>
+        where id = #{id} and is_deleted = 0
+    </select>
+
+    <select id="selectKnowledgePointListByCourseId" parameterType="Long" resultMap="KnowledgePointResult">
+        <include refid="selectKnowledgePointVo"/>
+        where course_id = #{courseId} and is_deleted = 0
+        order by create_time desc
+    </select>
+        
+    <insert id="insertKnowledgePoint" parameterType="com.ruoyi.system.domain.KnowledgePointRenwu3" useGeneratedKeys="true" keyProperty="id">
+        insert into knowledge_point
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="courseId != null">course_id,</if>
+            <if test="title != null and title != ''">title,</if>
+            <if test="description != null">description,</if>
+            <if test="level != null and level != ''">level,</if>
+            <if test="creatorUserId != null">creator_user_id,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="isDeleted != null">is_deleted,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="courseId != null">#{courseId},</if>
+            <if test="title != null and title != ''">#{title},</if>
+            <if test="description != null">#{description},</if>
+            <if test="level != null and level != ''">#{level},</if>
+            <if test="creatorUserId != null">#{creatorUserId},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="isDeleted != null">#{isDeleted},</if>
+         </trim>
+    </insert>
+
+    <update id="updateKnowledgePoint" parameterType="com.ruoyi.system.domain.KnowledgePointRenwu3">
+        update knowledge_point
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="courseId != null">course_id = #{courseId},</if>
+            <if test="title != null and title != ''">title = #{title},</if>
+            <if test="description != null">description = #{description},</if>
+            <if test="level != null and level != ''">level = #{level},</if>
+            <if test="creatorUserId != null">creator_user_id = #{creatorUserId},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="isDeleted != null">is_deleted = #{isDeleted},</if>
+            <if test="deleteTime != null">delete_time = #{deleteTime},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteKnowledgePointById" parameterType="Long">
+        update knowledge_point set is_deleted = 1, delete_time = now() where id = #{id}
+    </delete>
+
+    <delete id="deleteKnowledgePointByIds" parameterType="String">
+        update knowledge_point set is_deleted = 1, delete_time = now() where id in 
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>
