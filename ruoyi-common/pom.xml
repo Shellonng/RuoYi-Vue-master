@@ -126,7 +126,7 @@
             <version>2.16.7</version>
         </dependency>
 
-        <!-- Apache PDFBox 用于PDF文本提取 -->
+        <!-- Apache PDFBox 用于PDF文本提取（任务3：资源智能打标） -->
         <dependency>
             <groupId>org.apache.pdfbox</groupId>
             <artifactId>pdfbox</artifactId>
@@ -147,7 +147,7 @@
             <version>5.2.5</version>
         </dependency>
 
-        <!-- Apache POI Scratchpad 用于处理.doc/.ppt等旧版Office格式 -->
+        <!-- Apache POI Scratchpad 用于处理.doc/.ppt等旧版Office格式（任务3：资源智能打标） -->
         <dependency>
             <groupId>org.apache.poi</groupId>
             <artifactId>poi-scratchpad</artifactId>
@@ -159,6 +159,13 @@
             <groupId>org.apache.xmlbeans</groupId>
             <artifactId>xmlbeans</artifactId>
             <version>5.1.1</version>
+        </dependency>
+
+        <!-- HTTP客户端 - 调用DeepSeek API（任务3：资源智能打标） -->
+        <dependency>
+            <groupId>com.squareup.okhttp3</groupId>
+            <artifactId>okhttp</artifactId>
+            <version>4.11.0</version>
         </dependency>
 
     </dependencies>

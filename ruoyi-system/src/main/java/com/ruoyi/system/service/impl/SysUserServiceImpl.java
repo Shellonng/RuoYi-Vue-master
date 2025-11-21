@@ -1,6 +1,7 @@
 package com.ruoyi.system.service.impl;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
 import javax.validation.Validator;
@@ -30,7 +31,6 @@ import com.ruoyi.system.mapper.SysUserRoleMapper;
 import com.ruoyi.system.service.ISysConfigService;
 import com.ruoyi.system.service.ISysDeptService;
 import com.ruoyi.system.service.ISysUserService;
-import com.ruoyi.system.service.IUserSyncService;
 
 /**
  * 用户 业务层处理
@@ -65,9 +65,6 @@ public class SysUserServiceImpl implements ISysUserService
 
     @Autowired
     protected Validator validator;
-
-    @Autowired
-    private IUserSyncService userSyncService;
 
     /**
      * 根据条件分页查询用户列表
@@ -270,14 +267,6 @@ public class SysUserServiceImpl implements ISysUserService
         insertUserPost(user);
         // 新增用户与角色管理
         insertUserRole(user);
-
-        // 同步到 user 表
-        try {
-            userSyncService.syncCreateUser(user);
-        } catch (Exception e) {
-            log.error("同步用户到user表失败: {}", e.getMessage());
-        }
-
         return rows;
     }
 
@@ -288,21 +277,9 @@ public class SysUserServiceImpl implements ISysUserService
      * @return 结果
      */
     @Override
-    @Transactional
     public boolean registerUser(SysUser user)
     {
-        boolean result = userMapper.insertUser(user) > 0;
-
-        // 同步到 user 表
-        if (result) {
-            try {
-                userSyncService.syncCreateUser(user);
-            } catch (Exception e) {
-                log.error("同步注册用户到user表失败: {}", e.getMessage());
-            }
-        }
-
-        return result;
+        return userMapper.insertUser(user) > 0;
     }
 
     /**
@@ -324,18 +301,7 @@ public class SysUserServiceImpl implements ISysUserService
         userPostMapper.deleteUserPostByUserId(userId);
         // 新增用户与岗位管理
         insertUserPost(user);
-        int rows = userMapper.updateUser(user);
-
-        // 同步到 user 表
-        if (rows > 0) {
-            try {
-                userSyncService.syncUpdateUser(user);
-            } catch (Exception e) {
-                log.error("同步更新用户到user表失败: {}", e.getMessage());
-            }
-        }
-
-        return rows;
+        return userMapper.updateUser(user);
     }
 
     /**
@@ -359,21 +325,9 @@ public class SysUserServiceImpl implements ISysUserService
      * @return 结果
      */
     @Override
-    @Transactional
     public int updateUserStatus(SysUser user)
     {
-        int rows = userMapper.updateUser(user);
-
-        // 同步到 user 表
-        if (rows > 0) {
-            try {
-                userSyncService.syncUpdateUser(user);
-            } catch (Exception e) {
-                log.error("同步更新用户状态到user表失败: {}", e.getMessage());
-            }
-        }
-
-        return rows;
+        return userMapper.updateUserStatus(user.getUserId(), user.getStatus());
     }
 
     /**
@@ -391,14 +345,27 @@ public class SysUserServiceImpl implements ISysUserService
     /**
      * 修改用户头像
      * 
-     * @param userName 用户名
+     * @param userId 用户ID
      * @param avatar 头像地址
      * @return 结果
      */
     @Override
-    public boolean updateUserAvatar(String userName, String avatar)
+    public boolean updateUserAvatar(Long userId, String avatar)
     {
-        return userMapper.updateUserAvatar(userName, avatar) > 0;
+        return userMapper.updateUserAvatar(userId, avatar) > 0;
+    }
+
+    /**
+     * 更新用户登录信息（IP和登录时间）
+     * 
+     * @param userId 用户ID
+     * @param loginIp 登录IP地址
+     * @param loginDate 登录时间
+     * @return 结果
+     */
+    public void updateLoginInfo(Long userId, String loginIp, Date loginDate)
+    {
+        userMapper.updateLoginInfo(userId, loginIp, loginDate);
     }
 
     /**
@@ -410,20 +377,20 @@ public class SysUserServiceImpl implements ISysUserService
     @Override
     public int resetPwd(SysUser user)
     {
-        return userMapper.updateUser(user);
+        return userMapper.resetUserPwd(user.getUserId(), user.getPassword());
     }
 
     /**
      * 重置用户密码
      * 
-     * @param userName 用户名
+     * @param userId 用户ID
      * @param password 密码
      * @return 结果
      */
     @Override
-    public int resetUserPwd(String userName, String password)
+    public int resetUserPwd(Long userId, String password)
     {
-        return userMapper.resetUserPwd(userName, password);
+        return userMapper.resetUserPwd(userId, password);
     }
 
     /**
@@ -496,18 +463,7 @@ public class SysUserServiceImpl implements ISysUserService
         userRoleMapper.deleteUserRoleByUserId(userId);
         // 删除用户与岗位表
         userPostMapper.deleteUserPostByUserId(userId);
-        int rows = userMapper.deleteUserById(userId);
-
-        // 同步到 user 表（软删除）
-        if (rows > 0) {
-            try {
-                userSyncService.syncDeleteUser(userId);
-            } catch (Exception e) {
-                log.error("同步删除用户到user表失败: {}", e.getMessage());
-            }
-        }
-
-        return rows;
+        return userMapper.deleteUserById(userId);
     }
 
     /**
@@ -529,20 +485,7 @@ public class SysUserServiceImpl implements ISysUserService
         userRoleMapper.deleteUserRole(userIds);
         // 删除用户与岗位关联
         userPostMapper.deleteUserPost(userIds);
-        int rows = userMapper.deleteUserByIds(userIds);
-
-        // 同步到 user 表（批量软删除）
-        if (rows > 0) {
-            for (Long userId : userIds) {
-                try {
-                    userSyncService.syncDeleteUser(userId);
-                } catch (Exception e) {
-                    log.error("同步删除用户到user表失败, userId={}: {}", userId, e.getMessage());
-                }
-            }
-        }
-
-        return rows;
+        return userMapper.deleteUserByIds(userIds);
     }
 
     /**
@@ -588,6 +531,7 @@ public class SysUserServiceImpl implements ISysUserService
                     checkUserDataScope(u.getUserId());
                     deptService.checkDeptDataScope(user.getDeptId());
                     user.setUserId(u.getUserId());
+                    user.setDeptId(u.getDeptId());
                     user.setUpdateBy(operName);
                     userMapper.updateUser(user);
                     successNum++;
