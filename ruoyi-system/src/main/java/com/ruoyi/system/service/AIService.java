@@ -520,4 +520,105 @@ public class AIService
             throw new ServiceException("生成知识点关系失败：" + e.getMessage());
         }
     }
+
+    /**
+     * AI生成课程描述
+     *
+     * @param courseTitle 课程标题
+     * @return 生成的课程描述
+     */
+    public String generateCourseDescription(String courseTitle)
+    {
+        if (!aiConfig.getEnabled())
+        {
+            throw new ServiceException("AI功能未启用");
+        }
+
+        try
+        {
+            Generation gen = new Generation();
+            
+            // 构建系统提示词
+            Message systemMsg = Message.builder()
+                .role(Role.SYSTEM.getValue())
+                .content("你是一个专业的教育课程介绍撰写专家。你的任务是根据课程标题，生成一段简洁、专业、有吸引力的课程描述。" +
+                        "课程描述应该包含：1)课程的核心内容和目标；2)适用对象；3)学习收获。" +
+                        "要求：语言简洁明了，控制在100-150字之内，不要使用markdown格式，直接返回纯文本描述。")
+                .build();
+            
+            // 构建用户提示词
+            String userPrompt = String.format("请为以下课程生成简要描述：\n\n课程标题：%s\n\n" +
+                    "请生成一段专业、简洁的课程描述（100-150字）。", courseTitle);
+            
+            Message userMsg = Message.builder()
+                .role(Role.USER.getValue())
+                .content(userPrompt)
+                .build();
+            
+            // 设置生成参数
+            GenerationParam param = GenerationParam.builder()
+                .apiKey(aiConfig.getApiKey())
+                .model(aiConfig.getModel())
+                .messages(Arrays.asList(systemMsg, userMsg))
+                .resultFormat(GenerationParam.ResultFormat.MESSAGE)
+                .topP(0.8)
+                .temperature(0.7f)
+                .maxTokens(500)
+                .build();
+            
+            // 调用AI
+            log.info("开始调用AI生成课程描述，课程标题：{}，模型：{}", courseTitle, aiConfig.getModel());
+            
+            GenerationResult result = gen.call(param);
+            
+            // 检查响应
+            if (result == null || result.getOutput() == null)
+            {
+                log.error("AI返回结果为空");
+                throw new ServiceException("AI服务返回结果为空");
+            }
+            
+            if (result.getOutput().getChoices() == null || result.getOutput().getChoices().isEmpty())
+            {
+                log.error("AI返回的choices为空");
+                throw new ServiceException("AI服务返回的内容为空");
+            }
+            
+            // 提取响应内容
+            String description = result.getOutput().getChoices().get(0).getMessage().getContent();
+            
+            if (description == null || description.trim().isEmpty())
+            {
+                log.error("AI响应内容为空");
+                throw new ServiceException("AI返回的内容为空");
+            }
+            
+            // 清理可能存在的多余空格和换行
+            description = description.trim().replaceAll("\\s+", " ");
+            
+            log.info("课程描述生成成功，长度：{}，内容：{}", description.length(), description);
+            
+            return description;
+        }
+        catch (NoApiKeyException e)
+        {
+            log.error("API Key未设置", e);
+            throw new ServiceException("AI API Key配置错误");
+        }
+        catch (InputRequiredException e)
+        {
+            log.error("输入参数缺失", e);
+            throw new ServiceException("AI调用参数错误");
+        }
+        catch (ApiException e)
+        {
+            log.error("AI API调用失败", e);
+            throw new ServiceException("AI服务调用失败：" + e.getMessage());
+        }
+        catch (Exception e)
+        {
+            log.error("生成课程描述时发生未知错误", e);
+            throw new ServiceException("生成课程描述失败：" + e.getMessage());
+        }
+    }
 }

@@ -32,8 +32,9 @@ public class CourseServiceImpl implements ICourseService
     {
         Course course = courseMapper.selectCourseById(id);
         if (course != null) {
-            // 计算课程进度
+            // 计算课程进度和更新状态
             course.setProgress(calculateProgress(course));
+            updateCourseStatus(course);
         }
         return course;
     }
@@ -48,9 +49,10 @@ public class CourseServiceImpl implements ICourseService
     public List<Course> selectCourseList(Course course)
     {
         List<Course> list = courseMapper.selectCourseList(course);
-        // 为每个课程计算进度
+        // 为每个课程计算进度和状态
         for (Course c : list) {
             c.setProgress(calculateProgress(c));
+            updateCourseStatus(c);
         }
         return list;
     }
@@ -66,9 +68,10 @@ public class CourseServiceImpl implements ICourseService
         // 获取当前用户的业务ID（user.id）
         Long userId = BusinessUserUtils.getCurrentBusinessUserId();
         List<Course> list = courseMapper.selectCourseListByTeacherId(userId);
-        // 为每个课程计算进度
+        // 为每个课程计算进度和状态
         for (Course course : list) {
             course.setProgress(calculateProgress(course));
+            updateCourseStatus(course);
         }
         return list;
     }
@@ -181,5 +184,37 @@ public class CourseServiceImpl implements ICourseService
         }
 
         return (int) ((elapsedDuration * 100) / totalDuration);
+    }
+
+    /**
+     * 更新课程状态（根据当前时间和起止时间）
+     *
+     * @param course 课程信息
+     */
+    private void updateCourseStatus(Course course)
+    {
+        if (course == null || course.getStartTime() == null || course.getEndTime() == null) {
+            return;
+        }
+
+        Date now = new Date();
+        Date startTime = course.getStartTime();
+        Date endTime = course.getEndTime();
+
+        String newStatus;
+        // 判断状态
+        if (now.before(startTime)) {
+            newStatus = "未开始";
+        } else if (now.after(endTime)) {
+            newStatus = "已结束";
+        } else {
+            newStatus = "进行中";
+        }
+
+        // 如果状态发生变化，更新到数据库
+        if (!newStatus.equals(course.getStatus())) {
+            course.setStatus(newStatus);
+            courseMapper.updateCourse(course);
+        }
     }
 }

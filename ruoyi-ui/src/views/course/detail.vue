@@ -897,6 +897,13 @@ export default {
       // 知识点分页
       knowledgePointsPageSize: 6, // 每页显示的知识点数量
       knowledgePointsCurrentPage: 1, // 当前页码
+      // 3D图谱双击检测
+      last3DClickNode: null, // 最后一次点击的节点
+      last3DClickTime: 0, // 最后一次点击的时间
+      // 2D图谱双击检测
+      last2DClickNode: null, // 最后一次点击的节点ID
+      last2DClickTime: 0, // 最后一次点击的时间
+      clickTimeout: null, // 单击延迟定时器
     };
   },
   created() {
@@ -1152,10 +1159,28 @@ export default {
     },
     /** 跳转到小节详情页 */
     goToSectionDetail(section) {
+      // 参数验证
+      if (!section) {
+        console.error('[跳转小节] section参数为空');
+        this.$message.error('小节信息不存在');
+        return;
+      }
+      
+      if (!section.id) {
+        console.error('[跳转小节] section.id为空, section:', section);
+        this.$message.error('小节ID不存在');
+        return;
+      }
+      
+      console.log('[跳转小节] courseId:', this.courseId, 'sectionId:', section.id);
+      
       // 使用动态路由跳转到小节详情页
       // 根据数据库配置: section/:courseId/:sectionId
       this.$router.push({
         path: `/section/${this.courseId}/${section.id}`
+      }).catch(err => {
+        console.error('[跳转小节] 路由跳转失败:', err);
+        this.$message.error('页面跳转失败');
       });
     },
     /** 格式化日期 */
@@ -2429,41 +2454,77 @@ export default {
       
       this.knowledgeGraphChart.setOption(option);
       
-      // 添加点击事件处理
+      // 添加点击事件处理 - 使用时间间隔判断双击
       this.knowledgeGraphChart.on('click', (params) => {
         if (params.dataType === 'node') {
-          // 获取当前点击的节点ID
           const nodeId = params.data.id;
+          const now = Date.now();
           
-          // 高亮当前节点及其相关节点
-          this.highlightNodeAndRelated(nodeId, graphData);
-          
-          // 判断节点类型并打开相应抽屉
-          if (params.data.id && params.data.id.startsWith('section-')) {
-            // 小节节点
-            this.handleSectionNodeClick(params.data);
-            return;
-          } else if (params.data.id && params.data.id.startsWith('chapter-')) {
-            // 章节节点 - 显示该章节所有小节的汇总
-            this.handleChapterNodeClick(params.data);
-            return;
-          } else if (params.data.id === 'course-' + this.courseId) {
-            // 课程节点 - 显示所有章节和小节的汇总
-            this.handleCourseNodeClick(params.data);
+          // 检查是否是双击(400ms内点击同一节点)
+          if (this.last2DClickNode === nodeId && now - this.last2DClickTime < 400) {
+            // 双击检测成功
+            console.log('[知识图谱] 检测到双击节点:', nodeId);
+            
+            // 清除单击定时器
+            if (this.clickTimeout) {
+              clearTimeout(this.clickTimeout);
+              this.clickTimeout = null;
+            }
+            
+            // 重置双击检测状态
+            this.last2DClickNode = null;
+            this.last2DClickTime = 0;
+            
+            // 处理双击:小节节点跳转,其他节点恢复图谱
+            if (params.data.id && params.data.id.startsWith('section-')) {
+              console.log('[知识图谱] 双击小节节点,跳转到小节详情页:', params.data);
+              // 从节点数据中获取sectionData
+              const sectionData = params.data.sectionData || params.data.data;
+              if (sectionData) {
+                this.goToSectionDetail(sectionData);
+              } else {
+                console.error('[知识图谱] 节点数据中没有section信息:', params.data);
+                this.$message.error('无法获取小节信息');
+              }
+            } else {
+              console.log('[知识图谱] 双击非小节节点,恢复图谱');
+              this.knowledgeGraphChart.setOption({
+                series: [{
+                  data: graphData.nodes,
+                  links: graphData.links
+                }]
+              });
+            }
             return;
           }
-
+          
+          // 记录本次点击
+          this.last2DClickNode = nodeId;
+          this.last2DClickTime = now;
+          
+          // 延迟执行单击操作,给双击检测留时间
+          if (this.clickTimeout) {
+            clearTimeout(this.clickTimeout);
+          }
+          this.clickTimeout = setTimeout(() => {
+            // 高亮当前节点及其相关节点
+            this.highlightNodeAndRelated(nodeId, graphData);
+            
+            // 判断节点类型并打开相应抽屉
+            if (params.data.id && params.data.id.startsWith('section-')) {
+              // 小节节点
+              this.handleSectionNodeClick(params.data);
+            } else if (params.data.id && params.data.id.startsWith('chapter-')) {
+              // 章节节点 - 显示该章节所有小节的汇总
+              this.handleChapterNodeClick(params.data);
+            } else if (params.data.id === 'course-' + this.courseId) {
+              // 课程节点 - 显示所有章节和小节的汇总
+              this.handleCourseNodeClick(params.data);
+            }
+            
+            this.clickTimeout = null;
+          }, 250); // 250ms延迟,小于400ms双击检测窗口
         }
-      });
-      
-      // 双击恢复所有节点
-      this.knowledgeGraphChart.on('dblclick', () => {
-        this.knowledgeGraphChart.setOption({
-          series: [{
-            data: graphData.nodes,
-            links: graphData.links
-          }]
-        });
       });
       
       // 点击空白区域取消选择
@@ -3197,6 +3258,7 @@ export default {
           })
           .backgroundColor('#0f3460')
           .onNodeClick(this.handle3DNodeClick)
+          .onNodeRightClick(this.handle3DNodeDoubleClick)
           .onBackgroundClick(() => this.clear3DHighlight());
 
         console.log('[3D图谱] 配置完成, 容器尺寸:', container.offsetWidth, 'x', container.offsetHeight);
@@ -3545,6 +3607,20 @@ export default {
     handle3DNodeClick(node) {
       console.log('[3D图谱] 节点点击:', node);
       
+      // 记录单击时间,用于区分单击和双击
+      const now = Date.now();
+      if (this.last3DClickNode === node && now - this.last3DClickTime < 300) {
+        // 300ms内再次点击同一节点视为双击
+        console.log('[3D图谱] 检测到双击');
+        this.handle3DNodeDoubleClick(node);
+        this.last3DClickNode = null;
+        this.last3DClickTime = 0;
+        return;
+      }
+      
+      this.last3DClickNode = node;
+      this.last3DClickTime = now;
+      
       // 1. 高亮节点及其关系
       this.highlight3DNode(node);
       
@@ -3569,6 +3645,24 @@ export default {
       } else if (node.type === 'course') {
         // 课程节点 - 显示课程总览抽屉
         this.show3DCourseDrawer(node);
+      }
+    },
+
+    /** 处理3D节点双击 */
+    handle3DNodeDoubleClick(node) {
+      console.log('[3D图谱] 节点双击:', node);
+      
+      // 如果是小节节点,跳转到小节详情页
+      if (node.type === 'section') {
+        console.log('[3D图谱] 双击小节节点,跳转到小节详情页:', node.data);
+        if (node.data) {
+          this.goToSectionDetail(node.data);
+        } else {
+          console.error('[3D图谱] 节点data为空:', node);
+          this.$message.error('无法获取小节信息');
+        }
+      } else {
+        console.log('[3D图谱] 双击非小节节点,无操作');
       }
     },
 

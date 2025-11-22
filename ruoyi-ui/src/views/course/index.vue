@@ -122,17 +122,33 @@
         <!-- 课程信息 -->
         <div class="course-info">
           <h3 class="course-title">{{ course.title }}</h3>
-          <p class="course-desc">{{ course.description }}</p>
-
-          <div class="course-meta">
-            <div class="meta-item">
-              <span class="meta-label">学分：</span>
-              <span class="meta-value">{{ course.credit }}</span>
+          
+          <!-- 课程元数据 - 类似图片样式 -->
+          <div class="course-metadata">
+            <div class="metadata-row">
+              <div class="metadata-item">
+                <i class="el-icon-user"></i>
+                <span>{{ course.teacherName || '教师' }}</span>
+              </div>
             </div>
-            <div class="meta-item">
-              <span class="meta-label">学生数：</span>
-              <span class="meta-value">{{ course.studentCount }}</span>
+            <div class="metadata-row">
+              <div class="metadata-item credit-item">
+                <i class="el-icon-star-off"></i>
+                <span>学分{{ course.credit || 0 }}</span>
+              </div>
+              <div class="metadata-item">
+                <i class="el-icon-user-solid"></i>
+                <span>{{ course.studentCount || 0 }} 名学生</span>
+              </div>
             </div>
+          </div>
+          
+          <!-- 课程描述 -->
+          <p class="course-desc">{{ course.description || '暂无描述' }}</p>
+          
+          <!-- 课程类型标签 -->
+          <div class="course-type-tag" v-if="course.courseType">
+            <span class="type-badge">{{ course.courseType }}</span>
           </div>
 
           <!-- 课程进度 -->
@@ -203,12 +219,24 @@
         </el-form-item>
 
         <el-form-item label="课程描述" prop="description">
-          <el-input
-            v-model="form.description"
-            type="textarea"
-            :rows="3"
-            placeholder="请输入课程描述"
-          />
+          <div class="description-wrapper">
+            <el-input
+              v-model="form.description"
+              type="textarea"
+              :rows="3"
+              placeholder="请输入课程描述"
+            />
+            <el-button 
+              type="primary" 
+              size="mini" 
+              icon="el-icon-magic-stick"
+              class="ai-generate-btn"
+              @click="handleAIGenerate"
+              :loading="aiGenerating"
+            >
+              AI一键生成
+            </el-button>
+          </div>
         </el-form-item>
 
         <el-form-item label="上传封面" prop="coverImage">
@@ -269,6 +297,7 @@
 
 <script>
 import { listCourse, getCourseStats, getCourse, addCourse, updateCourse, delCourse } from "@/api/course/course";
+import { generateCourseDescription } from "@/api/course/generation";
 import { getToken } from "@/utils/auth";
 
 export default {
@@ -282,6 +311,8 @@ export default {
       viewMode: 'card',
       // 对话框显示
       dialogVisible: false,
+      // AI生成状态
+      aiGenerating: false,
       // 表单数据
       form: {
         id: null,
@@ -466,6 +497,33 @@ export default {
       } else {
         this.$message.error(response.msg || '上传失败');
       }
+    },
+    /** AI一键生成课程描述 */
+    handleAIGenerate() {
+      if (!this.form.title) {
+        this.$message.warning('请先输入课程名称');
+        return;
+      }
+      
+      this.aiGenerating = true;
+      
+      // 调用大模型API生成课程描述
+      generateCourseDescription(this.form.title)
+        .then(response => {
+          if (response.code === 200) {
+            this.form.description = response.data || response.msg;
+            this.$message.success('AI生成成功');
+          } else {
+            this.$message.error(response.msg || 'AI生成失败');
+          }
+        })
+        .catch(error => {
+          console.error('AI生成失败：', error);
+          this.$message.error('AI生成失败：' + (error.msg || error.message || '请重试'));
+        })
+        .finally(() => {
+          this.aiGenerating = false;
+        });
     },
     /** 获取封面完整URL */
     getCoverUrl(coverImage) {
@@ -725,24 +783,65 @@ export default {
   }
 
   .course-info {
-    padding: 12px;
+    padding: 16px;
 
     .course-title {
-      margin: 0 0 6px 0;
-      font-size: 16px;
-      font-weight: bold;
+      margin: 0 0 10px 0;
+      font-size: 17px;
+      font-weight: 600;
       color: #303133;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
 
+    .course-metadata {
+      margin-bottom: 10px;
+
+      .metadata-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 6px;
+
+        &:last-child {
+          margin-bottom: 0;
+        }
+      }
+
+      .metadata-item {
+        display: flex;
+        align-items: center;
+        font-size: 13px;
+        color: #606266;
+
+        i {
+          font-size: 14px;
+          margin-right: 4px;
+          color: #909399;
+        }
+
+        span {
+          color: #606266;
+        }
+
+        &.credit-item {
+          i {
+            color: #f39c12;
+          }
+          span {
+            color: #f39c12;
+          }
+        }
+      }
+    }
+
     .course-desc {
       margin: 0 0 10px 0;
-      font-size: 12px;
+      font-size: 13px;
       color: #606266;
       line-height: 1.5;
-      height: 36px;
+      max-height: 40px;
       overflow: hidden;
       text-overflow: ellipsis;
       display: -webkit-box;
@@ -750,22 +849,16 @@ export default {
       -webkit-box-orient: vertical;
     }
 
-    .course-meta {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 10px;
+    .course-type-tag {
+      margin-bottom: 12px;
 
-      .meta-item {
+      .type-badge {
+        display: inline-block;
+        padding: 3px 10px;
         font-size: 12px;
-
-        .meta-label {
-          color: #909399;
-        }
-
-        .meta-value {
-          color: #303133;
-          font-weight: 500;
-        }
+        color: #606266;
+        background-color: #f0f0f0;
+        border-radius: 3px;
       }
     }
 
@@ -810,6 +903,19 @@ export default {
 }
 
 /* 对话框样式 */
+.description-wrapper {
+  position: relative;
+
+  .ai-generate-btn {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    z-index: 10;
+    font-size: 12px;
+    padding: 5px 10px;
+  }
+}
+
 .cover-uploader {
   display: inline-block;
 

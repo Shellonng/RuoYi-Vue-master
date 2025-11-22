@@ -1,11 +1,13 @@
 package com.ruoyi.web.controller.system;
 
 import java.io.File;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -235,5 +237,45 @@ public class CourseGenerationController extends BaseController
             || lowerFileName.endsWith(".docx")
             || lowerFileName.endsWith(".ppt")
             || lowerFileName.endsWith(".pptx");
+    }
+
+    /**
+     * AI生成课程描述
+     *
+     * @param params 包含courseTitle的参数
+     * @return 生成的课程描述
+     */
+    @Log(title = "AI生成课程描述", businessType = BusinessType.OTHER)
+    @PostMapping("/generateDescription")
+    public AjaxResult generateDescription(@RequestBody Map<String, String> params)
+    {
+        try
+        {
+            String courseTitle = params.get("courseTitle");
+            
+            if (courseTitle == null || courseTitle.trim().isEmpty())
+            {
+                return error("课程标题不能为空");
+            }
+
+            log.info("开始生成课程描述，课程标题：{}", courseTitle);
+
+            // 调用AI服务生成课程描述
+            String description = aiService.generateCourseDescription(courseTitle);
+            
+            if (description == null || description.trim().isEmpty())
+            {
+                return error("生成课程描述失败，请重试");
+            }
+
+            log.info("课程描述生成成功，长度：{}", description.length());
+            
+            return success(description);
+        }
+        catch (Exception e)
+        {
+            log.error("生成课程描述失败", e);
+            return error("生成课程描述失败：" + e.getMessage());
+        }
     }
 }

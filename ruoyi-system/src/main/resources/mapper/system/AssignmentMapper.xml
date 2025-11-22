@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.AssignmentMapper">
+    
+    <resultMap type="Assignment" id="AssignmentResult">
+        <result property="id"    column="id"    />
+        <result property="title"    column="title"    />
+        <result property="courseId"    column="course_id"    />
+        <result property="publisherUserId"    column="publisher_user_id"    />
+        <result property="type"    column="type"    />
+        <result property="description"    column="description"    />
+        <result property="startTime"    column="start_time"    />
+        <result property="endTime"    column="end_time"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="status"    column="status"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="mode"    column="mode"    />
+        <result property="timeLimit"    column="time_limit"    />
+        <result property="totalScore"    column="total_score"    />
+        <result property="duration"    column="duration"    />
+        <result property="allowedFileTypes"    column="allowed_file_types"    />
+        <result property="attachments"    column="attachments"    />
+        <result property="isDeleted"    column="is_deleted"    />
+        <result property="deleteTime"    column="delete_time"    />
+    </resultMap>
+
+    <sql id="selectAssignmentVo">
+        select id, title, course_id, publisher_user_id, type, description, start_time, end_time, create_time, status, update_time, mode, time_limit, total_score, duration, allowed_file_types, attachments, is_deleted, delete_time from assignment
+    </sql>
+
+    <select id="selectAssignmentList" parameterType="Assignment" resultMap="AssignmentResult">
+        <include refid="selectAssignmentVo"/>
+        <where>  
+            <if test="title != null  and title != ''"> and title = #{title}</if>
+            <if test="courseId != null "> and course_id = #{courseId}</if>
+            <if test="publisherUserId != null "> and publisher_user_id = #{publisherUserId}</if>
+            <if test="type != null  and type != ''"> and type = #{type}</if>
+            <if test="description != null  and description != ''"> and description = #{description}</if>
+            <if test="startTime != null "> and start_time = #{startTime}</if>
+            <if test="endTime != null "> and end_time = #{endTime}</if>
+            <if test="status != null "> and status = #{status}</if>
+            <if test="mode != null  and mode != ''"> and mode = #{mode}</if>
+            <if test="timeLimit != null "> and time_limit = #{timeLimit}</if>
+            <if test="totalScore != null "> and total_score = #{totalScore}</if>
+            <if test="duration != null "> and duration = #{duration}</if>
+            <if test="allowedFileTypes != null  and allowedFileTypes != ''"> and allowed_file_types = #{allowedFileTypes}</if>
+            <if test="isDeleted != null "> and is_deleted = #{isDeleted}</if>
+            <if test="deleteTime != null "> and delete_time = #{deleteTime}</if>
+        </where>
+    </select>
+    
+    <select id="selectAssignmentById" parameterType="Long" resultMap="AssignmentResult">
+        <include refid="selectAssignmentVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertAssignment" parameterType="Assignment" useGeneratedKeys="true" keyProperty="id">
+        insert into assignment
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="title != null and title != ''">title,</if>
+            <if test="courseId != null">course_id,</if>
+            <if test="publisherUserId != null">publisher_user_id,</if>
+            <if test="type != null">type,</if>
+            <if test="description != null">description,</if>
+            <if test="startTime != null">start_time,</if>
+            <if test="endTime != null">end_time,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="status != null">status,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="mode != null and mode != ''">mode,</if>
+            <if test="timeLimit != null">time_limit,</if>
+            <if test="totalScore != null">total_score,</if>
+            <if test="duration != null">duration,</if>
+            <if test="allowedFileTypes != null">allowed_file_types,</if>
+            <if test="attachments != null">attachments,</if>
+            <if test="isDeleted != null">is_deleted,</if>
+            <if test="deleteTime != null">delete_time,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="title != null and title != ''">#{title},</if>
+            <if test="courseId != null">#{courseId},</if>
+            <if test="publisherUserId != null">#{publisherUserId},</if>
+            <if test="type != null">#{type},</if>
+            <if test="description != null">#{description},</if>
+            <if test="startTime != null">#{startTime},</if>
+            <if test="endTime != null">#{endTime},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="status != null">#{status},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="mode != null and mode != ''">#{mode},</if>
+            <if test="timeLimit != null">#{timeLimit},</if>
+            <if test="totalScore != null">#{totalScore},</if>
+            <if test="duration != null">#{duration},</if>
+            <if test="allowedFileTypes != null">#{allowedFileTypes},</if>
+            <if test="attachments != null">#{attachments},</if>
+            <if test="isDeleted != null">#{isDeleted},</if>
+            <if test="deleteTime != null">#{deleteTime},</if>
+         </trim>
+    </insert>
+
+    <update id="updateAssignment" parameterType="Assignment">
+        update assignment
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="title != null and title != ''">title = #{title},</if>
+            <if test="courseId != null">course_id = #{courseId},</if>
+            <if test="publisherUserId != null">publisher_user_id = #{publisherUserId},</if>
+            <if test="type != null">type = #{type},</if>
+            <if test="description != null">description = #{description},</if>
+            <if test="startTime != null">start_time = #{startTime},</if>
+            <if test="endTime != null">end_time = #{endTime},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="mode != null and mode != ''">mode = #{mode},</if>
+            <if test="timeLimit != null">time_limit = #{timeLimit},</if>
+            <if test="totalScore != null">total_score = #{totalScore},</if>
+            <if test="duration != null">duration = #{duration},</if>
+            <if test="allowedFileTypes != null">allowed_file_types = #{allowedFileTypes},</if>
+            <if test="attachments != null">attachments = #{attachments},</if>
+            <if test="isDeleted != null">is_deleted = #{isDeleted},</if>
+            <if test="deleteTime != null">delete_time = #{deleteTime},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteAssignmentById" parameterType="Long">
+        delete from assignment where id = #{id}
+    </delete>
+
+    <delete id="deleteAssignmentByIds" parameterType="String">
+        delete from assignment where id in 
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

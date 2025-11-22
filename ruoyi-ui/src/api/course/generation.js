@@ -42,3 +42,18 @@ export function parseOnly(file, courseName) {
     timeout: 180000
   })
 }
+
+/**
+ * AI生成课程描述
+ * @param {String} courseTitle - 课程标题
+ */
+export function generateCourseDescription(courseTitle) {
+  return request({
+    url: '/course/generation/generateDescription',
+    method: 'post',
+    data: {
+      courseTitle: courseTitle
+    },
+    timeout: 60000 // 1分钟超时
+  })
+}
