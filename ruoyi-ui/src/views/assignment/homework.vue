@@ -30,9 +30,18 @@
         <el-form-item label="总分" prop="field109">
           <el-input-number v-model="formData.field109" placeholder="总分"></el-input-number>
         </el-form-item>
+        <el-form-item label="关联知识点" prop="knowledgePoints">
+          <knowledge-point-selector
+            v-model="selectedKpIds"
+            :available-kps="availableKps"
+            :assignment-data="getCurrentAssignmentData()"
+            @change="handleKpChange"
+          />
+        </el-form-item>
         <el-form-item label="上传" prop="field108">
           <el-upload ref="field108" :file-list="field108fileList" :action="field108Action"
-            :before-upload="field108BeforeUpload" :on-success="field108OnSuccess" :on-error="field108OnError" :headers="headers">
+            :before-upload="field108BeforeUpload" :on-success="field108OnSuccess" :on-error="field108OnError" 
+            :on-remove="field108OnRemove" :headers="headers">
             <el-button size="small" type="primary" icon="el-icon-upload">点击上传</el-button>
           </el-upload>
         </el-form-item>
@@ -49,12 +58,17 @@
 </template>
 <script>
 import { listCourse } from "@/api/course/course"
+import { listKnowledgePointByCourse } from "@/api/course/knowledgePoint"
+import { listAssignmentKp, setAssignmentKnowledgePoints } from "@/api/system/assignmentKp"
 import { mapState } from "vuex"
 import { getToken } from "@/utils/auth"
+import KnowledgePointSelector from '@/components/KnowledgePointSelector/index.vue'
 
 export default {
   inheritAttrs: false,
-  components: {},
+  components: {
+    KnowledgePointSelector
+  },
   props: {
     visible: {
       type: Boolean,
@@ -113,6 +127,9 @@ export default {
       headers: {
         Authorization: "Bearer " + getToken()
       },
+      // 知识点相关数据
+      availableKps: [], // 可选知识点列表
+      selectedKpIds: [], // 已选择的知识点ID数组
       field106Options: [{
         "label": "答题型作业",
         "value": 1
@@ -140,11 +157,25 @@ export default {
             // 清空已上传的文件列表
             this.field108fileList = []
             this.uploadedFiles = []
+            // 清空知识点选择
+            this.availableKps = []
+            this.selectedKpIds = []
             this.resetForm();
           }
         }
       },
       immediate: true
+    },
+    // 监听课程选择变化，加载对应的知识点列表
+    'formData.field105': {
+      handler(newCourseId) {
+        if (newCourseId) {
+          this.loadKnowledgePoints(newCourseId)
+        } else {
+          this.availableKps = []
+          this.selectedKpIds = []
+        }
+      }
     }
   },
   created() {},
@@ -224,7 +255,7 @@ export default {
         
         // 调用API提交数据
         console.log('开始提交数据...')
-        this.$emit('submit', homeworkData)
+        this.$emit('submit', homeworkData, this.selectedKpIds)
         this.close()
       })
     },
@@ -270,6 +301,11 @@ export default {
         this.uploadedFiles = []
         this.field108fileList = []
       }
+      
+      // 加载已关联的知识点
+      if (this.editData.id && this.formData.field105) {
+        this.loadAssignmentKps(this.editData.id)
+      }
   
     },
     field108BeforeUpload(file) {
@@ -297,6 +333,25 @@ export default {
       console.error('文件上传错误:', error)
       this.$message.error('文件上传失败，请检查网络或文件大小')
     },
+    field108OnRemove(file, fileList) {
+      console.log('移除文件:', file)
+      console.log('当前fileList:', fileList)
+      
+      // 从uploadedFiles数组中移除对应的文件
+      // 根据文件名或URL匹配
+      const fileName = file.response ? file.response.originalFilename : file.name
+      const fileUrl = file.response ? file.response.url : file.url
+      
+      this.uploadedFiles = this.uploadedFiles.filter(f => {
+        return f.name !== fileName && f.url !== fileUrl
+      })
+      
+      // 更新fileList
+      this.field108fileList = fileList
+      
+      console.log('移除后的uploadedFiles:', this.uploadedFiles)
+      this.$message.success('文件已移除')
+    },
     // 加载课程列表
     loadCourses() {
       console.log('当前用户ID:', this.userId); // 调试信息
@@ -312,6 +367,43 @@ export default {
         console.error('加载课程失败:', error); // 调试信息
         this.$message.error('加载课程失败：' + (error.msg || '未知错误'))
       })
+    },
+    // 加载指定课程的知识点列表
+    loadKnowledgePoints(courseId) {
+      console.log('加载课程知识点，课程ID:', courseId)
+      listKnowledgePointByCourse(courseId).then(response => {
+        console.log('知识点列表响应:', response)
+        this.availableKps = response.data || []
+      }).catch(error => {
+        console.error('加载知识点失败:', error)
+        this.$message.error('加载知识点失败：' + (error.msg || '未知错误'))
+        this.availableKps = []
+      })
+    },
+    // 加载作业已关联的知识点
+    loadAssignmentKps(assignmentId) {
+      console.log('加载作业关联的知识点，作业ID:', assignmentId)
+      listAssignmentKp(assignmentId).then(response => {
+        console.log('作业知识点关联响应:', response)
+        // 提取知识点ID列表
+        this.selectedKpIds = (response.data || []).map(item => item.kpId)
+        console.log('已选择的知识点ID:', this.selectedKpIds)
+      }).catch(error => {
+        console.error('加载作业知识点关联失败:', error)
+        this.selectedKpIds = []
+      })
+    },
+    // 知识点选择变化处理
+    handleKpChange(value, direction, movedKeys) {
+      console.log('知识点选择变化:', { value, direction, movedKeys })
+    },
+    // 获取当前作业数据(用于AI匹配)
+    getCurrentAssignmentData() {
+      return {
+        title: this.formData.field103 || '',
+        description: this.formData.field104 || '',
+        attachments: this.uploadedFiles || []
+      }
     }
   }
 }

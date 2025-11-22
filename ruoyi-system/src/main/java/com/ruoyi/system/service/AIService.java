@@ -621,4 +621,169 @@ public class AIService
             throw new ServiceException("生成课程描述失败：" + e.getMessage());
         }
     }
+
+    /**
+     * AI智能匹配知识点
+     *
+     * @param assignmentTitle 作业标题
+     * @param assignmentDescription 作业描述
+     * @param attachments 附件信息
+     * @param availableKnowledgePoints 可选知识点列表
+     * @return 匹配的知识点ID列表
+     */
+    @SuppressWarnings("unchecked")
+    public java.util.List<Long> matchKnowledgePoints(
+        String assignmentTitle, 
+        String assignmentDescription,
+        Object attachments,
+        Object availableKnowledgePoints)
+    {
+        if (!aiConfig.getEnabled())
+        {
+            throw new ServiceException("AI功能未启用");
+        }
+
+        try
+        {
+            Generation gen = new Generation();
+            
+            // 构建知识点信息字符串
+            StringBuilder kpInfoBuilder = new StringBuilder();
+            java.util.List<java.util.Map<String, Object>> kpList = 
+                (java.util.List<java.util.Map<String, Object>>) availableKnowledgePoints;
+            
+            if (kpList == null || kpList.isEmpty())
+            {
+                log.warn("可选知识点列表为空");
+                return new java.util.ArrayList<>();
+            }
+            
+            for (java.util.Map<String, Object> kp : kpList)
+            {
+                Long id = kp.get("id") instanceof Integer ? 
+                    ((Integer) kp.get("id")).longValue() : (Long) kp.get("id");
+                String title = (String) kp.get("title");
+                String description = (String) kp.get("description");
+                String level = (String) kp.get("level");
+                
+                kpInfoBuilder.append(String.format("ID:%d, 标题:%s, 描述:%s, 难度:%s\n", 
+                    id, title, description != null ? description : "无", level != null ? level : "无"));
+            }
+            
+            // 构建系统提示词
+            Message systemMsg = Message.builder()
+                .role(Role.SYSTEM.getValue())
+                .content("你是一个专业的教育内容分析专家。你的任务是根据作业的标题、描述和附件信息，" +
+                        "从给定的知识点列表中，智能匹配最相关的知识点。" +
+                        "你需要深入理解作业内容涉及的知识领域，并准确找出对应的知识点。" +
+                        "请只返回匹配的知识点ID，用逗号分隔，例如：1,3,5。不要返回其他任何内容。")
+                .build();
+            
+            // 构建用户提示词
+            StringBuilder userPrompt = new StringBuilder();
+            userPrompt.append("请根据以下作业信息，从知识点列表中匹配最相关的知识点：\n\n");
+            userPrompt.append("作业标题：").append(assignmentTitle != null ? assignmentTitle : "无").append("\n");
+            userPrompt.append("作业描述：").append(assignmentDescription != null ? assignmentDescription : "无").append("\n");
+            
+            if (attachments != null)
+            {
+                userPrompt.append("附件信息：").append(JSON.toJSONString(attachments)).append("\n");
+            }
+            
+            userPrompt.append("\n可选知识点列表：\n").append(kpInfoBuilder.toString());
+            userPrompt.append("\n请返回匹配的知识点ID（用逗号分隔，例如：1,3,5）：");
+            
+            Message userMsg = Message.builder()
+                .role(Role.USER.getValue())
+                .content(userPrompt.toString())
+                .build();
+            
+            // 设置生成参数
+            GenerationParam param = GenerationParam.builder()
+                .apiKey(aiConfig.getApiKey())
+                .model(aiConfig.getModel())
+                .messages(Arrays.asList(systemMsg, userMsg))
+                .resultFormat(GenerationParam.ResultFormat.MESSAGE)
+                .topP(0.8)
+                .temperature(0.3f)  // 较低的temperature以获得更确定的结果
+                .maxTokens(200)
+                .build();
+            
+            // 调用AI
+            log.info("开始调用AI匹配知识点，作业：{}，可选知识点数：{}", 
+                assignmentTitle, kpList.size());
+            
+            GenerationResult result = gen.call(param);
+            
+            // 检查响应
+            if (result == null || result.getOutput() == null 
+                || result.getOutput().getChoices() == null 
+                || result.getOutput().getChoices().isEmpty())
+            {
+                log.error("AI返回结果为空");
+                return new java.util.ArrayList<>();
+            }
+            
+            // 提取响应内容
+            String response = result.getOutput().getChoices().get(0).getMessage().getContent();
+            
+            if (response == null || response.trim().isEmpty())
+            {
+                log.warn("AI返回的内容为空");
+                return new java.util.ArrayList<>();
+            }
+            
+            // 解析ID列表
+            java.util.List<Long> matchedIds = new java.util.ArrayList<>();
+            String[] idStrings = response.trim().split("[,，\\s]+");
+            
+            for (String idStr : idStrings)
+            {
+                try
+                {
+                    // 清理可能的非数字字符
+                    idStr = idStr.replaceAll("[^0-9]", "");
+                    if (!idStr.isEmpty())
+                    {
+                        Long id = Long.parseLong(idStr);
+                        // 验证ID是否在可选列表中
+                        boolean exists = kpList.stream()
+                            .anyMatch(kp -> {
+                                Long kpId = kp.get("id") instanceof Integer ? 
+                                    ((Integer) kp.get("id")).longValue() : (Long) kp.get("id");
+                                return kpId.equals(id);
+                            });
+                        
+                        if (exists && !matchedIds.contains(id))
+                        {
+                            matchedIds.add(id);
+                        }
+                    }
+                }
+                catch (NumberFormatException e)
+                {
+                    log.warn("无法解析ID：{}", idStr);
+                }
+            }
+            
+            log.info("AI成功匹配{}个知识点：{}", matchedIds.size(), matchedIds);
+            
+            return matchedIds;
+        }
+        catch (NoApiKeyException e)
+        {
+            log.error("API Key未设置", e);
+            throw new ServiceException("AI API Key配置错误");
+        }
+        catch (ApiException e)
+        {
+            log.error("AI API调用失败", e);
+            throw new ServiceException("AI服务调用失败：" + e.getMessage());
+        }
+        catch (Exception e)
+        {
+            log.error("匹配知识点时发生错误", e);
+            throw new ServiceException("匹配知识点失败：" + e.getMessage());
+        }
+    }
 }

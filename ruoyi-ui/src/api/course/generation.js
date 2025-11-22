@@ -57,3 +57,20 @@ export function generateCourseDescription(courseTitle) {
     timeout: 60000 // 1分钟超时
   })
 }
+
+/**
+ * AI智能匹配知识点
+ * @param {Object} params - 匹配参数
+ * @param {String} params.assignmentTitle - 作业标题
+ * @param {String} params.assignmentDescription - 作业描述
+ * @param {Array} params.attachments - 附件信息
+ * @param {Array} params.availableKnowledgePoints - 可选知识点列表
+ */
+export function matchKnowledgePoints(params) {
+  return request({
+    url: '/course/generation/matchKnowledgePoints',
+    method: 'post',
+    data: params,
+    timeout: 60000 // 1分钟超时
+  })
+}

@@ -2,9 +2,11 @@ package com.ruoyi.system.service.impl;
 
 import java.util.List;
 import com.ruoyi.common.utils.DateUtils;
+import com.ruoyi.common.exception.ServiceException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import com.ruoyi.system.mapper.AssignmentMapper;
+import com.ruoyi.system.mapper.AssignmentKpMapper;
 import com.ruoyi.system.domain.Assignment;
 import com.ruoyi.system.service.IAssignmentService;
 
@@ -19,6 +21,9 @@ public class AssignmentServiceImpl implements IAssignmentService
 {
     @Autowired
     private AssignmentMapper assignmentMapper;
+    
+    @Autowired
+    private AssignmentKpMapper assignmentKpMapper;
 
     /**
      * 查询任务
@@ -76,6 +81,14 @@ public class AssignmentServiceImpl implements IAssignmentService
     @Override
     public int updateAssignment(Assignment assignment)
     {
+        // 如果是要发布考试（status=1），则校验是否关联了知识点
+        if (assignment.getStatus() != null && assignment.getStatus() == 1L) {
+            int kpCount = assignmentKpMapper.countKpByAssignmentId(assignment.getId());
+            if (kpCount == 0) {
+                throw new ServiceException("该考试仍未关联任何知识点，无法发布！请先关联知识点后再发布。");
+            }
+        }
+        
         assignment.setUpdateTime(DateUtils.getNowDate());
         return assignmentMapper.updateAssignment(assignment);
     }

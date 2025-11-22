@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.AssignmentKpMapper">
+
+    <resultMap type="AssignmentKp" id="AssignmentKpResult">
+        <result property="id"           column="id"           />
+        <result property="assignmentId" column="assignment_id"/>
+        <result property="kpId"         column="kp_id"        />
+        <result property="sequence"     column="sequence"     />
+        <result property="isRequired"   column="is_required"  />
+        <result property="createTime"   column="create_time"  />
+    </resultMap>
+
+    <!-- 带知识点详情的结果映射 -->
+    <resultMap type="AssignmentKp" id="AssignmentKpWithKnowledgePointResult" extends="AssignmentKpResult">
+        <association property="knowledgePoint" javaType="KnowledgePoint">
+            <result property="id"               column="kp_real_id"         />
+            <result property="courseId"         column="kp_course_id"       />
+            <result property="title"            column="kp_title"           />
+            <result property="description"      column="kp_description"     />
+            <result property="level"            column="kp_level"           />
+            <result property="creatorUserId"    column="kp_creator_user_id" />
+            <result property="createTime"       column="kp_create_time"     />
+        </association>
+    </resultMap>
+
+    <sql id="selectAssignmentKpVo">
+        select id, assignment_id, kp_id, sequence, is_required, create_time
+        from assignment_kp
+    </sql>
+
+    <select id="selectAssignmentKpById" parameterType="Long" resultMap="AssignmentKpResult">
+        <include refid="selectAssignmentKpVo"/>
+        where id = #{id}
+    </select>
+
+    <select id="selectAssignmentKpList" parameterType="AssignmentKp" resultMap="AssignmentKpResult">
+        <include refid="selectAssignmentKpVo"/>
+        <where>
+            <if test="assignmentId != null">
+                AND assignment_id = #{assignmentId}
+            </if>
+            <if test="kpId != null">
+                AND kp_id = #{kpId}
+            </if>
+        </where>
+        order by assignment_id, sequence asc
+    </select>
+
+    <!-- 根据作业ID查询关联的知识点列表（含知识点详情） -->
+    <select id="selectAssignmentKpListByAssignmentId" parameterType="Long" resultMap="AssignmentKpWithKnowledgePointResult">
+        select 
+            ak.id, ak.assignment_id, ak.kp_id, ak.sequence, ak.is_required, ak.create_time,
+            kp.id as kp_real_id, kp.course_id as kp_course_id, kp.title as kp_title, 
+            kp.description as kp_description, kp.level as kp_level, 
+            kp.creator_user_id as kp_creator_user_id, kp.create_time as kp_create_time
+        from assignment_kp ak
+        left join knowledge_point kp on ak.kp_id = kp.id
+        where ak.assignment_id = #{assignmentId} and (kp.is_deleted = 0 or kp.is_deleted is null)
+        order by ak.sequence asc
+    </select>
+
+    <!-- 根据知识点ID查询关联的作业列表 -->
+    <select id="selectAssignmentKpListByKpId" parameterType="Long" resultMap="AssignmentKpResult">
+        <include refid="selectAssignmentKpVo"/>
+        where kp_id = #{kpId}
+        order by sequence asc
+    </select>
+
+    <!-- 检查作业和知识点是否已关联 -->
+    <select id="checkAssignmentKpExists" resultMap="AssignmentKpResult">
+        <include refid="selectAssignmentKpVo"/>
+        where assignment_id = #{assignmentId} and kp_id = #{kpId}
+        limit 1
+    </select>
+
+    <insert id="insertAssignmentKp" parameterType="AssignmentKp" useGeneratedKeys="true" keyProperty="id">
+        insert into assignment_kp (
+            <if test="assignmentId != null">assignment_id, </if>
+            <if test="kpId != null">kp_id, </if>
+            <if test="sequence != null">sequence, </if>
+            <if test="isRequired != null">is_required, </if>
+            create_time
+        )values(
+            <if test="assignmentId != null">#{assignmentId}, </if>
+            <if test="kpId != null">#{kpId}, </if>
+            <if test="sequence != null">#{sequence}, </if>
+            <if test="isRequired != null">#{isRequired}, </if>
+            sysdate()
+        )
+    </insert>
+
+    <!-- 批量插入作业知识点关联 -->
+    <insert id="batchInsertAssignmentKp" parameterType="java.util.List" useGeneratedKeys="true" keyProperty="id">
+        insert into assignment_kp (assignment_id, kp_id, sequence, is_required, create_time)
+        values
+        <foreach collection="list" item="item" separator=",">
+            (#{item.assignmentId}, #{item.kpId}, #{item.sequence}, #{item.isRequired}, sysdate())
+        </foreach>
+    </insert>
+
+    <delete id="deleteAssignmentKpById" parameterType="Long">
+        delete from assignment_kp where id = #{id}
+    </delete>
+
+    <delete id="deleteAssignmentKpByIds" parameterType="Long">
+        delete from assignment_kp where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <delete id="deleteAssignmentKpByAssignmentId" parameterType="Long">
+        delete from assignment_kp where assignment_id = #{assignmentId}
+    </delete>
+
+    <!-- 统计作业关联的知识点数量 -->
+    <select id="countKpByAssignmentId" parameterType="Long" resultType="int">
+        SELECT COUNT(*) 
+        FROM assignment_kp 
+        WHERE assignment_id = #{assignmentId}
+    </select>
+
+</mapper>
+

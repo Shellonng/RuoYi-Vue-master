@@ -105,12 +105,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <trim prefix="SET" suffixOverrides=",">
             <if test="title != null and title != ''">title = #{title},</if>
             <if test="courseId != null">course_id = #{courseId},</if>
-            <if test="publisherUserId != null">publisher_user_id = #{publisherUserId},</if>
             <if test="type != null">type = #{type},</if>
             <if test="description != null">description = #{description},</if>
             <if test="startTime != null">start_time = #{startTime},</if>
             <if test="endTime != null">end_time = #{endTime},</if>
-            <if test="createTime != null">create_time = #{createTime},</if>
             <if test="status != null">status = #{status},</if>
             <if test="updateTime != null">update_time = #{updateTime},</if>
             <if test="mode != null and mode != ''">mode = #{mode},</if>

@@ -278,4 +278,61 @@ public class CourseGenerationController extends BaseController
             return error("生成课程描述失败：" + e.getMessage());
         }
     }
+
+    /**
+     * AI智能匹配知识点
+     *
+     * @param params 匹配参数，包含作业信息和可选知识点列表
+     * @return 匹配的知识点ID列表
+     */
+    @Log(title = "AI匹配知识点", businessType = BusinessType.OTHER)
+    @PostMapping("/matchKnowledgePoints")
+    public AjaxResult matchKnowledgePoints(@RequestBody Map<String, Object> params)
+    {
+        try
+        {
+            String assignmentTitle = (String) params.get("assignmentTitle");
+            String assignmentDescription = (String) params.get("assignmentDescription");
+            
+            if ((assignmentTitle == null || assignmentTitle.trim().isEmpty()) 
+                && (assignmentDescription == null || assignmentDescription.trim().isEmpty()))
+            {
+                return error("作业标题或描述不能同时为空");
+            }
+
+            log.info("开始AI匹配知识点，作业标题：{}，描述长度：{}", 
+                assignmentTitle, 
+                assignmentDescription != null ? assignmentDescription.length() : 0);
+
+            // 调用AI服务匹配知识点
+            java.util.List<Long> matchedKpIds = aiService.matchKnowledgePoints(
+                assignmentTitle, 
+                assignmentDescription, 
+                params.get("attachments"),
+                params.get("availableKnowledgePoints")
+            );
+            
+            if (matchedKpIds == null || matchedKpIds.isEmpty())
+            {
+                log.info("AI未匹配到合适的知识点");
+                return success(new java.util.HashMap<String, Object>() {{
+                    put("matchedKnowledgePointIds", new java.util.ArrayList<>());
+                    put("message", "未找到匹配的知识点");
+                }});
+            }
+
+            log.info("AI成功匹配{}个知识点：{}", matchedKpIds.size(), matchedKpIds);
+            
+            return success(new java.util.HashMap<String, Object>() {{
+                put("matchedKnowledgePointIds", matchedKpIds);
+                put("count", matchedKpIds.size());
+                put("message", "匹配成功");
+            }});
+        }
+        catch (Exception e)
+        {
+            log.error("AI匹配知识点失败", e);
+            return error("AI匹配知识点失败：" + e.getMessage());
+        }
+    }
 }
