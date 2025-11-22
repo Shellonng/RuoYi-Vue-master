@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.KpRelationMapper">
+    
+    <resultMap type="com.ruoyi.system.domain.KpRelation" id="KpRelationResult">
+        <result property="id"           column="id"           />
+        <result property="fromKpId"     column="from_kp_id"   />
+        <result property="toKpId"       column="to_kp_id"     />
+        <result property="relationType" column="relation_type"/>
+        <result property="aiGenerated"  column="ai_generated" />
+        <result property="createTime"   column="create_time"  />
+        <result property="fromKpTitle"  column="from_kp_title"/>
+        <result property="toKpTitle"    column="to_kp_title"  />
+    </resultMap>
+
+    <sql id="selectKpRelationVo">
+        select r.id, r.from_kp_id, r.to_kp_id, r.relation_type, r.ai_generated, r.create_time,
+               kp1.title as from_kp_title, kp2.title as to_kp_title
+        from kp_relation r
+        left join knowledge_point kp1 on r.from_kp_id = kp1.id
+        left join knowledge_point kp2 on r.to_kp_id = kp2.id
+    </sql>
+
+    <select id="selectKpRelationList" parameterType="com.ruoyi.system.domain.KpRelation" resultMap="KpRelationResult">
+        <include refid="selectKpRelationVo"/>
+        <where>  
+            <if test="fromKpId != null">
+                and r.from_kp_id = #{fromKpId}
+            </if>
+            <if test="toKpId != null">
+                and r.to_kp_id = #{toKpId}
+            </if>
+            <if test="relationType != null and relationType != ''">
+                and r.relation_type = #{relationType}
+            </if>
+        </where>
+        order by r.create_time desc
+    </select>
+
+    <select id="selectKpRelationListByCourseId" parameterType="Long" resultMap="KpRelationResult">
+        select r.id, r.from_kp_id, r.to_kp_id, r.relation_type, r.ai_generated, r.create_time,
+               kp1.title as from_kp_title, kp2.title as to_kp_title
+        from kp_relation r
+        inner join knowledge_point kp1 on r.from_kp_id = kp1.id
+        inner join knowledge_point kp2 on r.to_kp_id = kp2.id
+        where kp1.course_id = #{courseId} 
+          and kp1.is_deleted = 0
+          and kp2.is_deleted = 0
+        order by r.create_time desc
+    </select>
+
+    <insert id="insertKpRelation" parameterType="com.ruoyi.system.domain.KpRelation">
+        insert into kp_relation
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="id != null">id,</if>
+            <if test="fromKpId != null">from_kp_id,</if>
+            <if test="toKpId != null">to_kp_id,</if>
+            <if test="relationType != null">relation_type,</if>
+            <if test="aiGenerated != null">ai_generated,</if>
+            create_time
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="id != null">#{id},</if>
+            <if test="fromKpId != null">#{fromKpId},</if>
+            <if test="toKpId != null">#{toKpId},</if>
+            <if test="relationType != null">#{relationType},</if>
+            <if test="aiGenerated != null">#{aiGenerated},</if>
+            now()
+        </trim>
+    </insert>
+
+    <insert id="batchInsertKpRelations" parameterType="java.util.List">
+        insert into kp_relation (from_kp_id, to_kp_id, relation_type, ai_generated, create_time)
+        values
+        <foreach collection="list" item="item" separator=",">
+            (#{item.fromKpId}, #{item.toKpId}, #{item.relationType}, #{item.aiGenerated}, now())
+        </foreach>
+    </insert>
+
+    <delete id="deleteKpRelationById" parameterType="Long">
+        delete from kp_relation where id = #{id}
+    </delete>
+
+    <delete id="deleteKpRelationsByCourseId" parameterType="Long">
+        delete from kp_relation 
+        where from_kp_id in (
+            select id from knowledge_point where course_id = #{courseId}
+        )
+    </delete>
+
+</mapper>

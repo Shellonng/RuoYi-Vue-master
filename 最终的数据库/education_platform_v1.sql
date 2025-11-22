@@ -2,7 +2,8 @@
 SQLyog Ultimate v8.71 
 MySQL - 8.0.13 : Database - education_platform_v1
 *********************************************************************
-*/
+*/
+
 
 /*!40101 SET NAMES utf8 */;
 
@@ -509,7 +510,7 @@ CREATE TABLE `kp_relation` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
   `from_kp_id` bigint(20) NOT NULL COMMENT '源知识点',
   `to_kp_id` bigint(20) NOT NULL COMMENT '目标知识点',
-  `relation_type` enum('PREREQUISITE','BELONGS_TO','EXAMPLE','EXTENSION','SIMILAR') CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+  `relation_type` enum('prerequisite_of','similar_to','extension_of','derived_from','counterexample_of') CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
   `ai_generated` tinyint(1) DEFAULT '1',
   `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`) USING BTREE,

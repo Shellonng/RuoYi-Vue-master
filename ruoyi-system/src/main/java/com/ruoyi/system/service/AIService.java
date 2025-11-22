@@ -218,7 +218,7 @@ public class AIService
 
         try
         {
-            Generation gen = new Generation(Protocol.HTTP.getValue(), "https://dashscope.aliyuncs.com/api/v1");
+            Generation gen = new Generation();
             
             // 构建系统提示词
             Message systemMsg = Message.builder()
@@ -426,6 +426,98 @@ public class AIService
         {
             log.error("提取的内容不是有效的JSON。内容：{}", jsonContent, e);
             throw new ServiceException("AI返回的JSON格式无效：" + e.getMessage());
+        }
+    }
+
+    /**
+     * AI生成知识点关系
+     * 
+     * @param knowledgePoints 知识点列表（JSON字符串，包含id和title）
+     * @return 知识点关系列表的JSON字符串
+     */
+    public String generateKnowledgePointRelations(String knowledgePoints)
+    {
+        log.info("开始调用AI生成知识点关系");
+        
+        try
+        {
+            Generation gen = new Generation();
+            
+            log.info("Generation实例创建成功");
+
+            // 构建提示词
+            String systemPrompt = "你是一个专业的教育领域专家，擅长分析知识点之间的关系。请根据给定的知识点列表，分析它们之间的关系。\n\n" +
+                "关系类型说明：\n" +
+                "1. prerequisite_of: A是B的前置知识（学习B之前需要先学习A）\n" +
+                "2. similar_to: A和B是相似的概念\n" +
+                "3. extension_of: A是B的扩展（A在B的基础上深化）\n" +
+                "4. derived_from: A派生自B（A是从B衍生出来的）\n" +
+                "5. counterexample_of: A是B的反例\n\n" +
+                "请返回JSON格式，包含relations数组，每个关系包含：\n" +
+                "- fromKpId: 源知识点ID\n" +
+                "- toKpId: 目标知识点ID\n" +
+                "- relationType: 关系类型（使用上述5种之一）\n" +
+                "- reason: 简短说明（可选，不超过50字）\n\n" +
+                "注意：\n" +
+                "1. 只返回确定性强的关系，不要生成所有可能的组合\n" +
+                "2. 重点关注prerequisite_of（前置关系）和extension_of（扩展关系）\n" +
+                "3. 每个知识点建议1-3个关系即可\n" +
+                "4. 返回纯JSON，不要包含其他说明文字";
+
+            String userPrompt = "知识点列表：\n" + knowledgePoints + "\n\n请分析这些知识点之间的关系，返回JSON格式的结果。";
+
+            Message systemMessage = Message.builder()
+                    .role(Role.SYSTEM.getValue())
+                    .content(systemPrompt)
+                    .build();
+
+            Message userMessage = Message.builder()
+                    .role(Role.USER.getValue())
+                    .content(userPrompt)
+                    .build();
+
+            GenerationParam param = GenerationParam.builder()
+                    .apiKey(aiConfig.getApiKey())
+                    .model("qwen-plus")
+                    .messages(Arrays.asList(systemMessage, userMessage))
+                    .resultFormat(GenerationParam.ResultFormat.MESSAGE)
+                    .topP(0.7)
+                    .temperature(0.3f)  // 降低随机性，提高准确性
+                    .build();
+
+            log.info("开始调用通义千问API生成知识点关系");
+            GenerationResult result = gen.call(param);
+            log.info("API调用完成");
+
+            String responseContent = result.getOutput().getChoices().get(0).getMessage().getContent();
+            log.info("AI返回的知识点关系内容长度：{}，内容预览：{}", 
+                responseContent.length(),
+                responseContent.substring(0, Math.min(200, responseContent.length())));
+
+            // 提取并验证JSON
+            String jsonContent = extractJSON(responseContent);
+            
+            return jsonContent;
+        }
+        catch (NoApiKeyException e)
+        {
+            log.error("API Key未设置", e);
+            throw new ServiceException("AI API Key配置错误");
+        }
+        catch (InputRequiredException e)
+        {
+            log.error("输入参数缺失", e);
+            throw new ServiceException("AI调用参数错误");
+        }
+        catch (ApiException e)
+        {
+            log.error("AI API调用失败", e);
+            throw new ServiceException("AI服务调用失败：" + e.getMessage());
+        }
+        catch (Exception e)
+        {
+            log.error("生成知识点关系时发生未知错误", e);
+            throw new ServiceException("生成知识点关系失败：" + e.getMessage());
         }
     }
 }

@@ -117,7 +117,7 @@
             <div v-for="section in chapter.sections" :key="section.id" class="section-item">
               <div class="section-header">
                 <i :class="section.type === 'video' ? 'el-icon-video-camera' : 'el-icon-document'"></i>
-                <div class="section-info">
+                <div class="section-info" @click="goToSectionDetail(section)" style="cursor: pointer;">
                   <h4 class="section-title">{{ section.title }}</h4>
                   <span class="section-duration" v-if="section.duration">{{ formatDurationDisplay(section.duration) }}</span>
                 </div>
@@ -185,7 +185,16 @@
       <!-- 课程图谱标签页 -->
       <el-tab-pane label="课程图谱" name="knowledge">
         <div class="tab-content">
+          <div class="tab-header">
+            <div class="add-ai-btn-wrapper">
+              <el-button type="primary" size="small" icon="el-icon-magic-stick" @click="handleGenerateKnowledgeGraph" :loading="generatingGraph">一键生成知识点图谱</el-button>
+              <span v-if="generatingGraph" style="margin-left: 10px; color: #909399; font-size: 12px;">AI正在分析知识点关系，请稍候...</span>
+            </div>
+          </div>
+          
+          <!-- 2D知识图谱 (ECharts) -->
           <div class="knowledge-graph-container" :class="{ 'is-fullscreen': isGraphFullscreen }">
+            <div class="graph-title">2D 知识图谱</div>
             <el-button 
               class="fullscreen-btn" 
               :icon="isGraphFullscreen ? 'el-icon-close' : 'el-icon-full-screen'"
@@ -197,19 +206,105 @@
             ></el-button>
             <div id="knowledge-graph" style="width: 100%; height: 700px;"></div>
           </div>
+
+          <!-- 3D知识图谱 (3d-force-graph) -->
+          <div class="knowledge-graph-3d-container" :class="{ 'is-fullscreen': isGraph3DFullscreen }">
+            <div class="graph-title">3D课程知识点图谱</div>
+            <el-button 
+              class="fullscreen-btn" 
+              :icon="isGraph3DFullscreen ? 'el-icon-close' : 'el-icon-full-screen'"
+              type="primary"
+              size="small"
+              circle
+              @click="toggleGraph3DFullscreen"
+              :title="isGraph3DFullscreen ? '退出全屏' : '全屏显示'"
+            ></el-button>
+            <div class="graph-controls">
+              <el-button-group size="mini">
+                <el-button @click="resetGraph3DView">重置视角</el-button>
+                <el-button @click="toggleGraph3DRotation">{{ isGraph3DRotating ? '停止旋转' : '自动旋转' }}</el-button>
+                <el-button @click="toggleShowLabels">{{ showLabels ? '隐藏标签' : '显示标签' }}</el-button>
+              </el-button-group>
+            </div>
+            <div id="knowledge-graph-3d" style="width: 100%; height: 700px;"></div>
+            <div class="graph-legend">
+              <div class="legend-section">
+                <div class="legend-title">节点类型</div>
+                <div class="legend-item">
+                  <span class="legend-color" style="background: #5b8ff9;"></span>
+                  <span>课程</span>
+                </div>
+                <div class="legend-item">
+                  <span class="legend-color" style="background: #5ad8a6;"></span>
+                  <span>章节</span>
+                </div>
+                <div class="legend-item">
+                  <span class="legend-color" style="background: #f6bd16;"></span>
+                  <span>小节</span>
+                </div>
+                <div class="legend-item">
+                  <span class="legend-color" style="background: #e86452;"></span>
+                  <span>知识点</span>
+                </div>
+              </div>
+              <div class="legend-section">
+                <div class="legend-title">边类型</div>
+                <div class="legend-item">
+                  <span class="legend-line" style="background: #999;"></span>
+                  <span>结构关系</span>
+                </div>
+                <div class="legend-item">
+                  <span class="legend-line" style="background: #409EFF;"></span>
+                  <span>前置于</span>
+                </div>
+                <div class="legend-item">
+                  <span class="legend-line" style="background: #67C23A;"></span>
+                  <span>相似于</span>
+                </div>
+                <div class="legend-item">
+                  <span class="legend-line" style="background: #E6A23C;"></span>
+                  <span>扩展于</span>
+                </div>
+                <div class="legend-item">
+                  <span class="legend-line" style="background: #F56C6C;"></span>
+                  <span>派生自</span>
+                </div>
+                <div class="legend-item">
+                  <span class="legend-line" style="background: #909399;"></span>
+                  <span>反例于</span>
+                </div>
+              </div>
+            </div>
+            <div class="graph-info">
+              <el-alert
+                title="操作提示"
+                type="info"
+                :closable="false"
+                style="margin-top: 10px;">
+                <div slot="default">
+                  <p><strong>鼠标操作：</strong></p>
+                  <p>• 左键拖拽：旋转视角</p>
+                  <p>• 右键拖拽：平移视角</p>
+                  <p>• 滚轮：缩放视图</p>
+                  <p>• 点击节点：查看详情并高亮相关节点</p>
+                </div>
+              </el-alert>
+            </div>
+          </div>
         </div>
       </el-tab-pane>
     </el-tabs>
 
     <!-- 小节详情抽屉 -->
     <el-drawer
-      :title="selectedSection ? selectedSection.title : '小节详情'"
+      :title="getDrawerTitle()"
       :visible.sync="sectionDrawerVisible"
       direction="rtl"
       size="420px"
       custom-class="section-drawer"
       :modal="false"
       :append-to-body="true"
+      :wrapperClosable="false"
       :before-close="handleSectionDrawerClose"
     >
       <div v-if="selectedSection" class="section-detail-content">
@@ -217,7 +312,7 @@
         <div class="section-info">
           <div class="info-header">
             <i class="el-icon-folder-opened"></i>
-            <span class="chapter-name">{{ selectedSection.chapterName }}</span>
+            <span class="chapter-name">{{ selectedSection.chapterName || selectedSection.sectionName }}</span>
           </div>
           <p class="section-desc" v-if="selectedSection.description">{{ selectedSection.description }}</p>
         </div>
@@ -233,12 +328,58 @@
               description="暂无知识点" 
               :image-size="60"
             ></el-empty>
-            <div v-else class="knowledge-items-list">
-              <div v-for="(point, index) in getKnowledgePointsList(selectedSection)" :key="index" class="knowledge-row">
+            
+            <!-- 小节视图:显示知识点列表 -->
+            <div v-if="!selectedSection.isKnowledgePointView" class="knowledge-items-list">
+              <div v-for="(point, index) in getPaginatedKnowledgePoints()" :key="index" class="knowledge-row clickable" @click="handleDrawerKnowledgeClick(point)">
                 <span class="knowledge-name">{{ point.name }}</span>
                 <el-tag v-if="point.level" size="mini" effect="plain" :type="getLevelTagType(point.level)">{{ point.level }}</el-tag>
               </div>
             </div>
+            
+            <!-- 知识点视图:只显示关联知识点 -->
+            <div v-else-if="selectedSection.isKnowledgePointView && selectedSection.relatedKnowledgePoints" class="knowledge-items-list">
+              <!-- 前置于 -->
+              <div v-for="kp in selectedSection.relatedKnowledgePoints.prerequisite_of" :key="'pre_' + kp.id" class="knowledge-row clickable" @click="handleDrawerKnowledgeClick(kp)">
+                <span class="knowledge-name">{{ kp.name || kp.title || kp.pointName }}</span>
+                <span class="relation-badge" style="background: #409EFF;">前置于</span>
+              </div>
+              
+              <!-- 相似于 -->
+              <div v-for="kp in selectedSection.relatedKnowledgePoints.similar_to" :key="'sim_' + kp.id" class="knowledge-row clickable" @click="handleDrawerKnowledgeClick(kp)">
+                <span class="knowledge-name">{{ kp.name || kp.title || kp.pointName }}</span>
+                <span class="relation-badge" style="background: #67C23A;">相似于</span>
+              </div>
+              
+              <!-- 扩展于 -->
+              <div v-for="kp in selectedSection.relatedKnowledgePoints.extension_of" :key="'ext_' + kp.id" class="knowledge-row clickable" @click="handleDrawerKnowledgeClick(kp)">
+                <span class="knowledge-name">{{ kp.name || kp.title || kp.pointName }}</span>
+                <span class="relation-badge" style="background: #E6A23C;">扩展于</span>
+              </div>
+              
+              <!-- 派生自 -->
+              <div v-for="kp in selectedSection.relatedKnowledgePoints.derived_from" :key="'der_' + kp.id" class="knowledge-row clickable" @click="handleDrawerKnowledgeClick(kp)">
+                <span class="knowledge-name">{{ kp.name || kp.title || kp.pointName }}</span>
+                <span class="relation-badge" style="background: #F56C6C;">派生自</span>
+              </div>
+              
+              <!-- 反例于 -->
+              <div v-for="kp in selectedSection.relatedKnowledgePoints.counterexample_of" :key="'ctr_' + kp.id" class="knowledge-row clickable" @click="handleDrawerKnowledgeClick(kp)">
+                <span class="knowledge-name">{{ kp.name || kp.title || kp.pointName }}</span>
+                <span class="relation-badge" style="background: #909399;">反例于</span>
+              </div>
+            </div>
+            <!-- 知识点分页 -->
+            <el-pagination
+              v-if="getKnowledgePointsCount(selectedSection) > knowledgePointsPageSize"
+              class="knowledge-pagination"
+              :current-page="knowledgePointsCurrentPage"
+              :page-size="knowledgePointsPageSize"
+              :total="getKnowledgePointsCount(selectedSection)"
+              layout="prev, pager, next"
+              :small="true"
+              @current-change="handleKnowledgePageChange"
+            ></el-pagination>
           </div>
         </div>
 
@@ -646,7 +787,10 @@ import { listChapterByCourse, addChapter, updateChapter, delChapter } from "@/ap
 import { listSectionByChapter, addSection, updateSection, delSection } from "@/api/course/section";
 import { listKnowledgePointBySection } from "@/api/course/knowledgePoint";
 import { uploadAndGenerate } from "@/api/course/generation";
+import { generateKnowledgeGraph, listKpRelationByCourse } from "@/api/course/kpRelation";
 import Sortable from 'sortablejs';
+import * as echarts from 'echarts';
+// ForceGraph3D从全局window对象获取(通过index.html引入)
 
 export default {
   name: "CourseDetail",
@@ -735,8 +879,24 @@ export default {
       knowledgeGraphChart: null, // 课程图谱实例
       isGraphFullscreen: false, // 知识图谱是否全屏
       isStructureFullscreen: false, // 课程结构是否全屏
+      generatingGraph: false, // 知识点图谱生成状态
+      // 3D图谱相关
+      graph3DInstance: null, // 3D图谱实例
+      isGraph3DFullscreen: false, // 3D图谱是否全屏
+      highlightedNode: null, // 当前高亮的节点
+      highlightedNodes: new Set(), // 高亮的节点集合
+      highlightedLinks: new Set(), // 高亮的连线集合
+      originalNodeColors: new Map(), // 保存节点原始颜色
+      originalNodeColorAccessor: null, // 保存原始的nodeColor访问器
+      isGraph3DRotating: false, // 3D图谱是否自动旋转
+      showLabels: true, // 是否显示标签
+      graph3DData: { nodes: [], links: [] }, // 3D图谱数据
+      kpRelations: [], // 知识点关系数据
       sectionDrawerVisible: false, // 小节详情抽屉显示状态
       selectedSection: null, // 当前选中的小节
+      // 知识点分页
+      knowledgePointsPageSize: 6, // 每页显示的知识点数量
+      knowledgePointsCurrentPage: 1, // 当前页码
     };
   },
   created() {
@@ -758,10 +918,24 @@ export default {
     this.$watch('activeTab', (newVal) => {
       if (newVal === 'knowledge') {
         this.$nextTick(() => {
+          // 渲染2D图谱
           this.renderKnowledgeGraph();
+          // 渲染3D图谱
+          if (!this.graph3DInstance) {
+            this.render3DKnowledgeGraph();
+          }
         });
       }
     });
+  },
+  beforeDestroy() {
+    // 清理3D图谱实例
+    if (this.graph3DInstance) {
+      this.graph3DInstance._destructor();
+      this.graph3DInstance = null;
+    }
+    // 停止旋转
+    this.stopGraph3DRotation();
   },
   computed: {
     /** 计算课程进度（根据开始、结束时间和当前时间） */
@@ -889,17 +1063,20 @@ export default {
     },
     /** 为指定小节加载知识点 */
     loadKnowledgePointsForSection(section, skipRender = false) {
-      listKnowledgePointBySection(section.id).then(response => {
+      return listKnowledgePointBySection(section.id).then(response => {
         // response.data 是 SectionKp 对象数组，包含 knowledgePoint 字段
         const sectionKps = response.data || [];
         const knowledgePoints = sectionKps.map(sk => sk.knowledgePoint).filter(kp => kp);
         this.$set(section, 'knowledgePoints', knowledgePoints);
+        console.log('[加载知识点] 小节:', section.title, '加载到', knowledgePoints.length, '个知识点');
         // 重新渲染思维导图（初次加载时跳过，避免覆盖渐进式渲染）
         if (!skipRender) {
           this.renderMindmap();
         }
-      }).catch(() => {
-        console.warn('获取小节知识点失败: section.id=' + section.id);
+        return knowledgePoints;
+      }).catch(error => {
+        console.warn('获取小节知识点失败: section.id=' + section.id, error);
+        return [];
       });
     },
     /** 切换章节展开/收起状态 */
@@ -2227,6 +2404,9 @@ export default {
             layoutAnimation: true,
             friction: 0.6
           },
+          // 节点始终可拖动
+          edgeSymbol: ['circle', 'arrow'],
+          edgeSymbolSize: [4, 10],
           emphasis: {
             focus: 'none',
             disabled: true
@@ -2244,65 +2424,31 @@ export default {
       // 添加点击事件处理
       this.knowledgeGraphChart.on('click', (params) => {
         if (params.dataType === 'node') {
-          // 判断是否为小节节点
-          if (params.data.id && params.data.id.startsWith('section-')) {
-            this.handleSectionNodeClick(params.data);
-            return;
-          }
-          
-          // 获取当前点击的节点
+          // 获取当前点击的节点ID
           const nodeId = params.data.id;
           
-          // 找到相邻的节点ID
-          const adjacentNodeIds = new Set([nodeId]);
-          graphData.links.forEach(link => {
-            if (link.source === nodeId) {
-              adjacentNodeIds.add(link.target);
-            }
-            if (link.target === nodeId) {
-              adjacentNodeIds.add(link.source);
-            }
-          });
+          // 高亮当前节点及其相关节点
+          this.highlightNodeAndRelated(nodeId, graphData);
           
-          // 更新节点样式
-          const updatedNodes = graphData.nodes.map(node => {
-            const isAdjacent = adjacentNodeIds.has(node.id);
-            return {
-              ...node,
-              itemStyle: {
-                ...node.itemStyle,
-                opacity: isAdjacent ? 1 : 0.2
-              },
-              label: {
-                ...node.label,
-                opacity: isAdjacent ? 1 : 0.2
-              }
-            };
-          });
-          
-          // 更新连线样式
-          const updatedLinks = graphData.links.map(link => {
-            const isConnected = link.source === nodeId || link.target === nodeId;
-            return {
-              ...link,
-              lineStyle: {
-                ...link.lineStyle,
-                opacity: isConnected ? 0.8 : 0.1
-              }
-            };
-          });
-          
-          // 重新设置数据
-          this.knowledgeGraphChart.setOption({
-            series: [{
-              data: updatedNodes,
-              links: updatedLinks
-            }]
-          });
+          // 判断节点类型并打开相应抽屉
+          if (params.data.id && params.data.id.startsWith('section-')) {
+            // 小节节点
+            this.handleSectionNodeClick(params.data);
+            return;
+          } else if (params.data.id && params.data.id.startsWith('chapter-')) {
+            // 章节节点 - 显示该章节所有小节的汇总
+            this.handleChapterNodeClick(params.data);
+            return;
+          } else if (params.data.id === 'course-' + this.courseId) {
+            // 课程节点 - 显示所有章节和小节的汇总
+            this.handleCourseNodeClick(params.data);
+            return;
+          }
+
         }
       });
       
-      // 双击或点击空白区域恢复
+      // 双击恢复所有节点
       this.knowledgeGraphChart.on('dblclick', () => {
         this.knowledgeGraphChart.setOption({
           series: [{
@@ -2312,6 +2458,7 @@ export default {
         });
       });
       
+      // 点击空白区域取消选择
       this.knowledgeGraphChart.getZr().on('click', (event) => {
         if (!event.target) {
           // 点击空白区域，恢复所有节点
@@ -2338,7 +2485,8 @@ export default {
       const categories = [
         { name: '课程' },
         { name: '章节' },
-        { name: '小节' }
+        { name: '小节' },
+        { name: '知识点' }
       ];
       
       // 定义颜色方案
@@ -2366,6 +2514,7 @@ export default {
           fontWeight: 'bold'
         }
       };
+      
       nodes.push(courseNode);
       
       // 添加章节和小节节点
@@ -2386,6 +2535,7 @@ export default {
             fontWeight: 'bold'
           }
         };
+        
         nodes.push(chapterNode);
         
         // 添加课程到章节的连线
@@ -2415,8 +2565,10 @@ export default {
               },
               label: {
                 fontSize: 11
-              }
+              },
+              sectionData: section // 保存小节数据引用
             };
+            
             nodes.push(sectionNode);
             
             // 添加章节到小节的连线
@@ -2429,6 +2581,43 @@ export default {
                 opacity: 0.7
               }
             });
+            
+            // 添加该小节的知识点节点(默认隐藏)
+            if (section.knowledgePoints && section.knowledgePoints.length > 0) {
+              section.knowledgePoints.forEach((kp, kpIndex) => {
+                const kpNode = {
+                  id: 'kp-' + section.id + '-' + kpIndex,
+                  name: kp.name || kp.title,
+                  symbolSize: 25,
+                  category: 3,
+                  itemStyle: {
+                    color: this.lightenColor(lighterColor, 20),
+                    opacity: 0 // 默认隐藏
+                  },
+                  label: {
+                    fontSize: 10,
+                    show: false // 默认不显示标签
+                  },
+                  visible: false, // 自定义属性标记是否可见
+                  sectionId: section.id, // 记录所属小节
+                  kpData: kp // 保存知识点对象引用
+                };
+                
+                nodes.push(kpNode);
+                
+                // 添加小节到知识点的连线(默认隐藏)
+                links.push({
+                  source: sectionNode.id,
+                  target: kpNode.id,
+                  lineStyle: {
+                    color: this.lightenColor(lighterColor, 20),
+                    width: 2,
+                    opacity: 0 // 默认隐藏
+                  },
+                  visible: false // 自定义属性标记是否可见
+                });
+              });
+            }
           });
         }
       });
@@ -2447,6 +2636,57 @@ export default {
         (B < 255 ? B < 1 ? 0 : B : 255))
         .toString(16).slice(1);
     },
+    /** 高亮节点及其相关节点 */
+    highlightNodeAndRelated(nodeId, graphData) {
+      if (!this.knowledgeGraphChart) return;
+      
+      // 找到相邻的节点ID
+      const adjacentNodeIds = new Set([nodeId]);
+      graphData.links.forEach(link => {
+        if (link.source === nodeId) {
+          adjacentNodeIds.add(link.target);
+        }
+        if (link.target === nodeId) {
+          adjacentNodeIds.add(link.source);
+        }
+      });
+      
+      // 更新节点样式
+      const updatedNodes = graphData.nodes.map(node => {
+        const isAdjacent = adjacentNodeIds.has(node.id);
+        return {
+          ...node,
+          itemStyle: {
+            ...node.itemStyle,
+            opacity: isAdjacent ? 1 : 0.2
+          },
+          label: {
+            ...node.label,
+            opacity: isAdjacent ? 1 : 0.2
+          }
+        };
+      });
+      
+      // 更新连线样式
+      const updatedLinks = graphData.links.map(link => {
+        const isConnected = link.source === nodeId || link.target === nodeId;
+        return {
+          ...link,
+          lineStyle: {
+            ...link.lineStyle,
+            opacity: isConnected ? 0.8 : 0.1
+          }
+        };
+      });
+      
+      // 重新设置数据
+      this.knowledgeGraphChart.setOption({
+        series: [{
+          data: updatedNodes,
+          links: updatedLinks
+        }]
+      });
+    },
     /** 切换知识图谱全屏 */
     toggleGraphFullscreen() {
       this.isGraphFullscreen = !this.isGraphFullscreen;
@@ -2458,6 +2698,7 @@ export default {
         }
       });
     },
+
     /** 切换课程结构全屏 */
     toggleStructureFullscreen() {
       this.isStructureFullscreen = !this.isStructureFullscreen;
@@ -2469,10 +2710,142 @@ export default {
         }
       });
     },
+    /** 处理课程节点点击 - 显示所有内容汇总 */
+    handleCourseNodeClick(nodeData) {
+      // 收集所有章节的所有小节
+      const allSections = [];
+      let totalKnowledgePoints = [];
+      let totalResources = {
+        learningMaterials: 0,
+        materials: 0,
+        activities: 0,
+        assignments: 0,
+        tests: 0,
+        exams: 0
+      };
+      
+      this.chapterList.forEach(chapter => {
+        if (chapter.sections && chapter.sections.length > 0) {
+          chapter.sections.forEach(section => {
+            allSections.push({
+              ...section,
+              chapterName: chapter.title
+            });
+            
+            // 汇总知识点
+            if (section.knowledgePoints && section.knowledgePoints.length > 0) {
+              totalKnowledgePoints = totalKnowledgePoints.concat(section.knowledgePoints);
+            }
+            
+            // 汇总资源（这里使用模拟数据，实际应从API获取）
+            totalResources.learningMaterials += section.learningMaterials || 0;
+            totalResources.materials += section.materials || 0;
+            totalResources.activities += section.activities || 0;
+            totalResources.assignments += section.assignments || 0;
+            totalResources.tests += section.tests || 0;
+            totalResources.exams += section.exams || 0;
+          });
+        }
+      });
+      
+      // 去重知识点（根据name去重）
+      const uniqueKnowledgePoints = [];
+      const knowledgePointNames = new Set();
+      totalKnowledgePoints.forEach(point => {
+        const pointName = typeof point === 'string' ? point : (point.name || point.title);
+        if (pointName && !knowledgePointNames.has(pointName)) {
+          knowledgePointNames.add(pointName);
+          uniqueKnowledgePoints.push(point);
+        }
+      });
+      
+      this.selectedSection = {
+        id: 'course-all',
+        title: this.courseInfo.title || '课程总览',
+        chapterName: '全部章节',
+        description: `包含 ${this.chapterList.length} 个章节，${allSections.length} 个小节`,
+        knowledgePoints: uniqueKnowledgePoints,
+        ...totalResources,
+        isAggregate: true, // 标记为汇总数据
+        aggregateType: 'course'
+      };
+      
+      this.knowledgePointsCurrentPage = 1; // 重置分页
+      this.sectionDrawerVisible = true;
+    },
+    /** 处理章节节点点击 - 显示该章节所有小节的汇总 */
+    handleChapterNodeClick(nodeData) {
+      // 从节点ID提取章节ID
+      const chapterId = parseInt(nodeData.id.replace('chapter-', ''));
+      
+      // 查找对应的章节
+      const chapter = this.chapterList.find(c => c.id === chapterId);
+      
+      if (!chapter) {
+        this.$message.warning('未找到对应的章节');
+        return;
+      }
+      
+      // 收集该章节下所有小节的数据
+      const allKnowledgePoints = [];
+      let totalResources = {
+        learningMaterials: 0,
+        materials: 0,
+        activities: 0,
+        assignments: 0,
+        tests: 0,
+        exams: 0
+      };
+      
+      if (chapter.sections && chapter.sections.length > 0) {
+        chapter.sections.forEach(section => {
+          // 汇总知识点
+          if (section.knowledgePoints && section.knowledgePoints.length > 0) {
+            allKnowledgePoints.push(...section.knowledgePoints);
+          }
+          
+          // 汇总资源
+          totalResources.learningMaterials += section.learningMaterials || 0;
+          totalResources.materials += section.materials || 0;
+          totalResources.activities += section.activities || 0;
+          totalResources.assignments += section.assignments || 0;
+          totalResources.tests += section.tests || 0;
+          totalResources.exams += section.exams || 0;
+        });
+      }
+      
+      // 去重知识点
+      const uniqueKnowledgePoints = [];
+      const knowledgePointNames = new Set();
+      allKnowledgePoints.forEach(point => {
+        const pointName = typeof point === 'string' ? point : (point.name || point.title);
+        if (pointName && !knowledgePointNames.has(pointName)) {
+          knowledgePointNames.add(pointName);
+          uniqueKnowledgePoints.push(point);
+        }
+      });
+      
+      this.selectedSection = {
+        id: 'chapter-' + chapterId,
+        title: chapter.title,
+        chapterName: '章节汇总',
+        description: `包含 ${chapter.sections ? chapter.sections.length : 0} 个小节`,
+        knowledgePoints: uniqueKnowledgePoints,
+        ...totalResources,
+        isAggregate: true, // 标记为汇总数据
+        aggregateType: 'chapter'
+      };
+      
+      this.knowledgePointsCurrentPage = 1; // 重置分页
+      this.sectionDrawerVisible = true;
+    },
     /** 处理小节节点点击 */
     handleSectionNodeClick(nodeData) {
       // 从节点ID提取小节ID
       const sectionId = parseInt(nodeData.id.replace('section-', ''));
+      
+      // 切换该小节知识点的显示/隐藏状态
+      this.toggleKnowledgePointsVisibility(sectionId);
       
       // 查找对应的小节数据
       let foundSection = null;
@@ -2505,13 +2878,100 @@ export default {
           exams: 0
         };
         
+        this.knowledgePointsCurrentPage = 1; // 重置分页
         this.sectionDrawerVisible = true;
       }
+    },
+    /** 切换知识点显示/隐藏 */
+    toggleKnowledgePointsVisibility(sectionId) {
+      if (!this.knowledgeGraphChart) return;
+      
+      const graphData = this.knowledgeGraphChart.getOption().series[0];
+      const nodes = graphData.data;
+      const links = graphData.links;
+      
+      // 检查该小节的知识点当前是否可见
+      const kpNodes = nodes.filter(n => n.sectionId === sectionId && n.category === 3);
+      if (kpNodes.length === 0) return;
+      
+      const isCurrentlyVisible = kpNodes[0].visible;
+      
+      // 更新知识点节点的可见性
+      const updatedNodes = nodes.map(node => {
+        if (node.sectionId === sectionId && node.category === 3) {
+          return {
+            ...node,
+            visible: !isCurrentlyVisible,
+            itemStyle: {
+              ...node.itemStyle,
+              opacity: !isCurrentlyVisible ? 1 : 0
+            },
+            label: {
+              ...node.label,
+              show: !isCurrentlyVisible
+            }
+          };
+        }
+        return node;
+      });
+      
+      // 更新知识点连线的可见性
+      const sectionNodeId = 'section-' + sectionId;
+      const updatedLinks = links.map(link => {
+        if (link.source === sectionNodeId && link.visible !== undefined) {
+          return {
+            ...link,
+            visible: !isCurrentlyVisible,
+            lineStyle: {
+              ...link.lineStyle,
+              opacity: !isCurrentlyVisible ? 0.7 : 0
+            }
+          };
+        }
+        return link;
+      });
+      
+      // 重新设置数据
+      this.knowledgeGraphChart.setOption({
+        series: [{
+          data: updatedNodes,
+          links: updatedLinks
+        }]
+      });
+      
+      console.log(`小节 ${sectionId} 的知识点已${!isCurrentlyVisible ? '展开' : '收起'}`);
     },
     /** 关闭小节详情抽屉 */
     handleSectionDrawerClose() {
       this.sectionDrawerVisible = false;
       this.selectedSection = null;
+      // 重置分页
+      this.knowledgePointsCurrentPage = 1;
+    },
+    /** 知识点分页切换 */
+    handleKnowledgePageChange(page) {
+      this.knowledgePointsCurrentPage = page;
+    },
+    /** 获取当前页的知识点列表 */
+    getPaginatedKnowledgePoints() {
+      const allPoints = this.getKnowledgePointsList(this.selectedSection);
+      const start = (this.knowledgePointsCurrentPage - 1) * this.knowledgePointsPageSize;
+      const end = start + this.knowledgePointsPageSize;
+      return allPoints.slice(start, end);
+    },
+    /** 获取抽屉标题 */
+    getDrawerTitle() {
+      if (!this.selectedSection) return '详情';
+      
+      if (this.selectedSection.isAggregate) {
+        if (this.selectedSection.aggregateType === 'course') {
+          return '📚 ' + (this.selectedSection.title || '课程总览');
+        } else if (this.selectedSection.aggregateType === 'chapter') {
+          return '📖 ' + (this.selectedSection.title || '章节汇总');
+        }
+      }
+      
+      return '📄 ' + (this.selectedSection.title || '小节详情');
     },
     /** 获取资源总数 */
     getTotalResources(section) {
@@ -2579,6 +3039,1155 @@ export default {
     /** 编辑小节 */
     editSection() {
       this.$message.info('编辑功能待实现');
+    },
+
+    /** 一键生成知识点图谱 */
+    handleGenerateKnowledgeGraph() {
+      this.$confirm('此操作将调用AI分析课程所有知识点的关系，是否继续？', '提示', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }).then(() => {
+        this.generatingGraph = true;
+        const loading = this.$loading({
+          lock: true,
+          text: 'AI正在分析知识点关系，请稍候...',
+          spinner: 'el-icon-loading',
+          background: 'rgba(0, 0, 0, 0.7)'
+        });
+
+        generateKnowledgeGraph(this.courseId).then(response => {
+          loading.close();
+          this.generatingGraph = false;
+          
+          if (response.code === 200) {
+            this.$message.success(response.msg || '知识点图谱生成成功');
+            // 重新渲染知识图谱
+            this.renderKnowledgeGraph();
+            // 渲染3D图谱
+            this.render3DKnowledgeGraph();
+          } else {
+            this.$message.error(response.msg || '生成失败');
+          }
+        }).catch(error => {
+          loading.close();
+          this.generatingGraph = false;
+          console.error('生成知识点图谱失败:', error);
+          this.$message.error('生成失败: ' + (error.message || '未知错误'));
+        });
+      }).catch(() => {
+        this.$message.info('已取消生成');
+      });
+    },
+
+    /** 渲染3D知识图谱 */
+    async render3DKnowledgeGraph() {
+      try {
+        console.log('[3D图谱] 开始渲染...');
+        
+        // 准备3D图谱数据
+        const graphData = await this.prepare3DGraphData();
+        console.log('[3D图谱] 数据准备完成:', {
+          节点数: graphData.nodes.length,
+          边数: graphData.links.length
+        });
+        
+        // 转换为纯JavaScript对象,避免Vue响应式包装
+        const pureGraphData = {
+          nodes: JSON.parse(JSON.stringify(graphData.nodes)),
+          links: JSON.parse(JSON.stringify(graphData.links))
+        };
+        console.log('[3D图谱] 转换后的纯数据:', pureGraphData);
+        
+        if (!pureGraphData.nodes || pureGraphData.nodes.length === 0) {
+          console.warn('[3D图谱] 没有数据可以渲染');
+          this.$message.warning('没有课程数据可以渲染3D图谱');
+          return;
+        }
+
+        // 获取容器
+        const container = document.getElementById('knowledge-graph-3d');
+        if (!container) {
+          console.error('[3D图谱] 容器不存在');
+          this.$message.error('3D图谱容器不存在');
+          return;
+        }
+
+        // 清空容器
+        container.innerHTML = '';
+
+        // 检查ForceGraph3D是否可用
+        if (!window.ForceGraph3D) {
+          console.error('[3D图谱] ForceGraph3D未加载');
+          this.$message.error('3D图谱库未加载,请刷新页面重试');
+          return;
+        }
+
+        // 创建真正的3D力导向图
+        console.log('[3D图谱] 创建ForceGraph3D实例');
+        console.log('[3D图谱] window.ForceGraph3D:', window.ForceGraph3D);
+        console.log('[3D图谱] 容器:', container);
+        console.log('[3D图谱] pureGraphData:', pureGraphData);
+        console.log('[3D图谱] 第一个节点示例:', pureGraphData.nodes[0]);
+        console.log('[3D图谱] 第一条边示例:', pureGraphData.links[0]);
+        
+        // 使用new关键字实例化
+        this.graph3DInstance = new window.ForceGraph3D(container);
+        
+        console.log('[3D图谱] 实例创建成功, 开始设置数据');
+        
+        // 设置数据和样式
+        this.graph3DInstance
+          .width(container.offsetWidth)
+          .height(container.offsetHeight)
+          .graphData(pureGraphData)
+          .nodeLabel('label')
+          .nodeVal(8)
+          .nodeColor(node => {
+            // 定义颜色映射
+            const colorMap = {
+              'course': '#5b8ff9',      // 蓝色 - 课程
+              'chapter': '#5ad8a6',      // 绿色 - 章节
+              'section': '#f6bd16',      // 黄色 - 小节
+              'knowledge': '#e86452'     // 红色 - 知识点
+            };
+            
+            // 如果没有高亮节点,显示原色
+            if (!this.highlightedNode) {
+              return colorMap[node.type] || '#999';
+            }
+            // 如果是高亮节点,显示原色
+            if (this.highlightedNodes.has(node)) {
+              return colorMap[node.type] || '#999';
+            }
+            // 非高亮节点,返回深灰色
+            return '#4a4a4a';
+          })
+          .linkDirectionalArrowLength(3.5)
+          .linkDirectionalArrowRelPos(1)
+          .linkCurvature(0.25)
+          .linkLabel('label')
+          .linkWidth(link => {
+            if (!this.highlightedNode) {
+              return link.isKpRelation ? 2 : 1;
+            }
+            const baseWidth = link.isKpRelation ? 2 : 1;
+            return this.highlightedLinks.has(link) ? baseWidth * 2 : baseWidth * 0.5;
+          })
+          .linkOpacity(link => {
+            if (!this.highlightedNode) return 0.6;
+            return this.highlightedLinks.has(link) ? 0.9 : 0.1;
+          })
+          .linkColor(link => {
+            if (!this.highlightedNode) {
+              return link.isKpRelation ? this.getRelationColor(link.relationType) : '#999';
+            }
+            if (this.highlightedLinks.has(link)) {
+              return link.isKpRelation ? this.getRelationColor(link.relationType) : '#999';
+            }
+            return '#3a3a3a';
+          })
+          .backgroundColor('#0f3460')
+          .onNodeClick(this.handle3DNodeClick)
+          .onBackgroundClick(() => this.clear3DHighlight());
+
+        console.log('[3D图谱] 配置完成, 容器尺寸:', container.offsetWidth, 'x', container.offsetHeight);
+        
+        // 根据节点数量动态设置相机位置,确保能看到全貌
+        const nodeCount = pureGraphData.nodes.length;
+        const cameraDistance = Math.max(800, nodeCount * 5); // 节点越多,相机越远
+        this.graph3DInstance.cameraPosition({ z: cameraDistance });
+        console.log('[3D图谱] 设置相机距离:', cameraDistance, '(节点数:', nodeCount, ')');
+
+        // 启用自动旋转
+        if (this.isGraph3DRotating) {
+          this.startGraph3DRotation();
+        }
+
+        // 添加窗口resize监听
+        window.addEventListener('resize', () => {
+          if (this.graph3DInstance) {
+            // ForceGraph3D会自动处理resize
+          }
+        });
+
+        console.log('[3D图谱] ✅ 渲染完成');
+        this.$message.success('3D知识图谱渲染成功');
+      } catch (error) {
+        console.error('[3D图谱] ❌ 渲染失败:', error);
+        console.error('[3D图谱] 错误堆栈:', error.stack);
+        this.$message.error('渲染3D图谱失败: ' + error.message);
+      }
+    },
+
+    /** 准备3D图谱数据 */
+    async prepare3DGraphData() {
+      const nodes = [];
+      const links = [];
+      const nodeMap = new Map();
+
+      console.log('[3D图谱] 开始准备数据...');
+      console.log('[3D图谱] courseInfo:', this.courseInfo);
+      console.log('[3D图谱] chapterList:', this.chapterList);
+
+      // 1. 添加课程节点
+      const courseNode = {
+        id: 'course_' + this.courseId,
+        label: this.courseInfo?.title || '课程',
+        type: 'course',
+        data: this.courseInfo
+      };
+      nodes.push(courseNode);
+      nodeMap.set(courseNode.id, courseNode);
+      console.log('[3D图谱] 添加课程节点:', courseNode);
+
+      // 2. 添加章节和小节节点
+      if (this.chapterList && this.chapterList.length > 0) {
+        console.log('[3D图谱] 处理章节列表,数量:', this.chapterList.length);
+        for (const chapter of this.chapterList) {
+          // 添加章节节点
+          const chapterNode = {
+            id: 'chapter_' + chapter.id,
+            label: chapter.title || '章节',
+            type: 'chapter',
+            data: chapter
+          };
+          nodes.push(chapterNode);
+          nodeMap.set(chapterNode.id, chapterNode);
+          console.log('[3D图谱] 添加章节节点:', chapterNode);
+
+          // 课程->章节连线
+          links.push({
+            source: courseNode.id,
+            target: chapterNode.id,
+            label: '包含章节',
+            isKpRelation: false
+          });
+
+          // 确保章节的小节已加载
+          if (!chapter.sections || chapter.sections.length === 0) {
+            console.log('[3D图谱] 加载章节的小节:', chapter.id);
+            await this.loadSectionsForChapter(chapter, true);
+          }
+
+          // 添加小节节点
+          if (chapter.sections) {
+            for (const section of chapter.sections) {
+            const sectionNode = {
+              id: 'section_' + section.id,
+              label: section.title || '小节',
+              type: 'section',
+              data: section
+            };
+            nodes.push(sectionNode);
+            nodeMap.set(sectionNode.id, sectionNode);
+
+            // 章节->小节连线
+            links.push({
+              source: chapterNode.id,
+              target: sectionNode.id,
+              label: '包含小节',
+              isKpRelation: false
+            });
+
+            // 确保小节的知识点已加载
+            console.log('[3D图谱] 检查小节知识点:', section.title, '当前知识点数:', section.knowledgePoints?.length);
+            if (!section.knowledgePoints || section.knowledgePoints.length === 0) {
+              console.log('[3D图谱] 加载小节知识点:', section.id);
+              await this.loadKnowledgePointsForSection(section, true);
+              console.log('[3D图谱] 加载后知识点数:', section.knowledgePoints?.length);
+            }
+
+            // 添加知识点节点
+            if (section.knowledgePoints && section.knowledgePoints.length > 0) {
+              console.log('[3D图谱] 添加知识点:', section.title, '数量:', section.knowledgePoints.length);
+              for (const kp of section.knowledgePoints) {
+                const kpNodeId = 'kp_' + kp.id;
+                if (!nodeMap.has(kpNodeId)) {
+                  const kpNode = {
+                    id: kpNodeId,
+                    label: kp.title || kp.name || '知识点',
+                    type: 'knowledge',
+                    data: kp
+                  };
+                  nodes.push(kpNode);
+                  nodeMap.set(kpNodeId, kpNode);
+                }
+
+                // 小节->知识点连线
+                links.push({
+                  source: sectionNode.id,
+                  target: kpNodeId,
+                  label: '包含知识点',
+                  isKpRelation: false
+                });
+              }
+            } else {
+              console.warn('[3D图谱] 小节没有知识点:', section.title, section.id);
+            }
+          }
+        }
+      }
+    }
+
+      // 3. 添加知识点之间的关系
+      try {
+        console.log('[3D图谱] 获取知识点关系...');
+        const relationsResponse = await listKpRelationByCourse(this.courseId);
+        console.log('[3D图谱] 关系响应:', relationsResponse);
+        
+        if (relationsResponse.code === 200 && relationsResponse.data) {
+          const relations = relationsResponse.data;
+          console.log('[3D图谱] 找到关系数量:', relations.length);
+          
+          // 保存关系数据到组件状态
+          this.kpRelations = relations;
+          
+          for (const relation of relations) {
+            const fromId = 'kp_' + relation.fromKpId;
+            const toId = 'kp_' + relation.toKpId;
+            
+            if (nodeMap.has(fromId) && nodeMap.has(toId)) {
+              links.push({
+                source: fromId,
+                target: toId,
+                label: this.getRelationLabel(relation.relationType),
+                relationType: relation.relationType,
+                isKpRelation: true,
+                data: relation
+              });
+            } else {
+              console.warn('[3D图谱] 跳过关系(节点不存在):', relation, 'from:', fromId, 'to:', toId);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[3D图谱] 获取知识点关系失败:', error);
+      }
+
+      console.log('[3D图谱] 最终数据:', { 节点数: nodes.length, 边数: links.length });
+      console.log('[3D图谱] 节点列表:', nodes);
+      console.log('[3D图谱] 边列表:', links);
+
+      this.graph3DData = { nodes, links };
+      return this.graph3DData;
+    },
+
+    /** 获取关系类型的中文标签 */
+    getRelationLabel(relationType) {
+      const typeMap = {
+        'prerequisite_of': '前置于',
+        'similar_to': '相似于',
+        'extension_of': '扩展于',
+        'derived_from': '派生自',
+        'counterexample_of': '反例于'
+      };
+      return typeMap[relationType] || relationType;
+    },
+
+    /** 获取关系类型的颜色 */
+    getRelationColor(relationType) {
+      const colorMap = {
+        'prerequisite_of': '#409EFF',  // 蓝色-前置
+        'similar_to': '#67C23A',       // 绿色-相似
+        'extension_of': '#E6A23C',     // 橙色-扩展
+        'derived_from': '#F56C6C',     // 红色-派生
+        'counterexample_of': '#909399' // 灰色-反例
+      };
+      return colorMap[relationType] || '#999';
+    },
+
+    /** 处理3D节点点击 */
+    handleNode3DClick(node) {
+      if (!node) return;
+
+      console.log('点击了节点:', node);
+
+      // 根据节点类型显示详情
+      if (node.type === 'knowledge') {
+        this.$message.info(`知识点: ${node.name}`);
+      } else if (node.type === 'section') {
+        this.selectedSection = node.data;
+        this.sectionDrawerVisible = true;
+      } else if (node.type === 'chapter') {
+        this.$message.info(`章节: ${node.name}`);
+      } else if (node.type === 'course') {
+        this.$message.info(`课程: ${node.name}`);
+      }
+    },
+
+    /** 切换3D图谱全屏 */
+    toggleGraph3DFullscreen() {
+      this.isGraph3DFullscreen = !this.isGraph3DFullscreen;
+      this.$nextTick(() => {
+        if (this.graph3DInstance) {
+          // 触发resize以适应新尺寸
+          window.dispatchEvent(new Event('resize'));
+        }
+      });
+    },
+
+    /** 重置3D图谱视角 */
+    resetGraph3DView() {
+      if (this.graph3DInstance) {
+        // 使用与初始化相同的动态距离计算
+        const nodeCount = this.graph3DInstance.graphData().nodes.length;
+        const cameraDistance = Math.max(800, nodeCount * 5);
+        this.graph3DInstance.cameraPosition(
+          { x: 0, y: 0, z: cameraDistance },
+          { x: 0, y: 0, z: 0 },
+          1000
+        );
+      }
+    },
+
+    /** 获取节点颜色 */
+    getNodeColor(node) {
+      const colorMap = {
+        'course': '#5b8ff9',      // 蓝色 - 课程
+        'chapter': '#5ad8a6',      // 绿色 - 章节
+        'section': '#f6bd16',      // 黄色 - 小节
+        'knowledge': '#e86452'     // 红色 - 知识点
+      };
+      const color = colorMap[node.type] || '#999';
+      console.log('[3D图谱] getNodeColor:', node.id, node.type, '->', color);
+      return color;
+    },
+
+    /** 将颜色变暗(保留色调) */
+    darkenColor(hexColor, factor) {
+      // 将hex颜色转为RGB
+      const hex = hexColor.replace('#', '');
+      const r = parseInt(hex.substr(0, 2), 16);
+      const g = parseInt(hex.substr(2, 2), 16);
+      const b = parseInt(hex.substr(4, 2), 16);
+      
+      // 降低亮度
+      const newR = Math.floor(r * factor);
+      const newG = Math.floor(g * factor);
+      const newB = Math.floor(b * factor);
+      
+      // 转回hex
+      return '#' + [newR, newG, newB].map(x => {
+        const hex = x.toString(16);
+        return hex.length === 1 ? '0' + hex : hex;
+      }).join('');
+    },
+
+    /** 将颜色变暗 */
+    darkenColor(hexColor, factor) {
+      // 将hex颜色转为RGB
+      const hex = hexColor.replace('#', '');
+      const r = parseInt(hex.substr(0, 2), 16);
+      const g = parseInt(hex.substr(2, 2), 16);
+      const b = parseInt(hex.substr(4, 2), 16);
+      
+      // 降低亮度
+      const newR = Math.floor(r * factor);
+      const newG = Math.floor(g * factor);
+      const newB = Math.floor(b * factor);
+      
+      // 转回hex
+      return '#' + [newR, newG, newB].map(x => {
+        const hex = x.toString(16);
+        return hex.length === 1 ? '0' + hex : hex;
+      }).join('');
+    },
+
+    /** 切换3D图谱自动旋转 */
+    toggleGraph3DRotation() {
+      this.isGraph3DRotating = !this.isGraph3DRotating;
+      if (this.isGraph3DRotating) {
+        this.startGraph3DRotation();
+      } else {
+        this.stopGraph3DRotation();
+      }
+    },
+
+    /** 开始3D图谱旋转 */
+    startGraph3DRotation() {
+      if (!this.graph3DInstance) return;
+      this.isGraph3DRotating = true;
+      
+      // 旋转时使用较小的距离系数,因为水平旋转会让视角显得更远
+      const nodeCount = this.graph3DInstance.graphData().nodes.length;
+      const distance = Math.max(600, nodeCount * 5);
+      
+      let angle = 0;
+      const rotateCamera = () => {
+        if (!this.isGraph3DRotating || !this.graph3DInstance) return;
+        
+        angle += 0.1; // 降低旋转速度
+        this.graph3DInstance.cameraPosition({
+          x: distance * Math.sin(angle * Math.PI / 180),
+          z: distance * Math.cos(angle * Math.PI / 180)
+        });
+        
+        requestAnimationFrame(rotateCamera);
+      };
+      rotateCamera();
+    },
+
+    /** 停止3D图谱旋转 */
+    stopGraph3DRotation() {
+      this.isGraph3DRotating = false;
+    },
+
+    /** 处理3D图谱节点点击 */
+    handle3DNodeClick(node) {
+      console.log('[3D图谱] 节点点击:', node);
+      
+      // 1. 高亮节点及其关系
+      this.highlight3DNode(node);
+      
+      // 2. 相机聚焦到节点(特写效果)
+      const distance = 200; // 特写距离
+      this.graph3DInstance.cameraPosition(
+        { x: node.x, y: node.y, z: node.z + distance }, // 相机位置(节点正前方)
+        { x: node.x, y: node.y, z: node.z }, // 看向节点中心
+        1000 // 动画时长1秒
+      );
+      
+      // 3. 根据节点类型打开抽屉
+      if (node.type === 'section') {
+        // 小节节点 - 直接使用节点携带的data
+        this.show3DSectionDrawer(node);
+      } else if (node.type === 'knowledge') {
+        // 知识点节点 - 直接使用节点携带的data
+        this.show3DKnowledgeDrawer(node);
+      } else if (node.type === 'chapter') {
+        // 章节节点 - 显示章节汇总抽屉
+        this.show3DChapterDrawer(node);
+      } else if (node.type === 'course') {
+        // 课程节点 - 显示课程总览抽屉
+        this.show3DCourseDrawer(node);
+      }
+    },
+
+    /** 显示3D图谱课程总览抽屉 */
+    show3DCourseDrawer(node) {
+      console.log('[3D图谱] 显示课程抽屉:', node);
+      
+      // 收集所有章节的所有小节
+      const allSections = [];
+      let totalKnowledgePoints = [];
+      let totalResources = {
+        learningMaterials: 0,
+        materials: 0,
+        activities: 0,
+        assignments: 0,
+        tests: 0,
+        exams: 0
+      };
+      
+      this.chapterList.forEach(chapter => {
+        if (chapter.sections && chapter.sections.length > 0) {
+          chapter.sections.forEach(section => {
+            allSections.push({
+              ...section,
+              chapterName: chapter.title
+            });
+            
+            // 汇总知识点
+            if (section.knowledgePoints && section.knowledgePoints.length > 0) {
+              totalKnowledgePoints = totalKnowledgePoints.concat(section.knowledgePoints);
+            }
+            
+            // 汇总资源
+            totalResources.learningMaterials += section.learningMaterials || 0;
+            totalResources.materials += section.materials || 0;
+            totalResources.activities += section.activities || 0;
+            totalResources.assignments += section.assignments || 0;
+            totalResources.tests += section.tests || 0;
+            totalResources.exams += section.exams || 0;
+          });
+        }
+      });
+      
+      // 去重知识点
+      const uniqueKnowledgePoints = [];
+      const knowledgePointNames = new Set();
+      totalKnowledgePoints.forEach(point => {
+        const pointName = typeof point === 'string' ? point : (point.name || point.title);
+        if (pointName && !knowledgePointNames.has(pointName)) {
+          knowledgePointNames.add(pointName);
+          uniqueKnowledgePoints.push(point);
+        }
+      });
+      
+      this.selectedSection = {
+        id: 'course-all',
+        title: this.courseInfo.title || '课程总览',
+        chapterName: '全部章节',
+        description: `包含 ${this.chapterList.length} 个章节，${allSections.length} 个小节`,
+        knowledgePoints: uniqueKnowledgePoints,
+        ...totalResources,
+        isAggregate: true,
+        aggregateType: 'course'
+      };
+      
+      this.knowledgePointsCurrentPage = 1;
+      this.sectionDrawerVisible = true;
+    },
+
+    /** 显示3D图谱章节汇总抽屉 */
+    show3DChapterDrawer(node) {
+      console.log('[3D图谱] 显示章节抽屉:', node);
+      
+      // 节点的data字段包含了完整的chapter数据
+      const chapter = node.data;
+      if (!chapter) {
+        this.$message.warning('未找到章节数据');
+        return;
+      }
+      
+      // 收集该章节下所有小节的数据
+      const allKnowledgePoints = [];
+      let totalResources = {
+        learningMaterials: 0,
+        materials: 0,
+        activities: 0,
+        assignments: 0,
+        tests: 0,
+        exams: 0
+      };
+      
+      if (chapter.sections && chapter.sections.length > 0) {
+        chapter.sections.forEach(section => {
+          // 汇总知识点
+          if (section.knowledgePoints && section.knowledgePoints.length > 0) {
+            allKnowledgePoints.push(...section.knowledgePoints);
+          }
+          
+          // 汇总资源
+          totalResources.learningMaterials += section.learningMaterials || 0;
+          totalResources.materials += section.materials || 0;
+          totalResources.activities += section.activities || 0;
+          totalResources.assignments += section.assignments || 0;
+          totalResources.tests += section.tests || 0;
+          totalResources.exams += section.exams || 0;
+        });
+      }
+      
+      // 去重知识点
+      const uniqueKnowledgePoints = [];
+      const knowledgePointNames = new Set();
+      allKnowledgePoints.forEach(point => {
+        const pointName = typeof point === 'string' ? point : (point.name || point.title);
+        if (pointName && !knowledgePointNames.has(pointName)) {
+          knowledgePointNames.add(pointName);
+          uniqueKnowledgePoints.push(point);
+        }
+      });
+      
+      this.selectedSection = {
+        id: 'chapter-' + chapter.id,
+        title: chapter.title,
+        chapterName: '章节汇总',
+        description: `包含 ${chapter.sections ? chapter.sections.length : 0} 个小节`,
+        knowledgePoints: uniqueKnowledgePoints,
+        ...totalResources,
+        isAggregate: true,
+        aggregateType: 'chapter'
+      };
+      
+      this.knowledgePointsCurrentPage = 1;
+      this.sectionDrawerVisible = true;
+    },
+
+    /** 显示3D图谱小节详情抽屉 */
+    show3DSectionDrawer(node) {
+      console.log('[3D图谱] 显示小节抽屉:', node);
+      
+      // 节点的data字段包含了完整的section数据
+      const section = node.data;
+      if (!section) {
+        this.$message.warning('未找到小节数据');
+        return;
+      }
+      
+      // 查找所属章节名称
+      let chapterName = '';
+      for (const chapter of this.chapterList) {
+        if (chapter.sections && chapter.sections.find(s => s.id === section.id)) {
+          chapterName = chapter.title;
+          break;
+        }
+      }
+      
+      // 设置选中的小节
+      this.selectedSection = {
+        ...section,
+        chapterName: chapterName,
+        learningMaterials: 0,
+        materials: 0,
+        activities: 0,
+        assignments: 0,
+        tests: 0,
+        exams: 0
+      };
+      
+      this.knowledgePointsCurrentPage = 1;
+      this.sectionDrawerVisible = true;
+    },
+
+    /** 显示3D图谱知识点详情抽屉 */
+    show3DKnowledgeDrawer(node) {
+      console.log('[3D图谱] 显示知识点抽屉:', node);
+      
+      // 节点的data字段包含了完整的知识点数据
+      const kp = node.data;
+      if (!kp) {
+        this.$message.warning('未找到知识点数据');
+        return;
+      }
+      
+      // 查找所属小节名称
+      let sectionName = '';
+      let sectionTitle = '';
+      for (const chapter of this.chapterList) {
+        if (chapter.sections) {
+          for (const section of chapter.sections) {
+            if (section.knowledgePoints && section.knowledgePoints.find(k => k.id === kp.id)) {
+              sectionName = section.title;
+              sectionTitle = section.title;
+              break;
+            }
+          }
+          if (sectionName) break;
+        }
+      }
+      
+      // 查找该知识点的所有关系
+      const relatedKnowledgePoints = {
+        prerequisite_of: [],    // 前置于
+        similar_to: [],         // 相似于
+        extension_of: [],       // 扩展于
+        derived_from: [],       // 派生自
+        counterexample_of: []   // 反例于
+      };
+      
+      // 从kpRelations中查找该知识点的关系
+      console.log('[3D图谱] 知识点ID:', kp.id);
+      console.log('[3D图谱] kpRelations总数:', this.kpRelations ? this.kpRelations.length : 0);
+      
+      if (this.kpRelations && this.kpRelations.length > 0) {
+        this.kpRelations.forEach(rel => {
+          // 如果该知识点是source(起点) - 使用fromKpId
+          if (rel.fromKpId === kp.id) {
+            console.log('[3D图谱] 找到关系(作为起点):', rel.relationType, '目标ID:', rel.toKpId);
+            // 找到target知识点的完整信息
+            const targetKp = this.findKnowledgePointById(rel.toKpId);
+            console.log('[3D图谱] 目标知识点:', targetKp);
+            if (targetKp && rel.relationType) {
+              if (!relatedKnowledgePoints[rel.relationType]) {
+                relatedKnowledgePoints[rel.relationType] = [];
+              }
+              relatedKnowledgePoints[rel.relationType].push(targetKp);
+            }
+          }
+          // 如果该知识点是target(终点),需要反向处理关系 - 使用toKpId
+          if (rel.toKpId === kp.id) {
+            console.log('[3D图谱] 找到关系(作为终点):', rel.relationType, '来源ID:', rel.fromKpId);
+            const sourceKp = this.findKnowledgePointById(rel.fromKpId);
+            console.log('[3D图谱] 来源知识点:', sourceKp);
+            if (sourceKp && rel.relationType) {
+              // 反向关系映射
+              const reverseTypeMap = {
+                'prerequisite_of': 'derived_from',  // A前置于B -> B派生自A
+                'derived_from': 'prerequisite_of',  // A派生自B -> B前置于A
+                'similar_to': 'similar_to',         // 相似关系是双向的
+                'extension_of': 'extension_of',     // 保持原样(双向)
+                'counterexample_of': 'counterexample_of' // 保持原样(双向)
+              };
+              const reverseType = reverseTypeMap[rel.relationType] || rel.relationType;
+              if (!relatedKnowledgePoints[reverseType]) {
+                relatedKnowledgePoints[reverseType] = [];
+              }
+              relatedKnowledgePoints[reverseType].push(sourceKp);
+            }
+          }
+        });
+      }
+      
+      console.log('[3D图谱] 最终收集的关系知识点:', relatedKnowledgePoints);
+      
+      // 设置选中的知识点并打开抽屉
+      this.selectedSection = {
+        title: sectionTitle,
+        sectionName: sectionName,
+        description: kp.description || '',
+        knowledgePoints: [kp],
+        relatedKnowledgePoints: relatedKnowledgePoints,
+        isKnowledgePointView: true, // 标记这是知识点视图
+        learningMaterials: 0,
+        materials: 0,
+        activities: 0,
+        assignments: 0,
+        tests: 0,
+        exams: 0
+      };
+      
+      this.knowledgePointsCurrentPage = 1;
+      this.sectionDrawerVisible = true;
+    },
+    
+    /** 根据ID查找知识点 */
+    findKnowledgePointById(kpId) {
+      for (const chapter of this.chapterList) {
+        if (chapter.sections) {
+          for (const section of chapter.sections) {
+            if (section.knowledgePoints) {
+              const kp = section.knowledgePoints.find(k => k.id === kpId);
+              if (kp) {
+                console.log('[查找知识点] 找到ID:', kpId, '知识点对象:', kp);
+                return kp;
+              }
+            }
+          }
+        }
+      }
+      console.warn('[查找知识点] 未找到ID:', kpId);
+      return null;
+    },
+
+    /** 高亮3D图谱节点及其关系 */
+    highlight3DNode(node) {
+      // 清空之前的高亮
+      this.highlightedNodes.clear();
+      this.highlightedLinks.clear();
+      
+      if (!node) {
+        this.highlightedNode = null;
+        return;
+      }
+      
+      this.highlightedNode = node;
+      this.highlightedNodes.add(node);
+      
+      // 获取图谱数据
+      const graphData = this.graph3DInstance.graphData();
+      
+      // 找出所有与该节点相关的连线
+      graphData.links.forEach(link => {
+        if (link.source === node || link.target === node ||
+            link.source.id === node.id || link.target.id === node.id) {
+          this.highlightedLinks.add(link);
+          
+          // 添加相关节点
+          const sourceNode = typeof link.source === 'object' ? link.source : graphData.nodes.find(n => n.id === link.source);
+          const targetNode = typeof link.target === 'object' ? link.target : graphData.nodes.find(n => n.id === link.target);
+          
+          if (sourceNode) this.highlightedNodes.add(sourceNode);
+          if (targetNode) this.highlightedNodes.add(targetNode);
+        }
+      });
+      
+      console.log('[3D图谱] 高亮节点数:', this.highlightedNodes.size, '连线数:', this.highlightedLinks.size);
+      
+      // 触发重新渲染,nodeColor函数会自动根据highlightedNodes状态更新颜色
+      this.graph3DInstance.nodeColor(this.graph3DInstance.nodeColor());
+    },
+
+    /** 清除3D图谱高亮 */
+    clear3DHighlight() {
+      console.log('[3D图谱] 清除高亮');
+      this.highlightedNode = null;
+      this.highlightedNodes.clear();
+      this.highlightedLinks.clear();
+      
+      if (this.graph3DInstance) {
+        // 触发重新渲染,nodeColor函数会自动恢复所有节点原色
+        this.graph3DInstance.nodeColor(this.graph3DInstance.nodeColor());
+      }
+    },
+
+    /** 处理抽屉中知识点点击 */
+    handleDrawerKnowledgeClick(kp) {
+      console.log('[抽屉] 点击知识点对象:', kp);
+      
+      const kpName = kp.name || kp.title || kp.pointName;
+      console.log('[抽屉] 查找知识点名称:', kpName);
+      
+      // 尝试在2D图谱中查找和高亮
+      if (this.knowledgeGraphChart) {
+        this.highlight2DKnowledgePoint(kp);
+      }
+      
+      // 尝试在3D图谱中查找和高亮
+      if (this.graph3DInstance) {
+        this.highlight3DKnowledgePoint(kp);
+      }
+      
+      // 如果两个图谱都未初始化
+      if (!this.knowledgeGraphChart && !this.graph3DInstance) {
+        this.$message.warning('图谱未初始化');
+      }
+    },
+    
+    /** 在2D图谱中高亮知识点 */
+    highlight2DKnowledgePoint(kp) {
+      if (!this.knowledgeGraphChart) return;
+      
+      const kpName = kp.name || kp.title || kp.pointName;
+      const graphData = this.knowledgeGraphChart.getOption().series[0];
+      const nodes = graphData.data;
+      const links = graphData.links;
+      
+      console.log('[2D图谱] 查找知识点:', kpName);
+      console.log('[2D图谱] 知识点对象:', kp);
+      
+      // 查找匹配的知识点节点
+      let targetNode = null;
+      
+      // 方法1: 通过对象引用匹配（最准确）
+      targetNode = nodes.find(n => n.category === 3 && n.kpData === kp);
+      if (targetNode) {
+        console.log('[2D图谱] 通过对象引用匹配: 找到');
+      }
+      
+      // 方法2: 通过ID查找
+      if (!targetNode) {
+        const kpId = kp.id || kp.kpId || kp.pointId;
+        if (kpId) {
+          targetNode = nodes.find(n => n.category === 3 && n.kpData && 
+            (n.kpData.id === kpId || n.kpData.kpId === kpId || n.kpData.pointId === kpId));
+          console.log('[2D图谱] 通过ID查找 ' + kpId + ':', targetNode ? '找到' : '未找到');
+        }
+      }
+      
+      // 方法3: 通过名称精确匹配
+      if (!targetNode && kpName) {
+        targetNode = nodes.find(n => n.category === 3 && n.kpData && 
+          (n.kpData.name === kpName || n.kpData.title === kpName));
+        console.log('[2D图谱] 通过名称精确匹配 "' + kpName + '":', targetNode ? '找到' : '未找到');
+      }
+      
+      // 方法4: 通过节点name匹配
+      if (!targetNode && kpName) {
+        targetNode = nodes.find(n => n.category === 3 && n.name === kpName);
+        console.log('[2D图谱] 通过节点name匹配 "' + kpName + '":', targetNode ? '找到' : '未找到');
+      }
+      
+      if (!targetNode) {
+        console.warn('[2D图谱] 未找到知识点:', kpName);
+        console.warn('[2D图谱] 可能原因: 该知识点未在2D图谱数据中生成');
+        console.log('[2D图谱] 所有知识点节点:', nodes.filter(n => n.category === 3).map(n => ({ id: n.id, name: n.name, kpData: n.kpData })));
+        this.$message.warning('未在2D图谱中找到该知识点: ' + kpName);
+        return;
+      }
+      
+      console.log('[2D图谱] 找到节点:', targetNode);
+      
+      // 确保知识点节点可见(如果它所属的小节未展开,先展开)
+      if (!targetNode.visible || targetNode.itemStyle.opacity === 0) {
+        console.log('[2D图谱] 知识点当前隐藏，准备展开小节:', targetNode.sectionId);
+        // 提取小节ID并展开
+        if (targetNode.sectionId) {
+          this.toggleKnowledgePointsVisibility(targetNode.sectionId);
+          // 等待展开动画完成后再高亮
+          setTimeout(() => {
+            this.highlightNodeInEcharts(targetNode.id);
+          }, 300);
+        }
+      } else {
+        console.log('[2D图谱] 知识点已可见，直接高亮');
+        // 直接高亮
+        this.highlightNodeInEcharts(targetNode.id);
+      }
+    },
+    
+    /** 在ECharts图谱中高亮指定节点 */
+    highlightNodeInEcharts(nodeId) {
+      if (!this.knowledgeGraphChart) return;
+      
+      const graphData = this.knowledgeGraphChart.getOption().series[0];
+      const nodes = graphData.data;
+      const links = graphData.links;
+      
+      // 找到相邻的节点ID
+      const adjacentNodeIds = new Set([nodeId]);
+      links.forEach(link => {
+        if (link.source === nodeId) {
+          adjacentNodeIds.add(link.target);
+        }
+        if (link.target === nodeId) {
+          adjacentNodeIds.add(link.source);
+        }
+      });
+      
+      // 更新节点样式
+      const updatedNodes = nodes.map(node => {
+        const isAdjacent = adjacentNodeIds.has(node.id);
+        const isTarget = node.id === nodeId;
+        
+        return {
+          ...node,
+          itemStyle: {
+            ...node.itemStyle,
+            opacity: isAdjacent ? 1 : 0.2,
+            borderWidth: isTarget ? 3 : 0,
+            borderColor: isTarget ? '#ff0000' : undefined
+          },
+          label: {
+            ...node.label,
+            opacity: isAdjacent ? 1 : 0.2,
+            fontWeight: isTarget ? 'bold' : 'normal'
+          }
+        };
+      });
+      
+      // 更新连线样式
+      const updatedLinks = links.map(link => {
+        const isConnected = link.source === nodeId || link.target === nodeId;
+        return {
+          ...link,
+          lineStyle: {
+            ...link.lineStyle,
+            opacity: isConnected ? 0.8 : 0.1,
+            width: isConnected ? (link.lineStyle.width || 2) : 2
+          }
+        };
+      });
+      
+      // 重新设置数据
+      this.knowledgeGraphChart.setOption({
+        series: [{
+          data: updatedNodes,
+          links: updatedLinks
+        }]
+      });
+      
+      console.log('[2D图谱] 已高亮节点:', nodeId);
+    },
+    
+    /** 在3D图谱中高亮知识点 */
+    highlight3DKnowledgePoint(kp) {
+      if (!this.graph3DInstance) return;
+      
+      const kpName = kp.name || kp.title || kp.pointName;
+      
+      // 从3D图谱中查找匹配的节点(通过名称匹配)
+      const graphData = this.graph3DInstance.graphData();
+      
+      // 先尝试通过ID查找
+      let node = null;
+      const kpId = kp.id || kp.kpId || kp.pointId;
+      
+      if (kpId) {
+        const nodeId = 'kp_' + kpId;
+        node = graphData.nodes.find(n => n.id === nodeId);
+        console.log('[3D图谱] 通过ID查找:', nodeId, '结果:', node ? '找到' : '未找到');
+      }
+      
+      // 如果ID查找失败,通过名称查找
+      if (!node && kpName) {
+        node = graphData.nodes.find(n => 
+          n.type === 'knowledge' && 
+          (n.label === kpName || n.data?.name === kpName || n.data?.title === kpName)
+        );
+        console.log('[3D图谱] 通过名称查找:', kpName, '结果:', node ? '找到' : '未找到');
+      }
+      
+      if (node) {
+        console.log('[3D图谱] 找到节点:', node);
+        
+        // 1. 高亮节点及其关系
+        this.highlight3DNode(node);
+        
+        // 2. 相机聚焦到节点(检查节点是否有坐标)
+        if (node.x !== undefined && node.y !== undefined && node.z !== undefined) {
+          const distance = 200;
+          this.graph3DInstance.cameraPosition(
+            { x: node.x, y: node.y, z: node.z + distance },
+            { x: node.x, y: node.y, z: node.z },
+            1000
+          );
+        }
+        
+        // 3. 更新抽屉内容
+        this.show3DKnowledgeDrawer(node);
+      } else {
+        console.warn('[3D图谱] 未找到节点, 知识点:', kp);
+      }
+    },
+
+    /** 处理知识点节点点击 */
+    handleKnowledgeNodeClick(node) {
+      // 从节点ID提取知识点ID
+      const knowledgeId = parseInt(node.id.replace('knowledge-', ''));
+      
+      // 查找对应的知识点数据
+      let foundKnowledge = null;
+      let sectionName = '';
+      
+      for (const chapter of this.chapterList) {
+        if (chapter.sections) {
+          for (const section of chapter.sections) {
+            if (section.knowledgePoints) {
+              const kp = section.knowledgePoints.find(k => k.id === knowledgeId);
+              if (kp) {
+                foundKnowledge = kp;
+                sectionName = section.title;
+                break;
+              }
+            }
+          }
+          if (foundKnowledge) break;
+        }
+      }
+      
+      if (foundKnowledge) {
+        // 设置选中的知识点并打开抽屉
+        this.selectedSection = {
+          title: sectionName,
+          knowledgePoints: [foundKnowledge]
+        };
+        this.sectionDrawerVisible = true;
+      }
+    },
+
+    /** 切换标签显示 */
+    toggleShowLabels() {
+      this.showLabels = !this.showLabels;
+      if (this.graph3DInstance) {
+        this.graph3DInstance.nodeLabel(
+          this.showLabels ? (node => `${node.label}<br/>类型: ${this.getNodeTypeLabel(node.type)}`) : null
+        );
+      }
+    },
+
+    /** 获取节点类型标签 */
+    getNodeTypeLabel(type) {
+      const labels = {
+        'course': '课程',
+        'chapter': '章节',
+        'section': '小节',
+        'knowledge': '知识点'
+      };
+      return labels[type] || '未知';
+    },
+
+    /** 获取节点大小 */
+    getNodeSize(type) {
+      const sizes = {
+        'course': 30,
+        'chapter': 22,
+        'section': 16,
+        'knowledge': 12
+      };
+      return sizes[type] || 10;
+    },
+
+    /** 获取节点颜色 */
+    getNodeColor(type) {
+      const colors = {
+        'course': '#68bdf6',    // 亮蓝色 - 课程
+        'chapter': '#6dce9e',   // 绿色 - 章节
+        'section': '#fbb13c',   // 橙色 - 小节
+        'knowledge': '#fe6673'  // 红色 - 知识点
+      };
+      return colors[type] || '#999';
     }
   }
 };
@@ -3087,13 +4696,20 @@ export default {
   }
 }
 
-/* 强制抽屉容器的 z-index 在全屏之上 */
+/* 抽屉容器样式 - 允许点击穿透到下层 */
 ::v-deep .el-drawer__wrapper {
+  pointer-events: none !important;  /* 允许点击穿透 */
   z-index: 10001 !important;
+}
+
+/* 抽屉本身可以交互 */
+::v-deep .el-drawer {
+  pointer-events: auto !important;  /* 抽屉本身可以点击 */
 }
 
 /* 全局抽屉容器样式 - 确保在body层级 */
 body > .el-drawer__wrapper {
+  pointer-events: none !important;
   z-index: 10001 !important;
 }
 
@@ -3167,6 +4783,7 @@ body > .el-drawer__wrapper {
       display: flex;
       flex-direction: column;
       gap: 8px;
+      margin-bottom: 12px;
     }
 
     .knowledge-row {
@@ -3183,6 +4800,20 @@ body > .el-drawer__wrapper {
         background: #f5f7fa;
         border-color: #c0c4cc;
       }
+      
+      &.clickable {
+        cursor: pointer;
+        
+        &:hover {
+          background: #ecf5ff;
+          border-color: #409EFF;
+          transform: translateX(4px);
+        }
+        
+        &:active {
+          transform: translateX(2px);
+        }
+      }
 
       .knowledge-name {
         flex: 1;
@@ -3194,6 +4825,98 @@ body > .el-drawer__wrapper {
       .el-tag {
         flex-shrink: 0;
         margin-left: 12px;
+      }
+      
+      .relation-badge {
+        flex-shrink: 0;
+        margin-left: 12px;
+        display: inline-block;
+        padding: 0 8px;
+        height: 20px;
+        line-height: 20px;
+        color: #fff;
+        font-size: 12px;
+        font-weight: 500;
+        border-radius: 10px;
+        white-space: nowrap;
+      }
+    }
+    
+    // 分页样式
+    .knowledge-pagination {
+      margin-top: 16px;
+      text-align: center;
+      
+      ::v-deep .el-pagination {
+        padding: 0;
+        
+        .el-pager li {
+          min-width: 28px;
+          height: 28px;
+          line-height: 28px;
+          font-size: 12px;
+        }
+        
+        .btn-prev, .btn-next {
+          min-width: 28px;
+          height: 28px;
+          line-height: 28px;
+        }
+      }
+    }
+  }
+
+  .related-knowledge-section {
+    margin-top: 24px;
+
+    .relation-group {
+      margin-bottom: 16px;
+
+      .relation-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+
+        .relation-badge {
+          display: inline-block;
+          padding: 2px 10px;
+          color: #fff;
+          font-size: 12px;
+          font-weight: 500;
+          border-radius: 12px;
+        }
+
+        .relation-count {
+          color: #909399;
+          font-size: 12px;
+        }
+      }
+
+      .relation-items {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+
+        .relation-item {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 8px 12px;
+          background: #f5f7fa;
+          border-radius: 4px;
+          transition: all 0.3s;
+
+          &:hover {
+            background: #e4e7ed;
+          }
+
+          .kp-name {
+            flex: 1;
+            font-size: 13px;
+            color: #303133;
+          }
+        }
       }
     }
   }
@@ -3236,6 +4959,40 @@ body > .el-drawer__wrapper {
         .stat-label {
           font-size: 11px;
           color: #909399;
+        }
+      }
+    }
+  }
+
+  .related-knowledge-list {
+    // 知识点视图时不需要顶部边距和边框
+    .knowledge-items-list & {
+      margin-top: 0;
+      padding-top: 0;
+      border-top: none;
+    }
+
+    .relation-group {
+      margin-bottom: 12px;
+
+      .relation-title {
+        margin-bottom: 8px;
+
+        .relation-badge {
+          display: inline-block;
+          padding: 2px 10px;
+          color: #fff;
+          font-size: 12px;
+          font-weight: 500;
+          border-radius: 12px;
+        }
+      }
+
+      .relation-items {
+        .knowledge-row {
+          margin-bottom: 4px;
+          padding-left: 0;
+          border-left: none;
         }
       }
     }
@@ -3418,6 +5175,147 @@ body > .el-drawer__wrapper {
         background-color: #f78989;
         border-color: #f78989;
       }
+    }
+  }
+}
+
+/* 3D知识图谱容器样式 */
+.knowledge-graph-3d-container {
+  position: relative;
+  margin: 24px -20px; // 负边距抵消父容器padding
+  padding: 20px;
+  background: #1a1a2e;
+  border-radius: 8px;
+  border: 1px solid #16213e;
+  transition: all 0.3s ease;
+  min-height: 800px;
+  overflow: visible;
+  width: calc(100% + 40px); // 补偿负边距
+  
+  .graph-title {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    font-size: 16px;
+    font-weight: bold;
+    color: #ffffff;
+    z-index: 10;
+  }
+
+  .fullscreen-btn {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    z-index: 10;
+  }
+
+  .graph-controls {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+  }
+
+  #knowledge-graph-3d {
+    width: 100%;
+    height: 750px;
+    background: #0f3460;
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .graph-legend {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    margin-top: 16px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+
+    .legend-section {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+
+      .legend-title {
+        color: #ffffff;
+        font-size: 13px;
+        font-weight: bold;
+        margin-bottom: 4px;
+        opacity: 0.9;
+      }
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #ffffff;
+      font-size: 13px;
+
+      .legend-color {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+      }
+
+      .legend-line {
+        display: inline-block;
+        width: 24px;
+        height: 3px;
+        border-radius: 2px;
+      }
+    }
+  }
+
+  .graph-info {
+    margin-top: 16px;
+
+    ::v-deep .el-alert {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      
+      .el-alert__title {
+        color: #ffffff;
+      }
+
+      .el-alert__description {
+        color: rgba(255, 255, 255, 0.8);
+        
+        p {
+          margin: 4px 0;
+          font-size: 13px;
+          line-height: 1.6;
+        }
+
+        strong {
+          color: #ffffff;
+        }
+      }
+    }
+  }
+
+  // 全屏状态
+  &.is-fullscreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw !important;
+    height: 100vh !important;
+    margin: 0;
+    padding: 20px;
+    border-radius: 0;
+    z-index: 9999;
+
+    #knowledge-graph-3d {
+      width: 100% !important;
+      height: calc(100vh - 200px) !important;
     }
   }
 }
