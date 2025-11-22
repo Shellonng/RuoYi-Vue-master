@@ -189,6 +189,8 @@
     <exam
       :visible="examOpen"
       :edit-data="examEditData"
+      :hide-course-select="hideCourseSelect"
+      :course-id="courseId"
       @close="examOpen = false"
       @submit="handleAssignmentSubmit"
     />

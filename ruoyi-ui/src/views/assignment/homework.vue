@@ -1,6 +1,6 @@
 <template>
   <div>
-    <el-dialog :visible="visible" @close="onClose" :title="editData ? '修改作业' : '添加作业'">
+    <el-dialog :visible="visible" @close="onClose" :title="editData ? '修改作业' : '添加作业'" append-to-body>
       <el-form ref="elForm" :model="formData" :rules="rules" size="medium" label-width="100px">
         <el-form-item label="作业标题" prop="field103">
           <el-input v-model="formData.field103" placeholder="请输入作业标题" clearable :style="{width: '100%'}">
@@ -10,7 +10,7 @@
           <el-input v-model="formData.field104" placeholder="请输入作业描述" clearable :style="{width: '100%'}">
           </el-input>
         </el-form-item>
-        <el-form-item label="课程选择" prop="field105">
+        <el-form-item v-if="!hideCourseSelect" label="课程选择" prop="field105">
           <el-select ref="courseSelect" v-model="formData.field105" placeholder="请选择课程选择" :style="{width: '100%'}" @click="handleCourseSelectClick">
             <el-option v-for="(item, index) in field105Options" :key="index" :label="item.label"
               :value="item.value" :disabled="item.disabled"></el-option>
@@ -76,6 +76,14 @@ export default {
     },
     editData: {
       type: Object,
+      default: null
+    },
+    hideCourseSelect: {
+      type: Boolean,
+      default: false
+    },
+    courseId: {
+      type: [Number, String],
       default: null
     }
   },
@@ -150,6 +158,11 @@ export default {
         if (newVal) {
           // 加载课程列表（无论是否编辑模式都需要）
           this.loadCourses()
+          
+          // 如果隐藏课程选择且传入了courseId，自动设置
+          if (this.hideCourseSelect && this.courseId) {
+            this.formData.field105 = this.courseId
+          }
           
           if (this.editData) {
             this.loadEditData();

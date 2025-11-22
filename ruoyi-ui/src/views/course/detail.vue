@@ -238,6 +238,13 @@
         </div>
       </el-tab-pane>
 
+      <!-- 知识点库标签页 -->
+      <el-tab-pane label="知识点库" name="knowledgePoints">
+        <div class="tab-content">
+          <knowledge-point :course-id="courseId" />
+        </div>
+      </el-tab-pane>
+
       <!-- 课程图谱标签页 -->
       <el-tab-pane label="课程图谱" name="knowledge">
         <div class="tab-content">
@@ -846,6 +853,7 @@ import { uploadAndGenerate } from "@/api/course/generation";
 import { generateKnowledgeGraph, listKpRelationByCourse } from "@/api/course/kpRelation";
 import ExamManagement from "@/views/assignment/exam/index.vue";
 import HomeworkManagement from "@/views/assignment/homework/index.vue";
+import KnowledgePoint from "@/views/knowledgepoint/index.vue";
 import Sortable from 'sortablejs';
 import * as echarts from 'echarts';
 // ForceGraph3D从全局window对象获取(通过index.html引入)
@@ -854,7 +862,8 @@ export default {
   name: "CourseDetail",
   components: {
     ExamManagement,
-    HomeworkManagement
+    HomeworkManagement,
+    KnowledgePoint
   },
   data() {
     return {

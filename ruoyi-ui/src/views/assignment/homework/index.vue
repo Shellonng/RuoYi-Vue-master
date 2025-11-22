@@ -189,6 +189,8 @@
     <homework
       :visible="homeworkOpen"
       :edit-data="homeworkEditData"
+      :hide-course-select="hideCourseSelect"
+      :course-id="courseId"
       @close="homeworkOpen = false"
       @submit="handleAssignmentSubmit"
     />
