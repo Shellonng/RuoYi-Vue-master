@@ -2503,7 +2503,7 @@ export default {
           categories: graphData.categories,
           roam: true,
           draggable: true,
-          zoom: 0.3,
+          zoom: 0.24,
           center: ['50%', '50%'],
           label: {
             show: true,
