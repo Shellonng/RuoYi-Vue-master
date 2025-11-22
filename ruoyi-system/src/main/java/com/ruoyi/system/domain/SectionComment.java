@@ -48,6 +48,9 @@ public class SectionComment extends BaseEntity
 
     // ========== 额外字段，用于前端展示 ==========
     
+    /** 小节标题 */
+    private String sectionTitle;
+
     /** 评论人姓名 */
     private String userName;
 
@@ -148,6 +151,14 @@ public class SectionComment extends BaseEntity
 
     public void setUserName(String userName) {
         this.userName = userName;
+    }
+
+    public String getSectionTitle() {
+        return sectionTitle;
+    }
+
+    public void setSectionTitle(String sectionTitle) {
+        this.sectionTitle = sectionTitle;
     }
 
     public String getUserAvatar() {

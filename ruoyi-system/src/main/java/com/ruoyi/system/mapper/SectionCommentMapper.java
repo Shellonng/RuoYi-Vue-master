@@ -90,4 +90,12 @@ public interface SectionCommentMapper
      * @return 结果
      */
     public int deleteSectionCommentByIds(Long[] ids);
+
+    /**
+     * 根据父评论ID删除所有回复
+     * 
+     * @param parentId 父评论ID
+     * @return 结果
+     */
+    public int deleteSectionCommentByParentId(@Param("parentId") Long parentId);
 }

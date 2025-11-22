@@ -109,11 +109,16 @@ public class SectionCommentServiceImpl implements ISectionCommentService
     @Override
     public int deleteSectionCommentByIds(Long[] ids)
     {
-        return sectionCommentMapper.deleteSectionCommentByIds(ids);
+        int result = 0;
+        for (Long id : ids)
+        {
+            result += deleteSectionCommentById(id);
+        }
+        return result;
     }
 
     /**
-     * 删除小节评论信息
+     * 删除小节评论信息（级联删除所有回复）
      * 
      * @param id 小节评论主键
      * @return 结果
@@ -121,6 +126,10 @@ public class SectionCommentServiceImpl implements ISectionCommentService
     @Override
     public int deleteSectionCommentById(Long id)
     {
+        // 1. 先删除所有回复
+        sectionCommentMapper.deleteSectionCommentByParentId(id);
+        
+        // 2. 再删除评论本身
         return sectionCommentMapper.deleteSectionCommentById(id);
     }
 }

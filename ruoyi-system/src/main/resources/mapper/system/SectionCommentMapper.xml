@@ -22,6 +22,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="userAvatar"   column="user_avatar"  />
         <result property="userRole"     column="user_role"    />
         <result property="replyCount"   column="reply_count"  />
+        <result property="sectionTitle" column="section_title"/>
     </resultMap>
 
     <sql id="selectSectionCommentVo">
@@ -30,13 +31,15 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         from section_comment
     </sql>
 
-    <!-- 带用户信息的查询 -->
+    <!-- 带用户信息的查询（支持课程过滤） -->
     <sql id="selectSectionCommentWithUserVo">
         select sc.id, sc.section_id, sc.user_id, sc.content, sc.parent_id,
                sc.create_time, sc.update_time, sc.is_deleted, sc.delete_time,
-               u.real_name as user_name, u.avatar as user_avatar, u.role as user_role
+               u.real_name as user_name, u.avatar as user_avatar, u.role as user_role,
+               s.title as section_title
         from section_comment sc
         left join user u on sc.user_id = u.id
+        left join section s on sc.section_id = s.id
     </sql>
 
     <select id="selectSectionCommentById" parameterType="Long" resultMap="SectionCommentWithUserResult">
@@ -44,21 +47,30 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         where sc.id = #{id} and sc.is_deleted = 0
     </select>
 
-    <select id="selectSectionCommentList" parameterType="SectionComment" resultMap="SectionCommentResult">
-        <include refid="selectSectionCommentVo"/>
+    <select id="selectSectionCommentList" parameterType="SectionComment" resultMap="SectionCommentWithUserResult">
+        <include refid="selectSectionCommentWithUserVo"/>
         <where>
-            is_deleted = 0
+            sc.is_deleted = 0
             <if test="sectionId != null">
-                and section_id = #{sectionId}
+                and sc.section_id = #{sectionId}
             </if>
             <if test="userId != null">
-                and user_id = #{userId}
+                and sc.user_id = #{userId}
             </if>
             <if test="parentId != null">
-                and parent_id = #{parentId}
+                and sc.parent_id = #{parentId}
+            </if>
+            <if test="params.courseId != null and params.courseId != ''">
+                and s.course_id = #{params.courseId}
+            </if>
+            <if test="params.content != null and params.content != ''">
+                and sc.content like concat('%', #{params.content}, '%')
+            </if>
+            <if test="params.userName != null and params.userName != ''">
+                and u.real_name like concat('%', #{params.userName}, '%')
             </if>
         </where>
-        order by create_time desc
+        order by sc.create_time desc
     </select>
 
     <!-- 查询小节的一级评论列表（含用户信息和回复数） -->
@@ -144,6 +156,13 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <foreach item="id" collection="array" open="(" separator="," close=")">
             #{id}
         </foreach>
+    </update>
+
+    <!-- 根据父评论ID逻辑删除所有回复 -->
+    <update id="deleteSectionCommentByParentId">
+        update section_comment
+        set is_deleted = 1, delete_time = now()
+        where parent_id = #{parentId}
     </update>
 
 </mapper>

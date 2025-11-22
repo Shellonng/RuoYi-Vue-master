@@ -234,7 +234,7 @@
       <!-- 讨论区标签页 -->
       <el-tab-pane label="讨论区" name="discussion">
         <div class="tab-content">
-          <el-empty description="讨论区建设中..."></el-empty>
+          <discussion :course-id="courseId" :hide-section-select="false" />
         </div>
       </el-tab-pane>
 
@@ -854,6 +854,7 @@ import { generateKnowledgeGraph, listKpRelationByCourse } from "@/api/course/kpR
 import ExamManagement from "@/views/assignment/exam/index.vue";
 import HomeworkManagement from "@/views/assignment/homework/index.vue";
 import KnowledgePoint from "@/views/knowledgepoint/index.vue";
+import Discussion from "@/views/discussion/index.vue";
 import Sortable from 'sortablejs';
 import * as echarts from 'echarts';
 // ForceGraph3D从全局window对象获取(通过index.html引入)
@@ -863,7 +864,8 @@ export default {
   components: {
     ExamManagement,
     HomeworkManagement,
-    KnowledgePoint
+    KnowledgePoint,
+    Discussion
   },
   data() {
     return {
