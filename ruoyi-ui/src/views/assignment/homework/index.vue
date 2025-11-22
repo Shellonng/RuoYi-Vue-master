@@ -11,7 +11,7 @@
           style="width: 100%"
         />
       </el-form-item>
-      <el-form-item label="所属课程" prop="courseId">
+      <el-form-item label="所属课程" prop="courseId" v-if="!hideCourseSelect">
         <el-select 
           v-model="queryParams.courseId" 
           placeholder="请选择课程" 
@@ -95,7 +95,7 @@
     <el-table v-loading="loading" :data="assignmentList" @selection-change="handleSelectionChange">
       <el-table-column type="selection" width="55" align="center" />
       <el-table-column label="作业名称" align="center" prop="title" min-width="150" />
-      <el-table-column label="所属课程" align="center" prop="courseName" min-width="120" />
+      <el-table-column label="所属课程" align="center" prop="courseName" min-width="120" v-if="!hideCourseSelect" />
       <el-table-column label="状态" align="center" prop="homeworkStatus" width="100">
         <template slot-scope="scope">
           <el-tag v-if="scope.row.homeworkStatus === '未开始'" type="info">未开始</el-tag>
@@ -163,7 +163,7 @@
       </el-table-column>
     </el-table>
     
-    <div class="pagination-container">
+    <div class="pagination-container" :style="{ marginTop: getPaginationMargin() }">
       <div class="pagination-info">
         共 {{ total }} 条
         <el-select v-model="queryParams.pageSize" @change="handleQuery" style="width: 100px; margin-left: 10px;">
@@ -205,6 +205,18 @@ export default {
   name: "HomeworkManagement",
   components: {
     Homework
+  },
+  props: {
+    // 是否隐藏课程选择
+    hideCourseSelect: {
+      type: Boolean,
+      default: false
+    },
+    // 固定的课程ID（当hideCourseSelect为true时使用）
+    courseId: {
+      type: [Number, String],
+      default: null
+    }
   },
   data() {
     return {
@@ -266,15 +278,32 @@ export default {
     }
   },
   created() {
-    this.getCourseList()
-    this.getList()
+    // 如果传入了固定的courseId，设置到查询参数中
+    if (this.hideCourseSelect && this.courseId) {
+      this.queryParams.courseId = this.courseId;
+    }
+    // 先加载课程列表，完成后再加载任务列表
+    this.getCourseList().then(() => {
+      this.getList()
+    })
+  },
+  watch: {
+    // 监听courseId变化，重置分页并重新加载
+    courseId(newVal, oldVal) {
+      if (newVal !== oldVal && this.hideCourseSelect) {
+        this.queryParams.pageNum = 1;
+        this.queryParams.courseId = newVal;
+        this.getList();
+      }
+    }
   },
   methods: {
     /** 查询课程列表 */
     getCourseList() {
-      listCourse({ pageNum: 1, pageSize: 1000 }).then(response => {
+      return listCourse({ pageNum: 1, pageSize: 1000 }).then(response => {
         this.courseList = response.rows || []
         this.filteredCourseList = this.courseList
+        return response
       })
     },
     /** 查询作业列表 */
@@ -394,7 +423,16 @@ export default {
       this.queryParams.pageNum = page
       this.getList()
     },
-    /** 处理作业提交 */
+    /** 计算分页容器的上边距 */
+    getPaginationMargin() {
+      // 基础边距40px + 每条数据的高度(捖50px计算)
+      const baseMargin = 40;
+      const rowHeight = 50;
+      const emptyRows = this.queryParams.pageSize - (this.assignmentList.length || 0);
+      const dynamicMargin = emptyRows > 0 ? emptyRows * rowHeight : 0;
+      return `${baseMargin + dynamicMargin}px`;
+    },
+    /** 处理作业或考试提交 */
     handleAssignmentSubmit(data, selectedKpIds) {
       console.log('接收到的提交数据:', JSON.stringify(data, null, 2))
       console.log('选择的知识点ID:', selectedKpIds)
@@ -430,8 +468,8 @@ export default {
           return
         }
         
-        // 如果有选择知识点，则保存知识点关联
-        if (selectedKpIds && selectedKpIds.length > 0) {
+        // 保存知识点关联（包括清空的情况）
+        if (selectedKpIds !== undefined) {
           console.log('开始保存知识点关联, 作业ID:', assignmentId, '知识点ID:', selectedKpIds)
           setAssignmentKnowledgePoints(assignmentId, selectedKpIds).then(kpResponse => {
             console.log('知识点关联保存成功:', kpResponse)
@@ -445,7 +483,7 @@ export default {
             this.getList()
           })
         } else {
-          // 没有选择知识点，直接提示成功
+          // 没有传入知识点数据，直接提示成功
           this.$modal.msgSuccess(data.id ? "修改成功" : "添加成功")
           this.homeworkOpen = false
           this.getList()
@@ -513,21 +551,17 @@ export default {
 }
 
 .pagination-container {
-  position: fixed;
-  bottom: 20px;
-  left: 180px;
-  right: 0;
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 10px 20px;
+  padding: 20px;
   background: #fff;
-  z-index: 100;
+  margin-top: 20px;
 }
 
 .pagination-info {
   position: absolute;
-  right: 20px;
+  right: 40px;
   display: flex;
   align-items: center;
   font-size: 14px;

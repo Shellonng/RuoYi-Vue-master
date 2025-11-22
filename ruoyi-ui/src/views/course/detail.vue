@@ -157,7 +157,63 @@
       <!-- 任务管理标签页 -->
       <el-tab-pane label="任务管理" name="tasks">
         <div class="tab-content">
-          <el-empty description="任务管理建设中..."></el-empty>
+          <!-- 任务类型切换 - 卡片滑动效果 -->
+          <div class="task-slider-container">
+            <!-- 左侧切换按钮 -->
+            <transition name="slide-btn">
+              <el-button 
+                v-if="activeTaskType === 'homework'"
+                class="slide-nav-btn slide-nav-left"
+                type="primary"
+                circle
+                icon="el-icon-arrow-left"
+                @click="switchToExam"
+              />
+            </transition>
+
+            <!-- 卡片滑动区域 -->
+            <div class="task-cards-wrapper">
+              <div class="task-cards" :style="{ transform: `translateX(${activeTaskType === 'exam' ? '0' : '-50%'})` }">
+                <!-- 考试管理卡片 -->
+                <div class="task-card">
+                  <div class="task-card-header">
+                    <i class="el-icon-s-order"></i>
+                    <span>考试管理</span>
+                  </div>
+                  <exam-management 
+                    :course-id="courseId" 
+                    :hide-course-select="true"
+                    ref="examManagement"
+                  />
+                </div>
+                
+                <!-- 作业管理卡片 -->
+                <div class="task-card">
+                  <div class="task-card-header">
+                    <i class="el-icon-edit-outline"></i>
+                    <span>作业管理</span>
+                  </div>
+                  <homework-management 
+                    :course-id="courseId" 
+                    :hide-course-select="true"
+                    ref="homeworkManagement"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <!-- 右侧切换按钮 -->
+            <transition name="slide-btn">
+              <el-button 
+                v-if="activeTaskType === 'exam'"
+                class="slide-nav-btn slide-nav-right"
+                type="primary"
+                circle
+                icon="el-icon-arrow-right"
+                @click="switchToHomework"
+              />
+            </transition>
+          </div>
         </div>
       </el-tab-pane>
 
@@ -788,12 +844,18 @@ import { listSectionByChapter, addSection, updateSection, delSection } from "@/a
 import { listKnowledgePointBySection } from "@/api/course/knowledgePoint";
 import { uploadAndGenerate } from "@/api/course/generation";
 import { generateKnowledgeGraph, listKpRelationByCourse } from "@/api/course/kpRelation";
+import ExamManagement from "@/views/assignment/exam/index.vue";
+import HomeworkManagement from "@/views/assignment/homework/index.vue";
 import Sortable from 'sortablejs';
 import * as echarts from 'echarts';
 // ForceGraph3D从全局window对象获取(通过index.html引入)
 
 export default {
   name: "CourseDetail",
+  components: {
+    ExamManagement,
+    HomeworkManagement
+  },
   data() {
     return {
       courseId: null,
@@ -904,6 +966,8 @@ export default {
       last2DClickNode: null, // 最后一次点击的节点ID
       last2DClickTime: 0, // 最后一次点击的时间
       clickTimeout: null, // 单击延迟定时器
+      // 任务管理相关
+      activeTaskType: 'exam', // 当前激活的任务类型标签
     };
   },
   created() {
@@ -930,6 +994,15 @@ export default {
           // 渲染3D图谱
           if (!this.graph3DInstance) {
             this.render3DKnowledgeGraph();
+          }
+        });
+      } else if (newVal === 'tasks') {
+        // 切换到任务管理标签页时，刷新当前激活的子标签
+        this.$nextTick(() => {
+          if (this.activeTaskType === 'exam' && this.$refs.examManagement) {
+            this.$refs.examManagement.handleQuery();
+          } else if (this.activeTaskType === 'homework' && this.$refs.homeworkManagement) {
+            this.$refs.homeworkManagement.handleQuery();
           }
         });
       }
@@ -4290,6 +4363,43 @@ export default {
         'knowledge': '#fe6673'  // 红色 - 知识点
       };
       return colors[type] || '#999';
+    },
+
+    // ==================== 任务管理相关方法 ====================
+    
+    /** 任务类型标签切换 */
+    handleTaskTabClick(tab) {
+      this.$nextTick(() => {
+        if (tab.name === 'exam' && this.$refs.examManagement) {
+          this.$refs.examManagement.handleQuery();
+        } else if (tab.name === 'homework' && this.$refs.homeworkManagement) {
+          this.$refs.homeworkManagement.handleQuery();
+        }
+      });
+    },
+
+    /** 切换到考试管理 */
+    switchToExam() {
+      this.activeTaskType = 'exam';
+      this.$nextTick(() => {
+        if (this.$refs.examManagement) {
+          // 重置分页到第一页
+          this.$refs.examManagement.queryParams.pageNum = 1;
+          this.$refs.examManagement.getList();
+        }
+      });
+    },
+
+    /** 切换到作业管理 */
+    switchToHomework() {
+      this.activeTaskType = 'homework';
+      this.$nextTick(() => {
+        if (this.$refs.homeworkManagement) {
+          // 重置分页到第一页
+          this.$refs.homeworkManagement.queryParams.pageNum = 1;
+          this.$refs.homeworkManagement.getList();
+        }
+      });
     }
   }
 };
@@ -5429,4 +5539,146 @@ body > .el-drawer__wrapper {
     }
   }
 }
+
+/* 任务管理卡片滑动效果 */
+.task-slider-container {
+  position: relative;
+  width: 100%;
+  overflow: visible;
+  
+  .task-cards-wrapper {
+    width: 100%;
+    overflow: hidden;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  }
+  
+  .task-cards {
+    display: flex;
+    width: 200%;
+    transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: transform;
+  }
+  
+  .task-card {
+    flex: 0 0 50%;
+    width: 50%;
+    min-height: 500px;
+    background: #fff;
+    position: relative;
+    
+    .task-card-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 16px 20px;
+      color: #fff;
+      font-size: 18px;
+      font-weight: 600;
+      border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+      
+      i {
+        font-size: 22px;
+      }
+    }
+    
+    /* 第一个卡片（考试管理）- 蓝色 */
+    &:first-child .task-card-header {
+      background: #4A90E2;
+    }
+    
+    /* 第二个卡片（作业管理）- 绿色 */
+    &:last-child .task-card-header {
+      background: #66C18C;
+    }
+  }
+  
+  .slide-nav-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 100;
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+    box-shadow: 0 4px 12px rgba(64, 158, 255, 0.4);
+    transition: all 0.3s ease;
+    
+    &:hover {
+      transform: translateY(-50%) scale(1.15);
+      box-shadow: 0 6px 16px rgba(64, 158, 255, 0.6);
+    }
+    
+    &:active {
+      transform: translateY(-50%) scale(0.95);
+    }
+  }
+  
+  .slide-nav-left {
+    left: -18px;
+    animation: pulse-left 2s ease-in-out infinite;
+  }
+  
+  .slide-nav-right {
+    right: -18px;
+    animation: pulse-right 2s ease-in-out infinite;
+  }
+}
+
+/* 按钮进入/离开动画 */
+.slide-btn-enter-active,
+.slide-btn-leave-active {
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.slide-btn-enter {
+  opacity: 0;
+  transform: translateY(-50%) scale(0.5);
+}
+
+.slide-btn-leave-to {
+  opacity: 0;
+  transform: translateY(-50%) scale(0.5);
+}
+
+/* 按钮呼吸动画 */
+@keyframes pulse-left {
+  0%, 100% {
+    transform: translateY(-50%) translateX(0);
+  }
+  50% {
+    transform: translateY(-50%) translateX(-2px);
+  }
+}
+
+@keyframes pulse-right {
+  0%, 100% {
+    transform: translateY(-50%) translateX(0);
+  }
+  50% {
+    transform: translateY(-50%) translateX(2px);
+  }
+}
+
+/* 响应式优化 */
+@media (max-width: 768px) {
+  .task-slider-container {
+    .slide-nav-btn {
+      width: 32px;
+      height: 32px;
+      font-size: 14px;
+    }
+    
+    .slide-nav-left {
+      left: -16px;
+    }
+    
+    .slide-nav-right {
+      right: -16px;
+    }
+  }
+}
 </style>
+
+

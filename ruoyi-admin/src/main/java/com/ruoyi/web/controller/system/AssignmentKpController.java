@@ -26,7 +26,7 @@ import com.ruoyi.system.service.IAssignmentKpService;
  * @author ruoyi
  */
 @RestController
-@RequestMapping("/system/assignmentKp")
+@RequestMapping({"/system/assignmentKp", "/system/assignmentkp"})
 public class AssignmentKpController extends BaseController
 {
     @Autowired

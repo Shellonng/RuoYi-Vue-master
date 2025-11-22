@@ -172,10 +172,10 @@ public class AssignmentKpServiceImpl implements IAssignmentKpService
         // 先删除该作业的所有知识点关联
         assignmentKpMapper.deleteAssignmentKpByAssignmentId(assignmentId);
         
-        // 如果没有新的知识点，直接返回
+        // 如果没有新的知识点，删除成功后返回1（表示操作成功）
         if (kpIds == null || kpIds.length == 0)
         {
-            return 0;
+            return 1;
         }
         
         // 创建新的关联
