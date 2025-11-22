@@ -1150,6 +1150,14 @@ export default {
     goBack() {
       this.$router.go(-1);
     },
+    /** 跳转到小节详情页 */
+    goToSectionDetail(section) {
+      // 使用动态路由跳转到小节详情页
+      // 根据数据库配置: section/:courseId/:sectionId
+      this.$router.push({
+        path: `/section/${this.courseId}/${section.id}`
+      });
+    },
     /** 格式化日期 */
     formatDate(dateStr) {
       if (!dateStr) return '';
@@ -4495,11 +4503,19 @@ export default {
 
       .section-info {
         flex: 1;
+        transition: all 0.3s;
+
+        &:hover {
+          .section-title {
+            color: #409eff;
+          }
+        }
 
         .section-title {
           margin: 0 0 4px 0;
           font-size: 14px;
           color: #303133;
+          transition: color 0.3s;
         }
 
         .section-duration {

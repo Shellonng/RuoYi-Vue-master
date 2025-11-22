@@ -75,3 +75,12 @@ export function batchAddKnowledgePoints(data) {
     data: data
   })
 }
+
+// 设置小节的知识点（先删除旧关联，再创建新关联）
+export function setSectionKnowledgePoints(sectionId, kpIds) {
+  return request({
+    url: '/sectionKp/setKnowledgePoints/' + sectionId,
+    method: 'put',
+    data: kpIds
+  })
+}

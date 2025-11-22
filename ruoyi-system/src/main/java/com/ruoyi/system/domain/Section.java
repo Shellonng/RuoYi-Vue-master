@@ -61,6 +61,12 @@ public class Section extends BaseEntity
     /** 小节完成状态（用于前端显示） */
     private Boolean completed;
 
+    /** 章节名称（用于前端显示，关联查询） */
+    private String chapterName;
+
+    /** 课程ID（用于前端显示，关联查询） */
+    private Long courseId;
+
     public Long getId() {
         return id;
     }
@@ -163,6 +169,22 @@ public class Section extends BaseEntity
 
     public void setCompleted(Boolean completed) {
         this.completed = completed;
+    }
+
+    public String getChapterName() {
+        return chapterName;
+    }
+
+    public void setChapterName(String chapterName) {
+        this.chapterName = chapterName;
+    }
+
+    public Long getCourseId() {
+        return courseId;
+    }
+
+    public void setCourseId(Long courseId) {
+        this.courseId = courseId;
     }
 
     @Override

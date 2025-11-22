@@ -1,17 +1,19 @@
 -- =============================================
 -- 小节详情页菜单配置
--- 说明：为课程详情页添加隐藏的小节详情子路由
+-- 说明：小节详情与课程详情同级，都在根路径下
 -- =============================================
 
--- 第一步：查询课程详情页的菜单ID（需要先确认）
--- SELECT menu_id, menu_name, path FROM sys_menu WHERE menu_name = '课程详情';
--- 假设课程详情的 menu_id = 2001（请根据实际情况修改）
+-- 第一步：查询现有菜单结构（可选，用于确认）
+-- SELECT menu_id, menu_name, parent_id, path FROM sys_menu WHERE menu_name IN ('课程管理', '课程详情', '小节详情');
+-- 课程管理: menu_id=2000, parent_id=0, path=course
+-- 课程详情: menu_id=5009, parent_id=0, path=detail/:id
+-- 小节详情: 将要创建，parent_id=0, path=section/:courseId/:sectionId
 
 -- 第二步：插入小节详情页菜单
--- 注意：parent_id 需要改成实际的课程详情菜单ID
+-- 注意：parent_id 设置为 0，表示与课程详情同级
 INSERT INTO sys_menu (
     menu_name,
-    parent_id,      -- 课程详情的 menu_id，需要根据实际情况修改
+    parent_id,      -- 设置为 0，与课程详情同级
     order_num,
     path,
     component,
@@ -27,7 +29,7 @@ INSERT INTO sys_menu (
     remark
 ) VALUES (
     '小节详情',
-    2001,            -- ★ 重要：改成实际的课程详情菜单ID
+    0,               -- ★ 与课程详情同级，parent_id=0
     3,
     'section/:courseId/:sectionId',  -- 动态参数路由
     'course/section',                -- 对应 views/course/section.vue
@@ -60,25 +62,19 @@ LIMIT 1;
 -- =============================================
 -- 使用说明
 -- =============================================
--- 1. 先查询课程详情的菜单ID：
---    SELECT menu_id FROM sys_menu WHERE menu_name = '课程详情';
+-- 1. 小节详情菜单与课程详情同级（parent_id=0）
 --
--- 2. 将上面查询到的 menu_id 替换脚本中的 parent_id 值
+-- 2. 直接执行插入语句（不需要修改parent_id）
 --
--- 3. 执行插入语句
+-- 3. 重启后端服务
 --
--- 4. 重启后端服务
+-- 4. 前端清除缓存，重新登录
 --
--- 5. 前端清除缓存，重新登录
---
--- 6. 跳转代码示例：
+-- 5. 跳转代码示例：
 --    this.$router.push({
---      path: `/course/detail/${courseId}/section/${sectionId}`
+--      path: `/section/${courseId}/${sectionId}`
 --    });
 --
--- 7. 或使用命名路由：
---    this.$router.push({
---      name: 'SectionDetail',
---      params: { courseId: courseId, sectionId: sectionId }
---    });
+-- 6. 完整URL示例：
+--    http://localhost/section/30/5
 -- =============================================

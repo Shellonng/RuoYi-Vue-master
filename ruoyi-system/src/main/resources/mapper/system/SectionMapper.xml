@@ -18,15 +18,30 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="deleteTime"   column="delete_time"  />
     </resultMap>
 
+    <!-- 带章节和课程信息的结果映射 -->
+    <resultMap type="Section" id="SectionWithChapterResult" extends="SectionResult">
+        <result property="chapterName"  column="chapter_name" />
+        <result property="courseId"     column="course_id"    />
+    </resultMap>
+
     <sql id="selectSectionVo">
         select id, chapter_id, title, description, video_url, duration, sort_order,
                create_time, update_time, is_deleted, delete_time
         from section
     </sql>
 
-    <select id="selectSectionById" parameterType="Long" resultMap="SectionResult">
-        <include refid="selectSectionVo"/>
-        where id = #{id} and is_deleted = 0
+    <!-- 带章节和课程信息的查询 -->
+    <sql id="selectSectionWithChapterVo">
+        select s.id, s.chapter_id, s.title, s.description, s.video_url, s.duration, s.sort_order,
+               s.create_time, s.update_time, s.is_deleted, s.delete_time,
+               c.title as chapter_name, c.course_id
+        from section s
+        left join chapter c on s.chapter_id = c.id and c.is_deleted = 0
+    </sql>
+
+    <select id="selectSectionById" parameterType="Long" resultMap="SectionWithChapterResult">
+        <include refid="selectSectionWithChapterVo"/>
+        where s.id = #{id} and s.is_deleted = 0
     </select>
 
     <select id="selectSectionList" parameterType="Section" resultMap="SectionResult">
@@ -76,7 +91,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <set>
             <if test="title != null and title != ''">title = #{title}, </if>
             <if test="description != null">description = #{description}, </if>
-            <if test="videoUrl != null and videoUrl != ''">video_url = #{videoUrl}, </if>
+            <if test="videoUrl != null">video_url = #{videoUrl}, </if>
             <if test="duration != null">duration = #{duration}, </if>
             <if test="sortOrder != null">sort_order = #{sortOrder}, </if>
             update_time = sysdate()

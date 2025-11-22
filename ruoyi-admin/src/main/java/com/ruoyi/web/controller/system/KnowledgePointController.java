@@ -20,6 +20,7 @@ import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.system.domain.KnowledgePoint;
 import com.ruoyi.system.service.IKnowledgePointService;
+import com.ruoyi.system.utils.BusinessUserUtils;
 
 /**
  * 知识点 信息操作处理
@@ -78,12 +79,12 @@ public class KnowledgePointController extends BaseController
      */
     @Log(title = "知识点", businessType = BusinessType.INSERT)
     @PostMapping
-    public AjaxResult add(@Validated @RequestBody KnowledgePoint knowledgePoint)
+    public AjaxResult add(@RequestBody KnowledgePoint knowledgePoint)
     {
-        // 自动设置创建者为当前登录用户
+        // 自动设置创建者为当前登录用户（业务用户ID）
         if (knowledgePoint.getCreatorUserId() == null)
         {
-            knowledgePoint.setCreatorUserId(SecurityUtils.getUserId());
+            knowledgePoint.setCreatorUserId(BusinessUserUtils.getCurrentBusinessUserId());
         }
         int result = knowledgePointService.insertKnowledgePoint(knowledgePoint);
         if (result > 0) {
