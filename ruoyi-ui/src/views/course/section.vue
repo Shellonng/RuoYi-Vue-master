@@ -195,21 +195,57 @@
               <div class="discussion-list">
                 <div v-for="item in discussionList" :key="item.id" class="discussion-item">
                   <div class="user-avatar">
-                    <el-avatar :size="40" :src="item.userAvatar">{{ item.userName.charAt(0) }}</el-avatar>
+                    <el-avatar :size="40" :src="item.userAvatar">{{ item.userName ? item.userName.charAt(0) : 'U' }}</el-avatar>
                   </div>
                   <div class="discussion-body">
                     <div class="user-info">
                       <span class="user-name">{{ item.userName }}</span>
+                      <el-tag v-if="item.userRole === 'TEACHER'" size="mini" type="warning" style="margin-left: 8px;">教师</el-tag>
                       <span class="post-time">{{ formatTime(item.createTime) }}</span>
                     </div>
                     <div class="discussion-text">{{ item.content }}</div>
                     <div class="discussion-actions">
-                      <el-button type="text" size="small" icon="el-icon-chat-line-round">
+                      <el-button type="text" size="small" icon="el-icon-chat-line-round" @click="showReplyInput(item)">
                         回复({{ item.replyCount || 0 }})
                       </el-button>
-                      <el-button type="text" size="small" icon="el-icon-thumb">
-                        点赞({{ item.likeCount || 0 }})
+                      <el-button v-if="canDeleteComment(item)" type="text" size="small" icon="el-icon-delete" @click="deleteDiscussion(item.id)" style="color: #f56c6c;">
+                        删除
                       </el-button>
+                    </div>
+                    
+                    <!-- 回复列表 -->
+                    <div v-if="item.replies && item.replies.length > 0" class="replies-list">
+                      <div v-for="reply in item.replies" :key="reply.id" class="reply-item">
+                        <el-avatar :size="32" :src="reply.userAvatar" style="margin-right: 10px;">{{ reply.userName ? reply.userName.charAt(0) : 'U' }}</el-avatar>
+                        <div class="reply-content">
+                          <div class="reply-user-info">
+                            <span class="user-name">{{ reply.userName }}</span>
+                            <el-tag v-if="reply.userRole === 'TEACHER'" size="mini" type="warning" style="margin-left: 5px;">教师</el-tag>
+                            <span class="post-time">{{ formatTime(reply.createTime) }}</span>
+                          </div>
+                          <div class="reply-text">{{ reply.content }}</div>
+                          <div class="reply-actions" v-if="canDeleteComment(reply)">
+                            <el-button type="text" size="mini" icon="el-icon-delete" @click="deleteDiscussion(reply.id)" style="color: #f56c6c;">
+                              删除
+                            </el-button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <!-- 回复输入框 -->
+                    <div v-if="item.showReplyInput" class="reply-input-area">
+                      <el-input
+                        type="textarea"
+                        :rows="2"
+                        placeholder="写下你的回复..."
+                        v-model="item.replyContent"
+                        maxlength="500"
+                      ></el-input>
+                      <div style="margin-top: 8px;">
+                        <el-button type="primary" size="small" @click="submitReply(item)">发送</el-button>
+                        <el-button size="small" @click="item.showReplyInput = false">取消</el-button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -426,7 +462,9 @@
 <script>
 import { getSection, listSectionByChapter, updateSection } from "@/api/course/section";
 import { listChapterByCourse } from "@/api/course/chapter";
+import { getCourse } from "@/api/course/course";
 import { listKnowledgePointBySection, addKnowledgePoint, setSectionKnowledgePoints } from "@/api/course/knowledgePoint";
+import { getCommentTree, addComment, delComment, getCurrentBusinessUser } from "@/api/system/comment";
 import { getToken } from "@/utils/auth";
 
 export default {
@@ -459,8 +497,12 @@ export default {
         videoUrl: '',
         coverImage: '',
         content: '',
-        duration: 0
+        duration: 0,
+        courseCreatorId: null  // 课程创建者ID
       },
+
+      // 当前用户ID（用于权限判断）
+      currentUserId: null,
 
       // 知识点列表
       knowledgePoints: [],
@@ -537,6 +579,7 @@ export default {
     this.loadKnowledgePoints();
     this.loadDiscussions();
     this.loadNotes();
+    this.loadCurrentUser();
   },
   mounted() {
     // 如果是视频类型，初始化视频播放器
@@ -939,8 +982,18 @@ export default {
           videoUrl: videoUrl,
           coverImage: '', // 如果需要封面图,可以在Section表中添加字段
           content: data.description || '', // 文档内容使用description字段
-          duration: data.duration || 0
+          duration: data.duration || 0,
+          courseCreatorId: null  // 先设置为null，稍后从课程信息中获取
         };
+
+        // 加载课程信息以获取创建者ID
+        if (data.courseId) {
+          getCourse(data.courseId).then(courseResponse => {
+            this.sectionInfo.courseCreatorId = courseResponse.data.teacherUserId;
+          }).catch(() => {
+            console.error('获取课程信息失败');
+          });
+        }
 
         // 如果是视频类型,初始化/重新加载视频播放器
         if (this.sectionInfo.type === 'video' && this.sectionInfo.videoUrl) {
@@ -1017,27 +1070,13 @@ export default {
 
     /** 加载讨论 */
     loadDiscussions() {
-      // 模拟数据
-      this.discussionList = [
-        {
-          id: 1,
-          userName: '张三',
-          userAvatar: '',
-          content: '这节课讲得很好，对数值分析有了更深的理解！',
-          createTime: new Date(Date.now() - 3600000),
-          replyCount: 2,
-          likeCount: 5
-        },
-        {
-          id: 2,
-          userName: '李四',
-          userAvatar: '',
-          content: '请问老师，误差累积应该如何避免？',
-          createTime: new Date(Date.now() - 7200000),
-          replyCount: 1,
-          likeCount: 3
-        }
-      ];
+      // 调用真实API获取评论数据
+      getCommentTree(this.sectionId).then(response => {
+        this.discussionList = response.data || [];
+      }).catch(error => {
+        console.error('加载讨论失败:', error);
+        this.discussionList = [];
+      });
     },
 
     /** 加载笔记 */
@@ -1100,18 +1139,72 @@ export default {
         return;
       }
       
-      // 实际项目中应该调用API
-      this.$message.success('发表成功');
-      this.discussionList.unshift({
-        id: Date.now(),
-        userName: '当前用户',
-        userAvatar: '',
-        content: this.newDiscussion,
-        createTime: new Date(),
-        replyCount: 0,
-        likeCount: 0
+      // 调用真实API发表评论
+      const commentData = {
+        sectionId: this.sectionId,
+        content: this.newDiscussion.trim(),
+        parentId: null // 一级评论
+      };
+      
+      addComment(commentData).then(response => {
+        this.$message.success('发表成功');
+        this.newDiscussion = '';
+        // 重新加载讨论列表
+        this.loadDiscussions();
+      }).catch(error => {
+        console.error('发表评论失败:', error);
+        this.$message.error('发表失败，请重试');
       });
-      this.newDiscussion = '';
+    },
+
+    /** 显示回复输入框 */
+    showReplyInput(item) {
+      // 为讨论项添加回复输入框的显示状态和内容
+      this.$set(item, 'showReplyInput', true);
+      this.$set(item, 'replyContent', '');
+    },
+
+    /** 提交回复 */
+    submitReply(item) {
+      if (!item.replyContent || !item.replyContent.trim()) {
+        this.$message.warning('请输入回复内容');
+        return;
+      }
+
+      const replyData = {
+        sectionId: this.sectionId,
+        content: item.replyContent.trim(),
+        parentId: item.id // 父评论ID
+      };
+
+      addComment(replyData).then(response => {
+        this.$message.success('回复成功');
+        item.showReplyInput = false;
+        item.replyContent = '';
+        // 重新加载讨论列表
+        this.loadDiscussions();
+      }).catch(error => {
+        console.error('回复失败:', error);
+        this.$message.error('回复失败，请重试');
+      });
+    },
+
+    /** 删除讨论 */
+    deleteDiscussion(commentId) {
+      this.$confirm('确定要删除这条评论吗？', '提示', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }).then(() => {
+        delComment(commentId).then(response => {
+          this.$message.success('删除成功');
+          // 重新加载讨论列表
+          this.loadDiscussions();
+        }).catch(error => {
+          console.error('删除失败:', error);
+          this.$message.error('删除失败，请重试');
+        });
+      }).catch(() => {});
     },
 
     /** 显示添加笔记对话框 */
@@ -1202,6 +1295,44 @@ export default {
       
       const d = new Date(date);
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    },
+
+    /** 判断是否可以删除评论 */
+    canDeleteComment(comment) {
+      if (!comment || !this.currentUserId) {
+        return false;
+      }
+      
+      // 1. 如果是评论作者本人，可以删除
+      if (comment.userId === this.currentUserId) {
+        return true;
+      }
+      
+      // 2. 如果是课程创建者（教师），可以删除该课程下所有评论
+      if (this.sectionInfo.courseCreatorId && this.currentUserId === this.sectionInfo.courseCreatorId) {
+        return true;
+      }
+      
+      return false;
+    },
+
+    /** 加载当前用户信息 */
+    loadCurrentUser() {
+      // 调用后端API获取当前登录的业务用户信息
+      getCurrentBusinessUser().then(response => {
+        if (response.code === 200 && response.data) {
+          // response.data 是业务user表的用户对象，包含id字段
+          this.currentUserId = response.data.id;
+          console.log('当前业务用户ID:', this.currentUserId);
+          console.log('课程创建者ID:', this.sectionInfo.courseCreatorId);
+        } else {
+          console.error('获取当前用户信息失败:', response.msg);
+          this.currentUserId = null;
+        }
+      }).catch(error => {
+        console.error('获取当前用户信息出错:', error);
+        this.currentUserId = null;
+      });
     },
 
     /** 格式化视频时间 */
@@ -1714,6 +1845,66 @@ export default {
         .discussion-actions {
           display: flex;
           gap: 8px;
+        }
+
+        /* 回复列表样式 */
+        .replies-list {
+          margin-top: 16px;
+          padding-left: 20px;
+          border-left: 2px solid #e4e7ed;
+
+          .reply-item {
+            display: flex;
+            gap: 10px;
+            padding: 12px 0;
+            border-bottom: 1px solid #f5f5f5;
+
+            &:last-child {
+              border-bottom: none;
+            }
+
+            .reply-content {
+              flex: 1;
+              min-width: 0;
+
+              .reply-user-info {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                margin-bottom: 6px;
+
+                .user-name {
+                  font-weight: 500;
+                  font-size: 13px;
+                  color: #303133;
+                }
+
+                .post-time {
+                  font-size: 12px;
+                  color: #909399;
+                }
+              }
+
+              .reply-text {
+                font-size: 13px;
+                color: #606266;
+                line-height: 1.5;
+                word-wrap: break-word;
+              }
+
+              .reply-actions {
+                margin-top: 4px;
+              }
+            }
+          }
+        }
+
+        /* 回复输入框样式 */
+        .reply-input-area {
+          margin-top: 12px;
+          padding: 12px;
+          background-color: #f9f9f9;
+          border-radius: 4px;
         }
       }
     }
