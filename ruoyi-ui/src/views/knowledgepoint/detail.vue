@@ -9,6 +9,52 @@
     <div class="detail-content" v-loading="loading">
       <!-- 左侧：知识点关系图谱和相关知识点 -->
       <div class="detail-left">
+        <!-- 编辑器滑出面板 -->
+        <div class="editor-slide-panel" :class="{ 'is-active': isEditing }">
+          <el-card class="editor-card">
+            <div slot="header" class="editor-header">
+              <span class="editor-title">
+                <i class="el-icon-edit"></i>
+                编辑知识点解析
+              </span>
+              <div class="editor-actions">
+                <el-button 
+                  type="primary" 
+                  size="small"
+                  icon="el-icon-magic-stick"
+                  :loading="aiGenerating"
+                  @click="handleAIGenerate"
+                >
+                  {{ aiGenerating ? 'AI生成中...' : 'AI生成' }}
+                </el-button>
+                <el-button 
+                  type="success" 
+                  size="small"
+                  icon="el-icon-check" 
+                  @click="handleSaveDescription"
+                >
+                  保存
+                </el-button>
+                <el-button 
+                  size="small"
+                  icon="el-icon-close" 
+                  @click="handleCancelEdit"
+                >
+                  取消
+                </el-button>
+              </div>
+            </div>
+            <div class="editor-content">
+              <el-input
+                type="textarea"
+                v-model="editableDescription"
+                placeholder="请输入知识点解析内容（支持 Markdown + KaTeX 语法）"
+                class="editor-textarea"
+              ></el-input>
+            </div>
+          </el-card>
+        </div>
+
         <el-card class="kp-graph-card">
           <div slot="header" class="card-header">
             <span class="card-title">
@@ -187,7 +233,8 @@
 
       <!-- 右侧：知识点基本信息卡片 -->
       <div class="detail-right">
-        <el-card class="kp-info-card">
+        <!-- 上部：知识点解析卡片 -->
+        <el-card class="kp-description-card">
           <div slot="header" class="card-header">
             <span class="card-title">{{ kpData.title || '知识点详情' }}</span>
             <el-tag :type="getLevelType(kpData.level)" effect="plain" size="medium">
@@ -201,25 +248,41 @@
               <div class="section-title">
                 <i class="el-icon-document"></i>
                 <span>知识点解析</span>
+                <!-- 编辑按钮放在这里 -->
                 <el-button 
                   type="primary" 
                   size="mini" 
-                  icon="el-icon-magic-stick"
-                  :loading="aiGenerating"
-                  @click="handleAIGenerate"
-                  class="ai-generate-btn"
+                  icon="el-icon-edit"
+                  @click="handleEditDescription"
+                  class="edit-btn"
                 >
-                  {{ aiGenerating ? 'AI生成中...' : 'AI一键生成知识点详解' }}
+                  编辑
                 </el-button>
               </div>
-              <div class="section-content markdown-content" v-if="kpData.description">
-                <div v-html="renderMarkdown(kpData.description)"></div>
-              </div>
-              <div class="section-content empty-text" v-else>
-                暂无解析，点击右侧按钮使用AI生成
+              
+              <!-- 编辑模式或只读模式：统一显示渲染后的内容 -->
+              <div class="section-content">
+                <div class="markdown-content" v-if="displayContent">
+                  <div v-html="displayContent"></div>
+                </div>
+                <div class="empty-text" v-else>
+                  暂无解析内容
+                </div>
               </div>
             </div>
+          </div>
+        </el-card>
 
+        <!-- 下部：所属小节及其他信息卡片 -->
+        <el-card class="kp-meta-card">
+          <div slot="header" class="card-header">
+            <span class="card-title">
+              <i class="el-icon-info"></i>
+              知识点信息
+            </span>
+          </div>
+          
+          <div class="kp-meta-content">
             <!-- 所属小节 -->
             <div class="info-section">
               <div class="section-title">
@@ -281,7 +344,6 @@
 
             <!-- 操作按钮 -->
             <div class="action-buttons">
-              <el-button type="primary" icon="el-icon-edit" @click="handleEdit">编辑知识点</el-button>
               <el-button type="danger" icon="el-icon-delete" @click="handleDelete">删除知识点</el-button>
             </div>
           </div>
@@ -297,11 +359,21 @@ import { listSectionKpByKp } from "@/api/course/sectionKp";
 import { listKpRelation } from "@/api/course/kpRelation";
 import { getSection } from "@/api/course/section";
 import * as echarts from 'echarts';
-import 'highlight.js/styles/github.css';
+import { marked } from 'marked';
+import katex from 'katex';
+import 'katex/dist/katex.min.css';
 import hljs from 'highlight.js';
+import 'highlight.js/styles/github.css';
 
 export default {
   name: "KnowledgePointDetail",
+  computed: {
+    // 实时渲染的内容：编辑时显示 editableDescription，非编辑时显示 kpData.description
+    displayContent() {
+      const content = this.isEditing ? this.editableDescription : this.kpData.description;
+      return content ? this.renderMarkdown(content) : '';
+    }
+  },
   data() {
     return {
       // 加载状态
@@ -326,7 +398,11 @@ export default {
       // 所有关系数据
       allRelations: [],
       // AI生成状态
-      aiGenerating: false
+      aiGenerating: false,
+      // 编辑模式
+      isEditing: false,
+      // 编辑中的内容
+      editableDescription: ''
     };
   },
   created() {
@@ -1203,11 +1279,43 @@ export default {
       this.getKpRelations();
     },
 
-    /** 编辑知识点 */
-    handleEdit() {
-      this.$router.push({
-        path: '/knowledgepoint',
-        query: { editId: this.kpId }
+    /** 进入编辑模式 */
+    handleEditDescription() {
+      this.isEditing = true;
+      this.editableDescription = this.kpData.description || '';
+    },
+
+    /** 取消编辑 */
+    handleCancelEdit() {
+      this.$confirm('确定要取消编辑吗？未保存的内容将丢失。', '提示', {
+        confirmButtonText: '确定',
+        cancelButtonText: '继续编辑',
+        type: 'warning'
+      }).then(() => {
+        this.isEditing = false;
+        this.editableDescription = '';
+      }).catch(() => {});
+    },
+
+    /** 保存知识点解析 */
+    handleSaveDescription() {
+      if (!this.editableDescription || !this.editableDescription.trim()) {
+        this.$message.warning('知识点解析内容不能为空');
+        return;
+      }
+
+      // 保存到数据库，传递完整的知识点对象
+      updateKnowledgePoint({
+        ...this.kpData,  // 包含所有必要字段（包括 courseId）
+        description: this.editableDescription
+      }).then(() => {
+        this.$message.success('保存成功');
+        this.kpData.description = this.editableDescription;
+        this.isEditing = false;
+        this.editableDescription = '';
+      }).catch(error => {
+        console.error('保存失败：', error);
+        this.$message.error('保存失败：' + (error.msg || error.message || '请重试'));
       });
     },
 
@@ -1238,18 +1346,9 @@ export default {
       generateKpDescription(this.kpData.title)
         .then(response => {
           if (response.code === 200) {
-            // 更新本地显示
-            this.kpData.description = response.data || response.msg;
-            
-            // 保存到数据库
-            updateKnowledgePoint({
-              id: this.kpData.id,
-              description: this.kpData.description
-            }).then(() => {
-              this.$message.success('AI生成并保存成功');
-            }).catch(() => {
-              this.$message.warning('AI生成成功，但保存失败，请手动编辑保存');
-            });
+            // 更新编辑框中的内容（不直接保存到数据库）
+            this.editableDescription = response.data || response.msg;
+            this.$message.success('AI生成成功，请点击"保存"按钮保存到数据库');
           } else {
             this.$message.error(response.msg || 'AI生成失败');
           }
@@ -1267,136 +1366,76 @@ export default {
     renderMarkdown(content) {
       if (!content) return '';
       
+      // 配置 marked
+      marked.setOptions({
+        highlight: function(code, lang) {
+          if (lang && hljs.getLanguage(lang)) {
+            try {
+              return hljs.highlight(code, { language: lang }).value;
+            } catch (err) {
+              console.error('Highlight error:', err);
+            }
+          }
+          return hljs.highlightAuto(code).value;
+        },
+        breaks: true,
+        gfm: true
+      });
+      
       let html = content;
       
-      // 预处理：移除多余的空行和分隔线
-      html = html.replace(/\n{2,}/g, '\n'); // 将2个以上连续换行替换为1个
-      html = html.replace(/^-{3,}$/gm, ''); // 移除分隔线 ---
-      html = html.replace(/^={3,}$/gm, ''); // 移除分隔线 ===
-      html = html.trim(); // 移除首尾空白
-      
-      // 1. 处理KaTeX块级公式 $$...$$
+      // 1. 处理 KaTeX 块级公式 $$...$$（在 marked 处理之前）
+      const blockFormulas = [];
       html = html.replace(/\$\$([\s\S]+?)\$\$/g, (match, formula) => {
         try {
-          return `<div class="katex-block">${this.renderKaTeX(formula, true)}</div>`;
-        } catch (e) {
-          return `<div class="katex-error">公式渲染错误: ${match}</div>`;
+          const rendered = katex.renderToString(formula.trim(), {
+            displayMode: true,
+            throwOnError: false
+          });
+          const placeholder = `___BLOCK_FORMULA_${blockFormulas.length}___`;
+          blockFormulas.push(rendered);
+          return placeholder;
+        } catch (err) {
+          console.error('KaTeX block error:', err);
+          return `<div class="katex-error">公式渲染错误: ${formula}</div>`;
         }
       });
       
-      // 2. 处理KaTeX行内公式 $...$
+      // 2. 处理 KaTeX 行内公式 $...$
+      const inlineFormulas = [];
       html = html.replace(/\$([^\$\n]+?)\$/g, (match, formula) => {
         try {
-          return `<span class="katex-inline">${this.renderKaTeX(formula, false)}</span>`;
-        } catch (e) {
-          return `<span class="katex-error">${match}</span>`;
+          const rendered = katex.renderToString(formula.trim(), {
+            displayMode: false,
+            throwOnError: false
+          });
+          const placeholder = `___INLINE_FORMULA_${inlineFormulas.length}___`;
+          inlineFormulas.push(rendered);
+          return placeholder;
+        } catch (err) {
+          console.error('KaTeX inline error:', err);
+          return `<span class="katex-error">公式渲染错误: ${formula}</span>`;
         }
       });
       
-      // 3. 处理代码块 ```language\ncode\n```
-      html = html.replace(/```(\w+)?\n([\s\S]+?)```/g, (match, language, code) => {
-        const lang = language || 'plaintext';
-        let highlighted;
-        try {
-          if (hljs.getLanguage(lang)) {
-            highlighted = hljs.highlight(code.trim(), { language: lang }).value;
-          } else {
-            highlighted = hljs.highlightAuto(code.trim()).value;
-          }
-        } catch (e) {
-          highlighted = this.escapeHtml(code.trim());
-        }
-        return `<pre><code class="hljs language-${lang}">${highlighted}</code></pre>`;
+      // 3. 使用 marked 处理 Markdown
+      html = marked.parse(html);
+      
+      // 4. 恢复 KaTeX 公式
+      blockFormulas.forEach((formula, index) => {
+        html = html.replace(`___BLOCK_FORMULA_${index}___`, formula);
       });
-      
-      // 4. 处理行内代码 `code`
-      html = html.replace(/`([^`]+?)`/g, '<code class="inline-code">$1</code>');
-      
-      // 5. 处理标题
-      html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-      html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-      html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
-      
-      // 6. 处理加粗 **text**
-      html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-      
-      // 7. 处理斜体 *text*
-      html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-      
-      // 8. 处理无序列表
-      html = html.replace(/^[\-\*] (.+)$/gm, '<li>$1</li>');
-      // 将连续的li标签包裹在ul中
-      html = html.replace(/(<li>[\s\S]*?<\/li>(?:\s*<li>[\s\S]*?<\/li>)*)/g, '<ul>$1</ul>');
-      
-      // 9. 处理有序列表
-      html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
-      
-      // 10. 处理表格（简单实现）
-      html = html.replace(/\|(.+)\|/g, (match) => {
-        const cells = match.split('|').filter(cell => cell.trim());
-        const cellsHtml = cells.map(cell => `<td>${cell.trim()}</td>`).join('');
-        return `<tr>${cellsHtml}</tr>`;
+      inlineFormulas.forEach((formula, index) => {
+        html = html.replace(`___INLINE_FORMULA_${index}___`, formula);
       });
-      html = html.replace(/(<tr>[\s\S]*?<\/tr>(?:\s*<tr>[\s\S]*?<\/tr>)*)/g, '<table class="markdown-table"><tbody>$1</tbody></table>');
-      
-      // 11. 处理段落（连续的非特殊行为一个段落）
-      html = html.replace(/^(?!<[hup]|<li|<table|<pre|<div)(.+)$/gm, '<p>$1</p>');
-      
-      // 12. 处理换行 - 只保留必要的换行
-      html = html.replace(/\n\n+/g, '\n'); // 多个换行替换为单个
-      html = html.replace(/\n/g, ''); // 移除剩余换行，让CSS控制间距
-      
-      // 13. 清理多余的空白标签
-      html = html.replace(/<p>\s*<\/p>/g, ''); // 移除空段落
-      html = html.replace(/<br>\s*<br>/g, '<br>'); // 移除连续的br标签
       
       return html;
     },
 
-    /** 渲染KaTeX公式 */
+    /** 渲染KaTeX公式（已废弃，使用 katex 库） */
     renderKaTeX(formula, displayMode) {
-      // 简单的数学公式渲染（使用Unicode和HTML）
-      // 注意：这是简化版本，真实项目建议使用 katex 库
-      let rendered = formula.trim();
-      
-      // 处理常见数学符号
-      const symbolMap = {
-        '\\alpha': 'α', '\\beta': 'β', '\\gamma': 'γ', '\\delta': 'δ',
-        '\\epsilon': 'ε', '\\theta': 'θ', '\\lambda': 'λ', '\\mu': 'μ',
-        '\\pi': 'π', '\\sigma': 'σ', '\\phi': 'φ', '\\omega': 'ω',
-        '\\sum': '∑', '\\int': '∫', '\\partial': '∂', '\\infty': '∞',
-        '\\leq': '≤', '\\geq': '≥', '\\neq': '≠', '\\approx': '≈',
-        '\\times': '×', '\\div': '÷', '\\pm': '±', '\\sqrt': '√',
-        '\\in': '∈', '\\subset': '⊂', '\\subseteq': '⊆', '\\cup': '∪',
-        '\\cap': '∩', '\\emptyset': '∅', '\\forall': '∀', '\\exists': '∃',
-        '\\rightarrow': '→', '\\Rightarrow': '⇒', '\\leftarrow': '←',
-        '\\Leftarrow': '⇐', '\\leftrightarrow': '↔', '\\Leftrightarrow': '⇔'
-      };
-      
-      // 替换符号
-      for (const [latex, unicode] of Object.entries(symbolMap)) {
-        const escapedLatex = latex.replace(/\\/g, '\\\\');
-        rendered = rendered.replace(new RegExp(escapedLatex, 'g'), unicode);
-      }
-      
-      // 处理上标 ^
-      rendered = rendered.replace(/\^(\{[^}]+\}|.)/g, (match, exp) => {
-        const content = exp.startsWith('{') ? exp.slice(1, -1) : exp;
-        return '<sup>' + content + '</sup>';
-      });
-      
-      // 处理下标 _
-      rendered = rendered.replace(/_(\{[^}]+\}|.)/g, (match, exp) => {
-        const content = exp.startsWith('{') ? exp.slice(1, -1) : exp;
-        return '<sub>' + content + '</sub>';
-      });
-      
-      // 处理分数 \frac{a}{b}
-      rendered = rendered.replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, function(match, numerator, denominator) {
-        return '<span class="frac"><span class="frac-top">' + numerator + '</span><span class="frac-bottom">' + denominator + '</span></span>';
-      });
-      
-      return rendered;
+      // 此方法已被新的 renderMarkdown 方法中的 katex 处理替代
+      return formula;
     },
 
     /** HTML转义 */
@@ -1447,9 +1486,93 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  position: relative;
+  overflow: hidden;
+
+  /* 编辑器滑出面板 */
+  .editor-slide-panel {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 558px;
+    z-index: 1000;
+    transform: translateX(-101%);
+    transition: transform 0.3s ease-in-out;
+    background: #fff;
+
+    &.is-active {
+      transform: translateX(0);
+    }
+
+    .editor-card {
+      height: 100%;
+      border-radius: 8px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+      display: flex;
+      flex-direction: column;
+
+      ::v-deep .el-card__header {
+        padding: 18px 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-bottom: none;
+      }
+
+      ::v-deep .el-card__body {
+        flex: 1;
+        padding: 0;
+        overflow: hidden;
+      }
+
+      .editor-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+
+        .editor-title {
+          font-size: 16px;
+          font-weight: bold;
+          color: #fff;
+
+          i {
+            margin-right: 8px;
+          }
+        }
+
+        .editor-actions {
+          display: flex;
+          gap: 8px;
+        }
+      }
+
+      .editor-content {
+        height: 100%;
+        padding: 15px;
+
+        .editor-textarea {
+          height: 100%;
+
+          ::v-deep textarea {
+            height: 100% !important;
+            min-height: 100% !important;
+            font-family: 'Courier New', 'Monaco', monospace;
+            font-size: 14px;
+            line-height: 1.8;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 15px;
+
+            &:focus {
+              border-color: #667eea;
+            }
+          }
+        }
+      }
+    }
+  }
 
   .kp-graph-card {
-    flex: 1;
+    height: 558px;
     border-radius: 8px;
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
 
@@ -1586,6 +1709,21 @@ export default {
   .related-kp-card {
     border-radius: 8px;
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+    height: 400px;
+    display: flex;
+    flex-direction: column;
+
+    ::v-deep .el-card__header {
+      padding: 18px 20px;
+      flex-shrink: 0;
+    }
+
+    ::v-deep .el-card__body {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
 
     .card-header {
       .card-title {
@@ -1601,11 +1739,35 @@ export default {
     }
 
     .related-tabs {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+
+      ::v-deep .el-tabs__header {
+        margin: 0;
+        padding-bottom: 10px;
+      }
+
+      ::v-deep .el-tabs__nav-wrap {
+        margin-bottom: 0;
+      }
+
+      ::v-deep .el-tabs__content {
+        flex: 1;
+        overflow: hidden;
+        padding: 0;
+      }
+
+      ::v-deep .el-tab-pane {
+        height: 100%;
+      }
+
       .kp-list {
         display: flex;
         flex-direction: column;
         gap: 12px;
-        max-height: 400px;
+        height: 100%;
         overflow-y: auto;
 
         .kp-item {
@@ -1656,11 +1818,13 @@ export default {
   height: 100%;
   display: flex;
   flex-direction: column;
+  gap: 20px;
 
-  .kp-info-card {
+  // 上部：知识点解析卡片
+  .kp-description-card {
     border-radius: 8px;
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-    height: 100%;
+    height: 558px;
     display: flex;
     flex-direction: column;
 
@@ -1690,6 +1854,60 @@ export default {
     }
 
     .kp-info-content {
+      padding: 15px;
+      height: 100%;
+      overflow: hidden;
+
+      .info-section {
+        margin-bottom: 0;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+      }
+    }
+  }
+
+  // 下部：所属小节及其他信息卡片
+  .kp-meta-card {
+    border-radius: 8px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+    height: 400px;
+    display: flex;
+    flex-direction: column;
+
+    ::v-deep .el-card__header {
+      padding: 18px 20px;
+      flex-shrink: 0;
+    }
+
+    ::v-deep .el-card__body {
+      flex: 1;
+      overflow: hidden;
+      padding: 0;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+
+      .card-title {
+        font-size: 16px;
+        font-weight: bold;
+        color: #303133;
+
+        i {
+          margin-right: 6px;
+          color: #409EFF;
+        }
+      }
+    }
+
+    .kp-meta-content {
+      padding: 20px;
+      height: 100%;
+      overflow-y: auto;
+
       .info-section {
         margin-bottom: 24px;
 
@@ -1781,21 +1999,40 @@ export default {
 
 /* Markdown内容样式 */
 .kp-description-section {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+
   .section-title {
     display: flex;
     align-items: center;
     justify-content: space-between;
     margin-bottom: 12px;
+    flex-shrink: 0;
 
-    .ai-generate-btn {
+    .edit-btn {
       margin-left: auto;
       font-size: 12px;
     }
   }
 
+  // 只读模式文本框样式
+  .description-display {
+    ::v-deep textarea {
+      font-family: 'Courier New', 'Monaco', monospace;
+      font-size: 12px;
+      line-height: 1.6;
+      padding: 12px;
+      background: #f9f9f9;
+      cursor: default;
+    }
+  }
+
   .section-content {
-    max-height: 500px;
-    overflow-y: auto;
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
 
     /* 美化滚动条 */
     &::-webkit-scrollbar {
@@ -1823,21 +2060,24 @@ export default {
     border-radius: 8px;
     line-height: 1.6;
     color: #303133;
-    font-size: 10px;
+    font-size: 12px;
+    flex: 1;
+    overflow-y: auto;
+    box-sizing: border-box;
 
     h1, h2, h3 {
-      margin: 8px 0 4px;
+      margin: 12px 0 8px;
       color: #409EFF;
       font-weight: 600;
-      line-height: 1.3;
+      line-height: 1.4;
     }
 
-    h1 { font-size: 12px; }
-    h2 { font-size: 11px; }
-    h3 { font-size: 10px; }
+    h1 { font-size: 22px; }
+    h2 { font-size: 18px; }
+    h3 { font-size: 14px; }
 
     p {
-      margin: 3px 0;
+      margin: 8px 0;
       line-height: 1.6;
     }
 
@@ -1852,45 +2092,45 @@ export default {
     }
 
     ul, ol {
-      margin: 6px 0;
-      padding-left: 20px;
+      margin: 8px 0;
+      padding-left: 24px;
 
       li {
-        margin: 2px 0;
-        line-height: 1.5;
+        margin: 4px 0;
+        line-height: 1.6;
       }
     }
 
     code.inline-code {
-      padding: 2px 5px;
+      padding: 2px 6px;
       background: #f0f0f0;
       border: 1px solid #e0e0e0;
       border-radius: 3px;
       font-family: 'Courier New', monospace;
-      font-size: 13px;
+      font-size: 11px;
       color: #e83e8c;
     }
 
     pre {
-      margin: 8px 0;
-      padding: 10px;
+      margin: 12px 0;
+      padding: 12px;
       background: #2d2d2d;
       border-radius: 6px;
       overflow-x: auto;
 
       code {
         font-family: 'Courier New', monospace;
-        font-size: 13px;
-        line-height: 1.4;
+        font-size: 12px;
+        line-height: 1.5;
         color: #f8f8f2;
       }
     }
 
     .markdown-table {
       width: 100%;
-      margin: 8px 0;
+      margin: 12px 0;
       border-collapse: collapse;
-      font-size: 13px;
+      font-size: 12px;
 
       td {
         padding: 4px 8px;
@@ -1913,6 +2153,47 @@ export default {
       text-align: center;
       font-size: 15px;
       overflow-x: auto;
+
+      // cases 分支结构样式
+      .cases-wrapper {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 18px;
+        
+        .cases-content {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          border-left: 2px solid #303133;
+          padding-left: 10px;
+          gap: 4px;
+          
+          .case-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+            
+            .case-condition {
+              font-family: 'Courier New', monospace;
+              color: #409EFF;
+              min-width: 80px;
+            }
+            
+            .case-desc {
+              color: #606266;
+            }
+          }
+        }
+      }
+      
+      // \text{} 文本样式
+      .text-normal {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        font-style: normal;
+        color: #303133;
+      }
     }
 
     .katex-inline {
