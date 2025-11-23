@@ -2763,7 +2763,15 @@ export default {
             this.highlightNodeAndRelated(nodeId, graphData);
             
             // 判断节点类型并打开相应抽屉
-            if (params.data.id && params.data.id.startsWith('section-')) {
+            if (params.data.id && params.data.id.startsWith('kp-')) {
+              // 知识点节点 - 使用和抽屉中点击知识点一样的处理方式
+              console.log('[知识图谱] 单击知识点节点:', params.data);
+              if (params.data.kpData) {
+                this.handleDrawerKnowledgeClick(params.data.kpData);
+              } else {
+                console.error('[知识图谱] 知识点节点缺少kpData:', params.data);
+              }
+            } else if (params.data.id && params.data.id.startsWith('section-')) {
               // 小节节点
               this.handleSectionNodeClick(params.data);
             } else if (params.data.id && params.data.id.startsWith('chapter-')) {
@@ -2974,19 +2982,34 @@ export default {
     highlightNodeAndRelated(nodeId, graphData) {
       if (!this.knowledgeGraphChart) return;
       
-      // 找到相邻的节点ID
+      // 找到相邻的节点ID（不包括知识点节点的自动扩展）
       const adjacentNodeIds = new Set([nodeId]);
+      const adjacentKnowledgePointIds = new Set(); // 单独存储相邻的知识点ID
+      
       graphData.links.forEach(link => {
         if (link.source === nodeId) {
-          adjacentNodeIds.add(link.target);
+          const targetId = link.target;
+          // 如果目标是知识点，单独处理
+          if (targetId.startsWith('kp-')) {
+            adjacentKnowledgePointIds.add(targetId);
+          } else {
+            adjacentNodeIds.add(targetId);
+          }
         }
         if (link.target === nodeId) {
-          adjacentNodeIds.add(link.source);
+          const sourceId = link.source;
+          // 如果来源是知识点，单独处理
+          if (sourceId.startsWith('kp-')) {
+            adjacentKnowledgePointIds.add(sourceId);
+          } else {
+            adjacentNodeIds.add(sourceId);
+          }
         }
       });
       
       // 检查点击的是否是小节节点
       const isClickedSectionNode = nodeId.startsWith('section-');
+      const isClickedKnowledgePoint = nodeId.startsWith('kp-');
       
       // 如果是小节节点，提取小节ID
       let clickedSectionId = null;
@@ -3001,14 +3024,23 @@ export default {
         
         // 如果是知识点节点
         if (isKnowledgePoint) {
-          // 检查该知识点是否属于被点击的小节
-          const belongsToClickedSection = isClickedSectionNode && 
-                                         node.sectionId && 
-                                         clickedSectionId && 
-                                         String(node.sectionId) === String(clickedSectionId);
+          let shouldShow = false;
           
-          // 知识点应该显示：要么属于被点击的小节，要么在相邻节点集合中
-          const shouldShow = belongsToClickedSection || isAdjacent;
+          // 情况1：点击的是小节节点，只显示该小节的知识点
+          if (isClickedSectionNode) {
+            const belongsToClickedSection = node.sectionId && 
+                                           clickedSectionId && 
+                                           String(node.sectionId) === String(clickedSectionId);
+            shouldShow = belongsToClickedSection;
+          }
+          // 情况2：点击的是知识点节点本身，只显示这个知识点
+          else if (isClickedKnowledgePoint) {
+            shouldShow = node.id === nodeId;
+          }
+          // 情况3：点击的是章节或课程节点，不显示任何知识点
+          else {
+            shouldShow = false;
+          }
           
           return {
             ...node,
@@ -3040,15 +3072,35 @@ export default {
       
       // 更新连线样式
       const updatedLinks = graphData.links.map(link => {
-        const isConnected = link.source === nodeId || link.target === nodeId;
-        const isKnowledgePointLink = link.target && link.target.startsWith('kp-');
+        const sourceId = link.source;
+        const targetId = link.target;
+        
+        // 判断这条连线是否应该显示
+        let shouldShowLink = false;
+        
+        // 判断是否是知识点连线
+        const isKnowledgePointLink = targetId.startsWith('kp-');
+        
+        if (isKnowledgePointLink) {
+          // 知识点连线：只有当该知识点应该显示时才显示连线
+          if (isClickedSectionNode) {
+            // 点击的是小节节点，只显示该小节到其知识点的连线
+            shouldShowLink = sourceId === nodeId;
+          } else if (isClickedKnowledgePoint) {
+            // 点击的是知识点节点，只显示该知识点相关的连线
+            shouldShowLink = targetId === nodeId || sourceId === nodeId;
+          }
+          // 其他情况（点击章节或课程），不显示知识点连线
+        } else {
+          // 非知识点连线：正常的章节、小节连线
+          shouldShowLink = sourceId === nodeId || targetId === nodeId;
+        }
         
         return {
           ...link,
           lineStyle: {
             ...link.lineStyle,
-            // 知识点连线使用更高的不透明度，确保可见
-            opacity: isConnected ? (isKnowledgePointLink ? 0.8 : 0.8) : 0.1
+            opacity: shouldShowLink ? 0.8 : 0.05 // 显示或几乎完全隐藏
           }
         };
       });
@@ -3256,6 +3308,7 @@ export default {
         this.sectionDrawerVisible = true;
       }
     },
+    
     /** 切换知识点显示/隐藏 */
     toggleKnowledgePointsVisibility(sectionId) {
       if (!this.knowledgeGraphChart) return;
@@ -4471,14 +4524,23 @@ export default {
       const nodes = graphData.data;
       const links = graphData.links;
       
-      // 找到相邻的节点ID
+      // 判断是否是知识点节点
+      const isKnowledgePointNode = nodeId.startsWith('kp-');
+      
+      // 找到相邻的节点ID（但不包括其他知识点）
       const adjacentNodeIds = new Set([nodeId]);
       links.forEach(link => {
         if (link.source === nodeId) {
-          adjacentNodeIds.add(link.target);
+          // 如果当前是知识点节点，不包括其他知识点
+          if (!isKnowledgePointNode || !link.target.startsWith('kp-')) {
+            adjacentNodeIds.add(link.target);
+          }
         }
         if (link.target === nodeId) {
-          adjacentNodeIds.add(link.source);
+          // 如果当前是知识点节点，不包括其他知识点
+          if (!isKnowledgePointNode || !link.source.startsWith('kp-')) {
+            adjacentNodeIds.add(link.source);
+          }
         }
       });
       
@@ -4486,7 +4548,30 @@ export default {
       const updatedNodes = nodes.map(node => {
         const isAdjacent = adjacentNodeIds.has(node.id);
         const isTarget = node.id === nodeId;
+        const isNodeKnowledgePoint = node.id.startsWith('kp-');
         
+        // 如果当前遍历的是知识点节点
+        if (isNodeKnowledgePoint) {
+          // 只有当前被选中的知识点才显示，其他知识点都隐藏
+          const shouldShow = node.id === nodeId;
+          return {
+            ...node,
+            itemStyle: {
+              ...node.itemStyle,
+              opacity: shouldShow ? 1 : 0,
+              borderWidth: shouldShow ? 3 : 0,
+              borderColor: shouldShow ? '#ff0000' : undefined
+            },
+            label: {
+              ...node.label,
+              show: shouldShow,
+              opacity: shouldShow ? 1 : 0,
+              fontWeight: shouldShow ? 'bold' : 'normal'
+            }
+          };
+        }
+        
+        // 普通节点（课程、章节、小节）
         return {
           ...node,
           itemStyle: {
@@ -4506,6 +4591,23 @@ export default {
       // 更新连线样式
       const updatedLinks = links.map(link => {
         const isConnected = link.source === nodeId || link.target === nodeId;
+        const isKnowledgePointLink = link.target.startsWith('kp-');
+        
+        // 如果是知识点连线
+        if (isKnowledgePointLink) {
+          // 只有当目标是被选中的知识点时才显示连线
+          const shouldShow = link.target === nodeId;
+          return {
+            ...link,
+            lineStyle: {
+              ...link.lineStyle,
+              opacity: shouldShow ? 0.8 : 0,
+              width: shouldShow ? (link.lineStyle.width || 2) : 2
+            }
+          };
+        }
+        
+        // 普通连线
         return {
           ...link,
           lineStyle: {
