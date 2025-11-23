@@ -162,6 +162,16 @@
               <i class="el-icon-connection"></i>
               相关知识点
             </span>
+            <div class="header-actions">
+              <el-button 
+                type="primary" 
+                size="mini" 
+                icon="el-icon-edit"
+                @click="handleEditRelation"
+              >
+                编辑关系
+              </el-button>
+            </div>
           </div>
 
           <el-tabs v-model="activeTab" class="related-tabs">
@@ -280,6 +290,14 @@
               <i class="el-icon-info"></i>
               知识点信息
             </span>
+            <el-button 
+              type="primary" 
+              size="mini" 
+              icon="el-icon-edit"
+              @click="handleEditKpInfo"
+            >
+              编辑信息
+            </el-button>
           </div>
           
           <div class="kp-meta-content">
@@ -342,14 +360,202 @@
               </div>
             </div>
 
-            <!-- 操作按钮 -->
-            <div class="action-buttons">
-              <el-button type="danger" icon="el-icon-delete" @click="handleDelete">删除知识点</el-button>
-            </div>
           </div>
         </el-card>
       </div>
     </div>
+
+    <!-- 编辑关系对话框 -->
+    <el-dialog
+      title="编辑知识点关系"
+      :visible.sync="relationDialogVisible"
+      width="900px"
+      top="10vh"
+      :close-on-click-modal="false"
+    >
+      <el-row :gutter="20">
+        <!-- 左侧：当前关系列表 -->
+        <el-col :span="12">
+          <div class="current-relations-panel">
+            <h4 class="panel-title">
+              <i class="el-icon-connection"></i>
+              当前关系
+            </h4>
+            <div v-if="allCurrentRelations.length > 0" class="relations-list">
+              <div 
+                v-for="rel in allCurrentRelations" 
+                :key="rel.id"
+                class="relation-item"
+                @click="handleSelectRelation(rel)"
+              >
+                <div class="relation-content">
+                  <span class="kp-name source">{{ rel.sourceTitle }}</span>
+                  <el-tag :type="getRelationTagType(rel.relationType)" size="mini" class="relation-tag">
+                    {{ getRelationLabel(rel.relationType) }}
+                  </el-tag>
+                  <span class="kp-name target">{{ rel.targetTitle }}</span>
+                  <el-button 
+                    type="text" 
+                    size="mini" 
+                    icon="el-icon-delete"
+                    class="delete-btn"
+                    @click.stop="handleDeleteRelation(rel)"
+                  >
+                  </el-button>
+                </div>
+              </div>
+            </div>
+            <el-empty v-else description="暂无关系" :image-size="80"></el-empty>
+          </div>
+        </el-col>
+
+        <!-- 右侧：编辑表单 -->
+        <el-col :span="12">
+          <div class="edit-form-panel">
+            <h4 class="panel-title">
+              <i class="el-icon-edit"></i>
+              {{ isEditMode ? '编辑关系' : '添加新关系' }}
+            </h4>
+            <el-form :model="relationForm" :rules="relationRules" ref="relationForm" label-width="100px" size="small">
+              <el-form-item label="源知识点" prop="sourceKpId">
+                <el-select 
+                  v-model="relationForm.sourceKpId" 
+                  filterable 
+                  remote
+                  reserve-keyword
+                  placeholder="请输入知识点名称搜索"
+                  :remote-method="searchSourceKnowledgePoints"
+                  :loading="sourceKpSearchLoading"
+                  style="width: 100%;"
+                  @focus="handleSourceSearchFocus"
+                >
+                  <el-option
+                    v-for="kp in sourceKpOptions"
+                    :key="kp.id"
+                    :label="kp.title"
+                    :value="kp.id"
+                  >
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                      <span>{{ kp.title }}</span>
+                      <el-tag :type="getLevelType(kp.level)" size="mini" style="margin-left: 10px;">
+                        {{ getLevelText(kp.level) }}
+                      </el-tag>
+                    </div>
+                  </el-option>
+                </el-select>
+              </el-form-item>
+              <el-form-item label="目标知识点" prop="targetKpId">
+                <el-select 
+                  v-model="relationForm.targetKpId" 
+                  filterable 
+                  remote
+                  reserve-keyword
+                  placeholder="请输入知识点名称搜索"
+                  :remote-method="searchTargetKnowledgePoints"
+                  :loading="targetKpSearchLoading"
+                  style="width: 100%;"
+                  @focus="handleTargetSearchFocus"
+                >
+                  <el-option
+                    v-for="kp in targetKpOptions"
+                    :key="kp.id"
+                    :label="kp.title"
+                    :value="kp.id"
+                  >
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                      <span>{{ kp.title }}</span>
+                      <el-tag :type="getLevelType(kp.level)" size="mini" style="margin-left: 10px;">
+                        {{ getLevelText(kp.level) }}
+                      </el-tag>
+                    </div>
+                  </el-option>
+                </el-select>
+              </el-form-item>
+              <el-form-item label="关系类型" prop="relationType">
+                <el-select v-model="relationForm.relationType" placeholder="请选择关系类型" style="width: 100%;">
+                  <el-option label="前置于" value="prerequisite_of">
+                    <span>前置于</span>
+                  </el-option>
+                  <el-option label="相似于" value="similar_to">
+                    <span>相似于</span>
+                  </el-option>
+                  <el-option label="扩展于" value="extension_of">
+                    <span>扩展于</span>
+                  </el-option>
+                  <el-option label="派生于" value="derived_from">
+                    <span>派生于</span>
+                  </el-option>
+                  <el-option label="反例于" value="counterexample_of">
+                    <span>反例于</span>
+                  </el-option>
+                </el-select>
+              </el-form-item>
+            </el-form>
+          </div>
+        </el-col>
+      </el-row>
+      <div slot="footer" class="dialog-footer">
+        <el-button @click="handleCancelRelation">取 消</el-button>
+        <el-button type="primary" @click="handleSaveRelation" :loading="relationSaving">
+          {{ isEditMode ? '保存修改' : '保 存' }}
+        </el-button>
+      </div>
+    </el-dialog>
+
+    <!-- 编辑知识点信息对话框 -->
+    <el-dialog 
+      title="修改知识点" 
+      :visible.sync="editKpDialogVisible" 
+      width="700px" 
+      :close-on-click-modal="false"
+    >
+      <el-form ref="kpForm" :model="kpForm" :rules="kpFormRules" label-width="100px">
+        <el-form-item label="知识点名称" prop="title">
+          <el-input v-model="kpForm.title" placeholder="请输入知识点名称" />
+        </el-form-item>
+        <el-form-item label="描述" prop="description">
+          <el-input
+            v-model="kpForm.description"
+            type="textarea"
+            :rows="4"
+            placeholder="请输入知识点描述"
+          />
+        </el-form-item>
+        <el-form-item label="难度等级" prop="level">
+          <el-radio-group v-model="kpForm.level">
+            <el-radio label="BASIC">基础</el-radio>
+            <el-radio label="INTERMEDIATE">中级</el-radio>
+            <el-radio label="ADVANCED">高级</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="关联小节" prop="sectionIds">
+          <el-select
+            v-model="kpForm.sectionIds"
+            multiple
+            clearable
+            collapse-tags
+            filterable
+            placeholder="请选择关联的小节"
+            :loading="sectionsLoading"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="section in availableSections"
+              :key="section.id"
+              :label="`${section.chapterTitle || ''} - ${section.title}`"
+              :value="section.id"
+            >
+              <span style="float: left">{{ section.title }}</span>
+              <span style="float: right; color: #8492a6; font-size: 13px">{{ section.chapterTitle }}</span>
+            </el-option>
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <div slot="footer" class="dialog-footer">
+        <el-button @click="editKpDialogVisible = false">取 消</el-button>
+        <el-button type="primary" @click="handleSaveKpInfo" :loading="kpFormSaving">确 定</el-button>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -402,7 +608,76 @@ export default {
       // 编辑模式
       isEditing: false,
       // 编辑中的内容
-      editableDescription: ''
+      editableDescription: '',
+      // 关系编辑对话框
+      relationDialogVisible: false,
+      relationForm: {
+        relationId: null,  // 用于编辑模式
+        sourceKpId: null,
+        targetKpId: null,
+        relationType: ''
+      },
+      relationRules: {
+        sourceKpId: [
+          { required: true, message: '请选择源知识点', trigger: 'change' }
+        ],
+        targetKpId: [
+          { required: true, message: '请选择目标知识点', trigger: 'change' },
+          { 
+            validator: (rule, value, callback) => {
+              if (value && value === this.relationForm.sourceKpId) {
+                callback(new Error('源知识点和目标知识点不能相同'));
+              } else {
+                callback();
+              }
+            }, 
+            trigger: 'change' 
+          },
+          { 
+            validator: (rule, value, callback) => {
+              const currentKpId = this.kpData.id;
+              if (value && this.relationForm.sourceKpId && 
+                  value !== currentKpId && this.relationForm.sourceKpId !== currentKpId) {
+                callback(new Error('源知识点或目标知识点必须有一个是当前知识点'));
+              } else {
+                callback();
+              }
+            }, 
+            trigger: 'change' 
+          }
+        ],
+        relationType: [
+          { required: true, message: '请选择关系类型', trigger: 'change' }
+        ]
+      },
+      sourceKpOptions: [],
+      targetKpOptions: [],
+      sourceKpSearchLoading: false,
+      targetKpSearchLoading: false,
+      relationSaving: false,
+      allCurrentRelations: [],  // 所有当前关系（包括正向和反向）
+      isEditMode: false,  // 是否为编辑模式
+      
+      // 编辑知识点信息
+      editKpDialogVisible: false,
+      kpFormSaving: false,
+      sectionsLoading: false,  // 小节列表加载状态
+      kpForm: {
+        id: null,
+        title: '',
+        description: '',
+        level: '',
+        sectionIds: []
+      },
+      kpFormRules: {
+        title: [
+          { required: true, message: '请输入知识点名称', trigger: 'blur' }
+        ],
+        level: [
+          { required: true, message: '请选择难度等级', trigger: 'change' }
+        ]
+      },
+      availableSections: []  // 可选的小节列表
     };
   },
   created() {
@@ -1279,6 +1554,166 @@ export default {
       this.getKpRelations();
     },
 
+    /** 打开编辑知识点信息对话框 */
+    async handleEditKpInfo() {
+      console.log('[编辑知识点] 当前知识点数据:', this.kpData);
+      console.log('[编辑知识点] 关联小节:', this.relatedSections);
+      
+      // 复制当前知识点数据到表单
+      this.kpForm = {
+        id: this.kpData.id,
+        title: this.kpData.title,
+        description: this.kpData.description || '',
+        level: this.kpData.level,
+        sectionIds: this.relatedSections.map(s => s.sectionId) || []
+      };
+      
+      // 先用已有的关联小节数据初始化选项列表
+      this.availableSections = this.relatedSections.map(s => ({
+        id: s.sectionId,
+        title: s.sectionTitle,
+        chapterTitle: s.chapterTitle
+      }));
+      
+      console.log('[编辑知识点] 表单数据:', this.kpForm);
+      
+      // 先打开对话框，提升用户体验
+      this.editKpDialogVisible = true;
+      
+      // 在后台异步加载完整的小节列表
+      this.loadAvailableSections().then(() => {
+        console.log('[编辑知识点] 可选小节列表:', this.availableSections);
+      });
+    },
+
+    /** 加载可用的小节列表 */
+    async loadAvailableSections() {
+      this.sectionsLoading = true;
+      try {
+        let courseId = null;
+        
+        // 从第一个关联小节获取课程ID
+        if (this.relatedSections && this.relatedSections.length > 0) {
+          const section = this.relatedSections[0];
+          const res = await import('@/api/course/section').then(({ getSection }) => {
+            return getSection(section.sectionId);
+          });
+          
+          if (res.data && res.data.courseId) {
+            courseId = res.data.courseId;
+          }
+        } else if (this.kpData.courseId) {
+          courseId = this.kpData.courseId;
+        }
+        
+        if (courseId) {
+          // 获取该课程的所有章节和小节
+          const chaptersRes = await import('@/api/course/chapter').then(({ listChapter }) => {
+            return listChapter({ courseId: courseId });
+          });
+          
+          const chapters = chaptersRes.rows || [];
+          
+          // 获取所有小节并添加章节标题
+          const allSections = [];
+          for (const chapter of chapters) {
+            const sectionsRes = await import('@/api/course/section').then(({ listSection }) => {
+              return listSection({ chapterId: chapter.id });
+            });
+            
+            const sections = sectionsRes.rows || [];
+            sections.forEach(section => {
+              allSections.push({
+                ...section,
+                chapterTitle: chapter.title
+              });
+            });
+          }
+          
+          this.availableSections = allSections;
+          console.log('[加载小节列表] 小节数量:', this.availableSections.length);
+          if (this.availableSections.length > 0) {
+            console.log('[加载小节列表] 第一个小节:', this.availableSections[0]);
+          }
+        } else {
+          this.availableSections = [];
+        }
+      } catch (error) {
+        console.error('加载小节列表失败:', error);
+        this.availableSections = [];
+      } finally {
+        this.sectionsLoading = false;
+      }
+    },
+
+    /** 保存知识点信息 */
+    handleSaveKpInfo() {
+      this.$refs.kpForm.validate(valid => {
+        if (valid) {
+          this.kpFormSaving = true;
+          
+          // 先更新知识点基本信息
+          updateKnowledgePoint({
+            ...this.kpData,  // 保留原有所有字段
+            title: this.kpForm.title,
+            description: this.kpForm.description,
+            level: this.kpForm.level
+          }).then(() => {
+            // 处理小节关联关系
+            const newSectionIds = this.kpForm.sectionIds || [];
+            const oldSectionIds = this.relatedSections.map(s => s.sectionId);
+            
+            // 找出需要添加和删除的小节
+            const toAdd = newSectionIds.filter(id => !oldSectionIds.includes(id));
+            const toRemove = oldSectionIds.filter(id => !newSectionIds.includes(id));
+            
+            const promises = [];
+            
+            // 为新小节添加关联
+            toAdd.forEach(sectionId => {
+              const promise = import('@/api/course/sectionKp').then(({ listSectionKpBySection, setSectionKnowledgePoints }) => {
+                return listSectionKpBySection(sectionId).then(res => {
+                  const dataArray = Array.isArray(res.data) ? res.data : (res.data ? [res.data] : []);
+                  const existingKpIds = dataArray.map(item => item.kpId);
+                  if (!existingKpIds.includes(this.kpData.id)) {
+                    existingKpIds.push(this.kpData.id);
+                  }
+                  return setSectionKnowledgePoints(sectionId, existingKpIds);
+                });
+              });
+              promises.push(promise);
+            });
+            
+            // 从旧小节移除关联
+            toRemove.forEach(sectionId => {
+              const promise = import('@/api/course/sectionKp').then(({ listSectionKpBySection, setSectionKnowledgePoints }) => {
+                return listSectionKpBySection(sectionId).then(res => {
+                  const dataArray = Array.isArray(res.data) ? res.data : (res.data ? [res.data] : []);
+                  const existingKpIds = dataArray.map(item => item.kpId).filter(id => id !== this.kpData.id);
+                  return setSectionKnowledgePoints(sectionId, existingKpIds);
+                });
+              });
+              promises.push(promise);
+            });
+            
+            // 等待所有小节关联更新完成
+            return Promise.all(promises);
+          }).then(() => {
+            this.$message.success('知识点信息更新成功');
+            this.editKpDialogVisible = false;
+            this.kpFormSaving = false;
+            // 重新加载知识点详情
+            this.getKpDetail();
+            this.getRelatedSections();
+          }).catch(error => {
+            console.error('保存失败：', error);
+            this.$message.error('保存失败：' + (error.msg || error.message || '请重试'));
+            this.kpFormSaving = false;
+          });
+        }
+      });
+    },
+
     /** 进入编辑模式 */
     handleEditDescription() {
       this.isEditing = true;
@@ -1317,20 +1752,6 @@ export default {
         console.error('保存失败：', error);
         this.$message.error('保存失败：' + (error.msg || error.message || '请重试'));
       });
-    },
-
-    /** 删除知识点 */
-    handleDelete() {
-      this.$confirm('确定要删除该知识点吗？删除后将无法恢复。', '警告', {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning'
-      }).then(() => {
-        delKnowledgePoint(this.kpId).then(() => {
-          this.$message.success('删除成功');
-          this.goBack();
-        });
-      }).catch(() => {});
     },
 
     /** AI一键生成知识点详解 */
@@ -1448,6 +1869,256 @@ export default {
         "'": '&#039;'
       };
       return text.replace(/[&<>"']/g, m => map[m]);
+    },
+
+    /** 打开编辑关系对话框 */
+    async handleEditRelation() {
+      console.log('[编辑关系] 打开对话框');
+      console.log('[编辑关系] allRelations:', this.allRelations);
+      console.log('[编辑关系] 当前知识点ID:', this.kpData.id);
+      
+      this.isEditMode = false;
+      this.relationForm = {
+        relationId: null,
+        sourceKpId: this.kpData.id,
+        targetKpId: null,
+        relationType: ''
+      };
+      
+      // 初始化选项列表，包含当前知识点
+      this.sourceKpOptions = [{
+        id: this.kpData.id,
+        title: this.kpData.title,
+        level: this.kpData.level
+      }];
+      this.targetKpOptions = [];
+      
+      // 先打开对话框
+      this.relationDialogVisible = true;
+      
+      // 异步加载当前所有关系
+      await this.loadAllCurrentRelations();
+      console.log('[编辑关系] 当前关系列表:', this.allCurrentRelations);
+    },
+
+    /** 加载当前知识点的所有关系（双向） */
+    async loadAllCurrentRelations() {
+      console.log('[加载当前关系] 开始加载，allRelations:', this.allRelations);
+      console.log('[加载当前关系] 当前知识点ID:', this.kpData.id);
+      
+      // 筛选出涉及当前知识点的所有关系（作为源或目标）
+      // 注意：API返回的字段是 fromKpId 和 toKpId，不是 sourceKpId 和 targetKpId
+      const relations = this.allRelations.filter(rel => 
+        rel.fromKpId == this.kpData.id || rel.toKpId == this.kpData.id
+      );
+      
+      console.log('[加载当前关系] 筛选出的关系数量:', relations.length);
+      
+      if (relations.length === 0) {
+        this.allCurrentRelations = [];
+        return;
+      }
+
+      // 收集所有需要加载的知识点ID（去重）
+      const kpIds = new Set();
+      relations.forEach(rel => {
+        if (rel.fromKpId != this.kpData.id) kpIds.add(rel.fromKpId);
+        if (rel.toKpId != this.kpData.id) kpIds.add(rel.toKpId);
+      });
+      
+      console.log('[加载当前关系] 需要加载的知识点IDs:', Array.from(kpIds));
+      
+      // 批量获取知识点信息
+      try {
+        const promises = Array.from(kpIds).map(id => {
+          return import('@/api/course/knowledgePoint').then(({ getKnowledgePoint }) => {
+            return getKnowledgePoint(id).then(response => ({
+              id: id,
+              title: response.data.title
+            })).catch(() => ({
+              id: id,
+              title: '未知知识点'
+            }));
+          });
+        });
+        
+        const kps = await Promise.all(promises);
+        const kpMap = {};
+        kps.forEach(kp => {
+          kpMap[kp.id] = kp.title;
+        });
+        kpMap[this.kpData.id] = this.kpData.title; // 加入当前知识点
+        
+        // 映射关系数据 - 统一使用 sourceKpId/targetKpId 字段名
+        this.allCurrentRelations = relations.map(rel => ({
+          ...rel,
+          sourceKpId: rel.fromKpId,  // 统一字段名
+          targetKpId: rel.toKpId,    // 统一字段名
+          sourceTitle: kpMap[rel.fromKpId] || '未知知识点',
+          targetTitle: kpMap[rel.toKpId] || '未知知识点'
+        }));
+      } catch (error) {
+        console.error('加载当前关系失败:', error);
+        this.allCurrentRelations = [];
+      }
+    },
+
+    /** 点击关系项，填充到编辑表单 */
+    handleSelectRelation(rel) {
+      this.isEditMode = true;
+      this.relationForm = {
+        relationId: rel.id,
+        sourceKpId: rel.sourceKpId,
+        targetKpId: rel.targetKpId,
+        relationType: rel.relationType
+      };
+      
+      // 将选中的知识点加入选项列表
+      this.sourceKpOptions = [{
+        id: rel.sourceKpId,
+        title: rel.sourceTitle
+      }];
+      this.targetKpOptions = [{
+        id: rel.targetKpId,
+        title: rel.targetTitle
+      }];
+    },
+
+    /** 搜索源知识点 */
+    searchSourceKnowledgePoints(query) {
+      if (query && query.trim() !== '') {
+        this.sourceKpSearchLoading = true;
+        import('@/api/course/knowledgePoint').then(({ listKnowledgePoint }) => {
+          listKnowledgePoint({ title: query, pageSize: 50 }).then(response => {
+            this.sourceKpOptions = (response.rows || []);
+            this.sourceKpSearchLoading = false;
+          }).catch(() => {
+            this.sourceKpSearchLoading = false;
+          });
+        });
+      }
+    },
+
+    /** 搜索目标知识点 */
+    searchTargetKnowledgePoints(query) {
+      if (query && query.trim() !== '') {
+        this.targetKpSearchLoading = true;
+        import('@/api/course/knowledgePoint').then(({ listKnowledgePoint }) => {
+          listKnowledgePoint({ title: query, pageSize: 50 }).then(response => {
+            this.targetKpOptions = (response.rows || []);
+            this.targetKpSearchLoading = false;
+          }).catch(() => {
+            this.targetKpSearchLoading = false;
+          });
+        });
+      }
+    },
+
+    /** 源知识点搜索框获取焦点时加载默认列表 */
+    handleSourceSearchFocus() {
+      if (this.sourceKpOptions.length === 0) {
+        this.searchSourceKnowledgePoints(' ');
+      }
+    },
+
+    /** 目标知识点搜索框获取焦点时加载默认列表 */
+    handleTargetSearchFocus() {
+      if (this.targetKpOptions.length === 0) {
+        this.searchTargetKnowledgePoints(' ');
+      }
+    },
+
+    /** 保存关系 */
+    handleSaveRelation() {
+      this.$refs.relationForm.validate(valid => {
+        if (valid) {
+          this.relationSaving = true;
+          
+          if (this.isEditMode && this.relationForm.relationId) {
+            // 编辑模式：更新关系
+            import('@/api/course/kpRelation').then(({ updateKpRelation }) => {
+              updateKpRelation({
+                id: this.relationForm.relationId,
+                fromKpId: this.relationForm.sourceKpId,  // 转换为后端字段名
+                toKpId: this.relationForm.targetKpId,    // 转换为后端字段名
+                relationType: this.relationForm.relationType
+              }).then(() => {
+                this.$message.success('关系修改成功');
+                this.relationDialogVisible = false;
+                this.relationSaving = false;
+                this.getKpRelations(); // 刷新关系数据
+              }).catch(error => {
+                this.$message.error('保存失败：' + (error.msg || error.message || '请重试'));
+                this.relationSaving = false;
+              });
+            });
+          } else {
+            // 新增模式：添加关系
+            import('@/api/course/kpRelation').then(({ addKpRelation }) => {
+              addKpRelation({
+                fromKpId: this.relationForm.sourceKpId,  // 转换为后端字段名
+                toKpId: this.relationForm.targetKpId,    // 转换为后端字段名
+                relationType: this.relationForm.relationType
+              }).then(() => {
+                this.$message.success('关系添加成功');
+                this.relationDialogVisible = false;
+                this.relationSaving = false;
+                this.getKpRelations(); // 刷新关系数据
+              }).catch(error => {
+                this.$message.error('保存失败：' + (error.msg || error.message || '请重试'));
+                this.relationSaving = false;
+              });
+            });
+          }
+        }
+      });
+    },
+
+    /** 删除关系 */
+    handleDeleteRelation(relation) {
+      this.$confirm('确定要删除该关系吗？', '提示', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }).then(() => {
+        import('@/api/course/kpRelation').then(({ delKpRelation }) => {
+          delKpRelation(relation.id).then(() => {
+            this.$message.success('删除成功');
+            // 从当前列表中移除
+            const index = this.allCurrentRelations.findIndex(r => r.id === relation.id);
+            if (index > -1) {
+              this.allCurrentRelations.splice(index, 1);
+            }
+            // 从 allRelations 中移除
+            const allIndex = this.allRelations.findIndex(r => r.id === relation.id);
+            if (allIndex > -1) {
+              this.allRelations.splice(allIndex, 1);
+            }
+            // 刷新整体关系数据和图谱
+            this.getKpRelations();
+          }).catch(error => {
+            this.$message.error('删除失败：' + (error.msg || error.message || '请重试'));
+          });
+        });
+      }).catch(() => {});
+    },
+
+    /** 取消编辑 */
+    handleCancelRelation() {
+      this.relationDialogVisible = false;
+      this.isEditMode = false;
+    },
+
+    /** 获取关系类型Tag类型 */
+    getRelationTagType(relationType) {
+      const typeMap = {
+        'prerequisite_of': 'success',
+        'similar_to': 'info',
+        'extension_of': 'warning',
+        'derived_from': 'primary',
+        'counterexample_of': 'danger'
+      };
+      return typeMap[relationType] || 'info';
     }
   }
 };
@@ -1726,6 +2397,11 @@ export default {
     }
 
     .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+
       .card-title {
         font-size: 16px;
         font-weight: bold;
@@ -1735,6 +2411,10 @@ export default {
           margin-right: 6px;
           color: #409EFF;
         }
+      }
+
+      .header-actions {
+        margin-left: auto;
       }
     }
 
@@ -2251,6 +2931,123 @@ export default {
   .detail-right {
     width: 100%;
     height: auto;
+  }
+}
+
+/* 编辑关系对话框样式 */
+.current-relations-panel {
+  max-height: 450px;
+  overflow-y: auto;
+  padding: 10px;
+  background: #f5f7fa;
+  border-radius: 4px;
+
+  .panel-title {
+    font-weight: bold;
+    font-size: 14px;
+    margin-bottom: 10px;
+    color: #303133;
+  }
+
+  .relation-item {
+    background: white;
+    padding: 12px;
+    margin-bottom: 10px;
+    border-radius: 4px;
+    border: 1px solid #dcdfe6;
+    cursor: pointer;
+    transition: all 0.3s;
+
+    &:hover {
+      border-color: #409eff;
+      background: #ecf5ff;
+      transform: translateX(5px);
+    }
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+
+    .relation-content {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+
+      .kp-name {
+        font-size: 13px;
+        color: #303133;
+        flex-shrink: 1;
+        
+        &.source {
+          font-weight: 500;
+        }
+        
+        &.target {
+          color: #606266;
+        }
+      }
+
+      .relation-tag {
+        flex-shrink: 0;
+      }
+
+      .delete-btn {
+        margin-left: auto;
+        color: #F56C6C;
+        padding: 0;
+        
+        &:hover {
+          color: #f78989;
+        }
+      }
+    }
+  }
+
+  .empty-hint {
+    text-align: center;
+    color: #909399;
+    padding: 30px;
+    font-size: 13px;
+  }
+}
+
+.edit-form-panel {
+  padding: 10px;
+
+  .panel-title {
+    font-weight: bold;
+    font-size: 14px;
+    margin-bottom: 15px;
+    color: #303133;
+  }
+
+  .el-form {
+    .el-form-item {
+      margin-bottom: 18px;
+    }
+  }
+
+  .validation-hint {
+    margin-bottom: 15px;
+  }
+}
+
+.existing-relations {
+  margin-bottom: 20px;
+
+  h4 {
+    margin-bottom: 12px;
+    font-size: 14px;
+    color: #303133;
+    font-weight: 600;
+  }
+
+  ::v-deep .el-table {
+    th {
+      background-color: #f5f7fa;
+      color: #606266;
+      font-weight: 600;
+    }
   }
 }
 </style>

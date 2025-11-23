@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -57,6 +58,16 @@ public class KpRelationController extends BaseController
     {
         kpRelation.setAiGenerated(0);  // 手动添加的关系
         return toAjax(kpRelationService.insertKpRelation(kpRelation));
+    }
+
+    /**
+     * 修改知识点关系
+     */
+    @Log(title = "知识点关系", businessType = BusinessType.UPDATE)
+    @PutMapping
+    public AjaxResult edit(@RequestBody KpRelation kpRelation)
+    {
+        return toAjax(kpRelationService.updateKpRelation(kpRelation));
     }
 
     /**

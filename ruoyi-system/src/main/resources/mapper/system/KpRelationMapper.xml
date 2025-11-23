@@ -74,6 +74,17 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         </trim>
     </insert>
 
+    <update id="updateKpRelation" parameterType="com.ruoyi.system.domain.KpRelation">
+        update kp_relation
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="fromKpId != null">from_kp_id = #{fromKpId},</if>
+            <if test="toKpId != null">to_kp_id = #{toKpId},</if>
+            <if test="relationType != null">relation_type = #{relationType},</if>
+            <if test="aiGenerated != null">ai_generated = #{aiGenerated},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
     <insert id="batchInsertKpRelations" parameterType="java.util.List">
         insert into kp_relation (from_kp_id, to_kp_id, relation_type, ai_generated, create_time)
         values

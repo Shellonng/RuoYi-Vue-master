@@ -35,6 +35,14 @@ public interface KpRelationMapper
     public int insertKpRelation(KpRelation kpRelation);
 
     /**
+     * 修改知识点关系
+     *
+     * @param kpRelation 知识点关系
+     * @return 结果
+     */
+    public int updateKpRelation(KpRelation kpRelation);
+
+    /**
      * 批量新增知识点关系
      *
      * @param kpRelations 知识点关系列表
