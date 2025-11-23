@@ -518,7 +518,7 @@
           </div>
           
           <!-- 资源统计列表 -->
-          <div class="resource-stats">
+          <div v-if="!currentResourceType" class="resource-stats">
             <div class="stat-item clickable" @click="viewResourceDetail('learningMaterials')">
               <i class="el-icon-reading stat-icon" style="color: #409EFF;"></i>
               <div class="stat-content">
@@ -3580,7 +3580,22 @@ export default {
     },
     /** 获取知识点数量 */
     getKnowledgePointsCount(section) {
-      if (!section || !section.knowledgePoints) return 0;
+      if (!section) return 0;
+      
+      // 如果是知识点视图，计算关联知识点的总数
+      if (section.isKnowledgePointView && section.relatedKnowledgePoints) {
+        let count = 0;
+        const related = section.relatedKnowledgePoints;
+        if (related.prerequisite_of) count += related.prerequisite_of.length;
+        if (related.similar_to) count += related.similar_to.length;
+        if (related.extension_of) count += related.extension_of.length;
+        if (related.derived_from) count += related.derived_from.length;
+        if (related.counterexample_of) count += related.counterexample_of.length;
+        return count;
+      }
+      
+      // 小节视图：计算知识点列表长度
+      if (!section.knowledgePoints) return 0;
       if (Array.isArray(section.knowledgePoints)) {
         return section.knowledgePoints.length;
       }
@@ -4419,7 +4434,7 @@ export default {
     },
 
     /** 显示3D图谱知识点详情抽屉 */
-    show3DKnowledgeDrawer(node) {
+    async show3DKnowledgeDrawer(node) {
       console.log('[3D图谱] 显示知识点抽屉:', node);
       
       // 节点的data字段包含了完整的知识点数据
@@ -4516,6 +4531,10 @@ export default {
       };
       
       this.knowledgePointsCurrentPage = 1;
+      
+      // 加载该知识点的作业/考试/测验资源
+      await this.loadKnowledgePointResources(kp.id);
+      
       this.sectionDrawerVisible = true;
     },
     
@@ -4598,24 +4617,62 @@ export default {
       this.currentResourceType = null;
       this.currentResourceList = [];
       
-      // 将知识点设置为当前选中的小节（使用与3D图谱相同的数据结构）
+      // 查找该知识点的所有关系
+      const relatedKnowledgePoints = {
+        prerequisite_of: [],    // 前置于
+        similar_to: [],         // 相似于
+        extension_of: [],       // 扩展于
+        derived_from: [],       // 派生自
+        counterexample_of: []   // 反例于
+      };
+      
+      // 从kpRelations中查找该知识点的关系
+      if (this.kpRelations && this.kpRelations.length > 0) {
+        this.kpRelations.forEach(rel => {
+          // 如果该知识点是source(起点)
+          if (rel.fromKpId === kpId) {
+            const targetKp = this.findKnowledgePointById(rel.toKpId);
+            if (targetKp && rel.relationType) {
+              if (!relatedKnowledgePoints[rel.relationType]) {
+                relatedKnowledgePoints[rel.relationType] = [];
+              }
+              relatedKnowledgePoints[rel.relationType].push(targetKp);
+            }
+          }
+          // 如果该知识点是target(终点),需要反向处理关系
+          if (rel.toKpId === kpId) {
+            const sourceKp = this.findKnowledgePointById(rel.fromKpId);
+            if (sourceKp && rel.relationType) {
+              // 反向关系映射
+              const reverseTypeMap = {
+                'prerequisite_of': 'derived_from',
+                'derived_from': 'prerequisite_of',
+                'similar_to': 'similar_to',
+                'extension_of': 'extension_of',
+                'counterexample_of': 'counterexample_of'
+              };
+              const reverseType = reverseTypeMap[rel.relationType] || rel.relationType;
+              if (!relatedKnowledgePoints[reverseType]) {
+                relatedKnowledgePoints[reverseType] = [];
+              }
+              relatedKnowledgePoints[reverseType].push(sourceKp);
+            }
+          }
+        });
+      }
+      
+      // 将知识点设置为当前选中的小节
       this.selectedSection = {
-        id: kpId,  // 添加ID字段
+        id: kpId,
         title: kpName,
         sectionName: kpName,
         name: kpName,
         description: kp.description || '',
         knowledgePoints: [kp],
-        kpData: kp, // 保存完整的知识点数据
-        relatedKnowledgePoints: kp.relatedKnowledgePoints || {
-          prerequisite_of: [],
-          similar_to: [],
-          extension_of: [],
-          derived_from: [],
-          counterexample_of: []
-        },
-        isKnowledgePointView: true, // 使用与3D图谱相同的标志
-        isKnowledgePoint: true, // 也保留这个标志
+        kpData: kp,
+        relatedKnowledgePoints: relatedKnowledgePoints,
+        isKnowledgePointView: true,
+        isKnowledgePoint: true,
         // 初始化资源数量为0
         learningMaterials: 0,
         materials: 0,
@@ -5903,6 +5960,10 @@ body > .el-drawer__wrapper {
       font-size: 13px;
       color: #606266;
       line-height: 1.5;
+      max-height: 4.5em; // 3行的高度（1.5 * 3）
+      overflow-y: auto;
+      word-wrap: break-word;
+      word-break: break-all;
     }
   }
 
