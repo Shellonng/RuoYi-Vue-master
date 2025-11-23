@@ -116,4 +116,16 @@ public class AssignmentServiceImpl implements IAssignmentService
     {
         return assignmentMapper.deleteAssignmentById(id);
     }
+    
+    /**
+     * 根据知识点ID查询关联的作业/考试列表
+     * 
+     * @param kpId 知识点ID
+     * @return 作业集合
+     */
+    @Override
+    public List<Assignment> selectAssignmentsByKnowledgePointId(Long kpId)
+    {
+        return assignmentMapper.selectAssignmentsByKnowledgePointId(kpId);
+    }
 }

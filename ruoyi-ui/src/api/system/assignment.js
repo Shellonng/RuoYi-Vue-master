@@ -42,3 +42,11 @@ export function delAssignment(id) {
     method: 'delete'
   })
 }
+
+// 根据知识点ID查询相关作业/考试/测验
+export function getAssignmentsByKnowledgePoint(kpId) {
+  return request({
+    url: '/system/assignment/byKnowledgePoint/' + kpId,
+    method: 'get'
+  })
+}

@@ -58,4 +58,12 @@ public interface AssignmentMapper
      * @return 结果
      */
     public int deleteAssignmentByIds(Long[] ids);
+    
+    /**
+     * 根据知识点ID查询关联的作业/考试列表
+     * 
+     * @param kpId 知识点ID
+     * @return 作业集合
+     */
+    public List<Assignment> selectAssignmentsByKnowledgePointId(Long kpId);
 }

@@ -133,4 +133,14 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             #{id}
         </foreach>
     </delete>
+    
+    <!-- 根据知识点ID查询关联的作业/考试列表 -->
+    <select id="selectAssignmentsByKnowledgePointId" parameterType="Long" resultMap="AssignmentResult">
+        SELECT DISTINCT a.*
+        FROM assignment a
+        INNER JOIN assignment_kp ak ON a.id = ak.assignment_id
+        WHERE ak.kp_id = #{kpId}
+        AND a.is_deleted = 0
+        ORDER BY a.create_time DESC
+    </select>
 </mapper>
