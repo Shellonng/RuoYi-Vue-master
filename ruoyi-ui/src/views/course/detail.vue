@@ -2685,22 +2685,22 @@ export default {
           const nodeId = params.data.id;
           const now = Date.now();
           
-          // 检查是否是双击(400ms内点击同一节点)
-          if (this.last2DClickNode === nodeId && now - this.last2DClickTime < 400) {
+          // 如果是同一节点且在300ms内,判定为双击
+          if (this.last2DClickNode === nodeId && now - this.last2DClickTime < 300) {
             // 双击检测成功
             console.log('[知识图谱] 检测到双击节点:', nodeId);
             
-            // 清除单击定时器
+            // 清除单击定时器,防止单击操作执行
             if (this.clickTimeout) {
               clearTimeout(this.clickTimeout);
               this.clickTimeout = null;
             }
             
-            // 重置双击检测状态
+            // 重置双击检测状态(重要:立即重置,避免三击被误判)
             this.last2DClickNode = null;
             this.last2DClickTime = 0;
             
-            // 处理双击:小节节点跳转,其他节点恢复图谱
+            // 处理双击:小节节点跳转,知识点节点跳转,其他节点恢复图谱
             if (params.data.id && params.data.id.startsWith('section-')) {
               console.log('[知识图谱] 双击小节节点,跳转到小节详情页:', params.data);
               // 从节点数据中获取sectionData
@@ -2711,6 +2711,27 @@ export default {
                 console.error('[知识图谱] 节点数据中没有section信息:', params.data);
                 this.$message.error('无法获取小节信息');
               }
+            } else if (params.data.id && params.data.id.startsWith('kp-')) {
+              // 2D图谱: 双击知识点节点，跳转到知识点详情页
+              // 2D图谱中知识点节点格式: 'kp-{sectionId}-{index}'
+              // 从节点数据的kpData中获取知识点ID
+              if (params.data.kpData && params.data.kpData.id) {
+                const kpId = params.data.kpData.id;
+                console.log('[知识图谱] 双击知识点节点(2D),跳转到知识点详情页:', kpId);
+                this.$router.push({
+                  path: `/knowledgepoint/detail/${kpId}`
+                });
+              } else {
+                console.error('[知识图谱] 无法获取知识点ID:', params.data);
+                this.$message.error('无法获取知识点信息');
+              }
+            } else if (params.data.id && params.data.id.startsWith('kp_')) {
+              // 3D图谱: 双击知识点节点，跳转到知识点详情页
+              const kpId = params.data.id.replace('kp_', '');
+              console.log('[知识图谱] 双击知识点节点(3D),跳转到知识点详情页:', kpId);
+              this.$router.push({
+                path: `/knowledgepoint/detail/${kpId}`
+              });
             } else {
               console.log('[知识图谱] 双击非小节节点,恢复图谱');
               this.knowledgeGraphChart.setOption({
@@ -2723,15 +2744,21 @@ export default {
             return;
           }
           
+          // 清除之前的单击定时器(如果点击了不同节点)
+          if (this.clickTimeout) {
+            clearTimeout(this.clickTimeout);
+            this.clickTimeout = null;
+          }
+          
           // 记录本次点击
           this.last2DClickNode = nodeId;
           this.last2DClickTime = now;
           
-          // 延迟执行单击操作,给双击检测留时间
-          if (this.clickTimeout) {
-            clearTimeout(this.clickTimeout);
-          }
+          // 延迟执行单击操作,等待可能的第二次点击
           this.clickTimeout = setTimeout(() => {
+            // 执行单击操作
+            console.log('[知识图谱] 执行单击操作:', nodeId);
+            
             // 高亮当前节点及其相关节点
             this.highlightNodeAndRelated(nodeId, graphData);
             
@@ -2748,7 +2775,7 @@ export default {
             }
             
             this.clickTimeout = null;
-          }, 250); // 250ms延迟,小于400ms双击检测窗口
+          }, 320); // 320ms延迟,略大于双击检测窗口(300ms)
         }
       });
       
@@ -3983,8 +4010,14 @@ export default {
     handle3DNodeDoubleClick(node) {
       console.log('[3D图谱] 节点双击:', node);
       
+      // 如果是知识点节点,跳转到知识点详情页
+      if (node.id && node.id.startsWith('kp_')) {
+        console.log('[3D图谱] 双击知识点节点,跳转到知识点详情页:', node);
+        const kpId = node.id.replace('kp_', '');
+        this.$router.push({ path: `/knowledgepoint/detail/${kpId}` });
+      }
       // 如果是小节节点,跳转到小节详情页
-      if (node.type === 'section') {
+      else if (node.type === 'section') {
         console.log('[3D图谱] 双击小节节点,跳转到小节详情页:', node.data);
         if (node.data) {
           this.goToSectionDetail(node.data);
