@@ -251,7 +251,9 @@
           <div class="tab-header">
             <div class="add-ai-btn-wrapper">
               <el-button type="primary" size="small" icon="el-icon-magic-stick" @click="handleGenerateKnowledgeGraph" :loading="generatingGraph">一键生成知识点图谱</el-button>
+              <el-button type="success" size="small" icon="el-icon-refresh" @click="handleRefreshGraph" :loading="refreshingGraph" style="margin-left: 10px;">刷新图谱</el-button>
               <span v-if="generatingGraph" style="margin-left: 10px; color: #909399; font-size: 12px;">AI正在分析知识点关系，请稍候...</span>
+              <span v-if="refreshingGraph" style="margin-left: 10px; color: #909399; font-size: 12px;">正在刷新图谱数据...</span>
             </div>
           </div>
           
@@ -1017,6 +1019,7 @@ export default {
       isGraphFullscreen: false, // 知识图谱是否全屏
       isStructureFullscreen: false, // 课程结构是否全屏
       generatingGraph: false, // 知识点图谱生成状态
+      refreshingGraph: false, // 图谱刷新状态
       // 3D图谱相关
       graph3DInstance: null, // 3D图谱实例
       isGraph3DFullscreen: false, // 3D图谱是否全屏
@@ -1094,6 +1097,12 @@ export default {
       }
     });
   },
+  activated() {
+    // keep-alive 缓存的组件被激活时调用
+    // 重新加载课程数据以获取最新的知识点信息
+    console.log('[课程详情] 页面激活，刷新数据');
+    this.refreshCourseData();
+  },
   beforeDestroy() {
     // 清理3D图谱实例
     if (this.graph3DInstance) {
@@ -1155,6 +1164,31 @@ export default {
     }
   },
   methods: {
+    /** 刷新课程数据（用于页面激活时更新） */
+    async refreshCourseData() {
+      console.log('[刷新数据] 开始刷新课程数据...');
+      
+      try {
+        // 重新加载章节和小节数据（不等待知识点，快速返回）
+        await this.getChapterList(false, false);
+        
+        console.log('[刷新数据] 数据加载完成，当前标签页:', this.activeTab);
+        
+        // 如果当前在课程图谱标签页，重新渲染图谱
+        if (this.activeTab === 'knowledge') {
+          this.$nextTick(() => {
+            console.log('[刷新数据] 重新渲染图谱...');
+            this.renderKnowledgeGraph();
+            if (this.graph3DInstance) {
+              this.render3DKnowledgeGraph();
+            }
+          });
+        }
+      } catch (error) {
+        console.error('[刷新数据] 刷新失败:', error);
+      }
+    },
+    
     /** 获取课程信息 */
     getCourseInfo() {
       getCourse(this.courseId).then(response => {
@@ -1183,42 +1217,57 @@ export default {
       });
     },
     /** 获取章节列表 */
-    getChapterList(animated = false) {
-      listChapterByCourse(this.courseId).then(async response => {
+    getChapterList(animated = false, waitForKnowledgePoints = false) {
+      return listChapterByCourse(this.courseId).then(async response => {
         const chapters = response.data;
         // 为每个章节加载其对应的小节(并行加载)，初次加载时跳过渲染
         const loadPromises = chapters.map(chapter => {
           this.expandedChapters.add(chapter.id);
-          return this.loadSectionsForChapter(chapter, true); // 传递true跳过渲染
+          return this.loadSectionsForChapter(chapter, true, waitForKnowledgePoints); // 传递waitForKnowledgePoints参数
         });
         
-        // 等待所有小节和知识点加载完成
+        // 等待所有小节加载完成（如果waitForKnowledgePoints=true，也会等待知识点）
         await Promise.all(loadPromises);
         
         this.chapterList = chapters;
+        
+        console.log('[数据加载] 章节列表加载完成:', chapters.length, '个章节', waitForKnowledgePoints ? '(已等待知识点)' : '(知识点异步加载)');
         
         // 数据加载完成后渲染思维导图(初次加载带逐节动画)
         this.$nextTick(() => {
           this.renderMindmap(true); // 初次加载使用动画
         });
-      }).catch(() => {
+        
+        return chapters;
+      }).catch((error) => {
+        console.error('[数据加载] 获取章节列表失败:', error);
         this.$message.error('获取章节列表失败');
+        throw error;
       });
     },
     /** 为指定章节加载小节 */
-    loadSectionsForChapter(chapter, skipRender = false) {
-      return listSectionByChapter(chapter.id).then(response => {
+    loadSectionsForChapter(chapter, skipRender = false, waitForKnowledgePoints = false) {
+      return listSectionByChapter(chapter.id).then(async response => {
         const sections = response.data;
         // 按 sortOrder 排序
         sections.sort((a, b) => a.sortOrder - b.sortOrder);
         // 这里可以根据实际业务逻辑设置小节的显示类型
-        sections.forEach(section => {
+        
+        // 为每个小节加载知识点
+        const kpLoadPromises = sections.map(section => {
           // 根据 videoUrl 判断类型
           section.type = section.videoUrl ? 'video' : 'document';
           // 保持时长为秒数，由formatDurationDisplay处理显示格式
           // 加载该小节的知识点（传递skipRender参数）
-          this.loadKnowledgePointsForSection(section, skipRender);
+          return this.loadKnowledgePointsForSection(section, skipRender);
         });
+        
+        // 只有在需要时才等待所有知识点加载完成（图谱刷新时）
+        if (waitForKnowledgePoints) {
+          await Promise.all(kpLoadPromises);
+        }
+        // 否则异步加载，不阻塞（章节管理页）
+        
         // 使用 Vue.set 更新，确保响应式更新
         this.$set(chapter, 'sections', sections);
         return sections;
@@ -2600,10 +2649,11 @@ export default {
             show: true,
             position: 'bottom',
             formatter: '{b}',
-            fontSize: 12
+            fontSize: 12,
+            color: '#303133'
           },
           labelLayout: {
-            hideOverlap: true
+            hideOverlap: false // 不自动隐藏重叠标签，避免知识点标签被隐藏
           },
           force: {
             repulsion: 1200,
@@ -2828,19 +2878,27 @@ export default {
             
             // 添加该小节的知识点节点(默认隐藏)
             if (section.knowledgePoints && section.knowledgePoints.length > 0) {
+              console.log(`[准备图谱] 小节 "${section.title}" 有 ${section.knowledgePoints.length} 个知识点`);
+              
               section.knowledgePoints.forEach((kp, kpIndex) => {
+                // 知识点使用更鲜艳的颜色，不变浅，保持原章节颜色
+                const kpColor = colorScheme; // 使用章节主颜色，更鲜艳
+                
                 const kpNode = {
                   id: 'kp-' + section.id + '-' + kpIndex,
                   name: kp.name || kp.title,
-                  symbolSize: 25,
+                  symbolSize: 28, // 稍微增大一点
                   category: 3,
                   itemStyle: {
-                    color: this.lightenColor(lighterColor, 20),
-                    opacity: 0 // 默认隐藏
+                    color: kpColor,
+                    opacity: 0, // 默认隐藏，但显示时会设置为1
+                    borderColor: '#fff',
+                    borderWidth: 2
                   },
                   label: {
-                    fontSize: 10,
-                    show: false // 默认不显示标签
+                    fontSize: 11,
+                    show: false, // 默认不显示标签
+                    fontWeight: 'bold'
                   },
                   visible: false, // 自定义属性标记是否可见
                   sectionId: section.id, // 记录所属小节
@@ -2848,15 +2906,16 @@ export default {
                 };
                 
                 nodes.push(kpNode);
+                console.log(`[准备图谱] 添加知识点节点: ${kpNode.id} - ${kpNode.name}, sectionId: ${kpNode.sectionId}`);
                 
                 // 添加小节到知识点的连线(默认隐藏)
                 links.push({
                   source: sectionNode.id,
                   target: kpNode.id,
                   lineStyle: {
-                    color: this.lightenColor(lighterColor, 20),
-                    width: 2,
-                    opacity: 0 // 默认隐藏
+                    color: kpColor,
+                    width: 2.5,
+                    opacity: 0 // 默认隐藏，但显示时会设置为更高的值
                   },
                   visible: false // 自定义属性标记是否可见
                 });
@@ -2865,6 +2924,10 @@ export default {
           });
         }
       });
+      
+      // 统计知识点节点数量
+      const kpNodeCount = nodes.filter(n => n.id && n.id.startsWith('kp-')).length;
+      console.log(`[准备图谱] 图谱数据准备完成: 总节点=${nodes.length}, 知识点节点=${kpNodeCount}, 连线=${links.length}`);
       
       return { nodes, links, categories };
     },
@@ -2898,6 +2961,12 @@ export default {
       // 检查点击的是否是小节节点
       const isClickedSectionNode = nodeId.startsWith('section-');
       
+      // 如果是小节节点，提取小节ID
+      let clickedSectionId = null;
+      if (isClickedSectionNode) {
+        clickedSectionId = nodeId.replace('section-', '');
+      }
+      
       // 更新节点样式
       const updatedNodes = graphData.nodes.map(node => {
         const isAdjacent = adjacentNodeIds.has(node.id);
@@ -2906,23 +2975,29 @@ export default {
         // 如果是知识点节点
         if (isKnowledgePoint) {
           // 检查该知识点是否属于被点击的小节
-          const belongsToClickedSection = isClickedSectionNode && node.sectionId && nodeId === 'section-' + node.sectionId;
+          const belongsToClickedSection = isClickedSectionNode && 
+                                         node.sectionId && 
+                                         clickedSectionId && 
+                                         String(node.sectionId) === String(clickedSectionId);
+          
+          // 知识点应该显示：要么属于被点击的小节，要么在相邻节点集合中
+          const shouldShow = belongsToClickedSection || isAdjacent;
           
           return {
             ...node,
             itemStyle: {
               ...node.itemStyle,
-              opacity: belongsToClickedSection || isAdjacent ? 1 : 0 // 显示相关知识点，隐藏其他
+              opacity: shouldShow ? 1 : 0 // 完全显示或完全隐藏
             },
             label: {
               ...node.label,
-              show: belongsToClickedSection || isAdjacent, // 显示标签
-              opacity: belongsToClickedSection || isAdjacent ? 1 : 0
+              show: shouldShow, // 显示或隐藏标签
+              opacity: shouldShow ? 1 : 0 // 标签完全不透明
             }
           };
         }
         
-        // 普通节点
+        // 普通节点（课程、章节、小节）
         return {
           ...node,
           itemStyle: {
@@ -2945,7 +3020,8 @@ export default {
           ...link,
           lineStyle: {
             ...link.lineStyle,
-            opacity: isConnected ? (isKnowledgePointLink ? 0.6 : 0.8) : 0.1
+            // 知识点连线使用更高的不透明度，确保可见
+            opacity: isConnected ? (isKnowledgePointLink ? 0.8 : 0.8) : 0.1
           }
         };
       });
@@ -3349,6 +3425,36 @@ export default {
       }).catch(() => {
         this.$message.info('已取消生成');
       });
+    },
+
+    /** 手动刷新图谱 */
+    async handleRefreshGraph() {
+      this.refreshingGraph = true;
+      console.log('[手动刷新] 开始刷新图谱...');
+      
+      try {
+        // 重新加载章节和小节数据（包括知识点）- 必须等待知识点加载完成
+        await this.getChapterList(false, true);
+        
+        console.log('[手动刷新] 数据加载完成（包括知识点），开始渲染图谱...');
+        
+        // 数据加载完成后渲染图谱
+        this.$nextTick(() => {
+          // 重新渲染2D图谱
+          this.renderKnowledgeGraph();
+          // 重新渲染3D图谱
+          if (this.graph3DInstance) {
+            this.render3DKnowledgeGraph();
+          }
+          this.refreshingGraph = false;
+          this.$message.success('图谱已刷新');
+          console.log('[手动刷新] 图谱渲染完成');
+        });
+      } catch (error) {
+        console.error('[手动刷新] 刷新失败:', error);
+        this.refreshingGraph = false;
+        this.$message.error('刷新失败');
+      }
     },
 
     /** 渲染3D知识图谱 */

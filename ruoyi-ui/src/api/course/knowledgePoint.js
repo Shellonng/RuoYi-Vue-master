@@ -84,3 +84,15 @@ export function setSectionKnowledgePoints(sectionId, kpIds) {
     data: kpIds
   })
 }
+
+// AI生成知识点详解
+export function generateKpDescription(kpTitle) {
+  return request({
+    url: '/course/generation/generateKpDescription',
+    method: 'post',
+    data: {
+      kpTitle: kpTitle
+    },
+    timeout: 60000 // 1分钟超时
+  })
+}

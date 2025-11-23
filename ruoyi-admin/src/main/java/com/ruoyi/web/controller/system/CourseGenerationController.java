@@ -280,6 +280,46 @@ public class CourseGenerationController extends BaseController
     }
 
     /**
+     * AI生成知识点详解
+     *
+     * @param params 包含kpTitle的参数
+     * @return 生成的知识点详解（Markdown格式）
+     */
+    @Log(title = "AI生成知识点详解", businessType = BusinessType.OTHER)
+    @PostMapping("/generateKpDescription")
+    public AjaxResult generateKpDescription(@RequestBody Map<String, String> params)
+    {
+        try
+        {
+            String kpTitle = params.get("kpTitle");
+            
+            if (kpTitle == null || kpTitle.trim().isEmpty())
+            {
+                return error("知识点名称不能为空");
+            }
+
+            log.info("开始生成知识点详解，知识点名称：{}", kpTitle);
+
+            // 调用AI服务生成知识点详解
+            String description = aiService.generateKnowledgePointDescription(kpTitle);
+            
+            if (description == null || description.trim().isEmpty())
+            {
+                return error("生成知识点详解失败，请重试");
+            }
+
+            log.info("知识点详解生成成功，长度：{}", description.length());
+            
+            return success(description);
+        }
+        catch (Exception e)
+        {
+            log.error("生成知识点详解失败", e);
+            return error("生成知识点详解失败：" + e.getMessage());
+        }
+    }
+
+    /**
      * AI智能匹配知识点
      *
      * @param params 匹配参数，包含作业信息和可选知识点列表

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="knowledge-detail-container">
     <!-- 顶部返回 -->
     <div class="detail-header">
@@ -42,61 +42,66 @@
             <!-- 图例 -->
             <div v-if="allRelations.length > 0 || relatedSections.length > 0" class="graph-legend">
               <div class="legend-title">图例说明</div>
-              <div class="legend-section">
-                <div class="legend-subtitle">节点类型</div>
-                <div class="legend-items">
-                  <div class="legend-item">
-                    <span class="legend-dot" style="background: #409EFF;"></span>
-                    <span>当前知识点</span>
-                  </div>
-                  <div class="legend-item">
-                    <span class="legend-dot" style="background: #67C23A;"></span>
-                    <span>前置知识点</span>
-                  </div>
-                  <div class="legend-item">
-                    <span class="legend-dot" style="background: #E6A23C;"></span>
-                    <span>后续知识点</span>
-                  </div>
-                  <div class="legend-item">
-                    <span class="legend-dot" style="background: #909399;"></span>
-                    <span>关联知识点</span>
-                  </div>
-                  <div class="legend-item">
-                    <span class="legend-rect" style="background: #C770F0;"></span>
-                    <span>小节</span>
-                  </div>
-                  <div class="legend-item">
-                    <span class="legend-rect" style="background: #F56C6C;"></span>
-                    <span>章节</span>
+              <div class="legend-columns">
+                <!-- 左列：节点类型 -->
+                <div class="legend-column">
+                  <div class="legend-subtitle">节点类型</div>
+                  <div class="legend-items">
+                    <div class="legend-item">
+                      <span class="legend-dot" style="background: #409EFF;"></span>
+                      <span>当前知识点</span>
+                    </div>
+                    <div class="legend-item">
+                      <span class="legend-dot" style="background: #67C23A;"></span>
+                      <span>前置知识点</span>
+                    </div>
+                    <div class="legend-item">
+                      <span class="legend-dot" style="background: #E6A23C;"></span>
+                      <span>后续知识点</span>
+                    </div>
+                    <div class="legend-item">
+                      <span class="legend-dot" style="background: #909399;"></span>
+                      <span>关联知识点</span>
+                    </div>
+                    <div class="legend-item">
+                      <span class="legend-rect" style="background: #C770F0;"></span>
+                      <span>小节</span>
+                    </div>
+                    <div class="legend-item">
+                      <span class="legend-rect" style="background: #F56C6C;"></span>
+                      <span>章节</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div class="legend-section">
-                <div class="legend-subtitle">关系类型</div>
-                <div class="legend-items">
-                  <div class="legend-item">
-                    <span class="legend-line" style="background: #C770F0;"></span>
-                    <span>属于（知识点→小节→章节）</span>
-                  </div>
-                  <div class="legend-item">
-                    <span class="legend-line" style="background: #67C23A;"></span>
-                    <span>前置于（prerequisite_of）</span>
-                  </div>
-                  <div class="legend-item">
-                    <span class="legend-line" style="background: #E6A23C;"></span>
-                    <span>扩展于（extension_of）</span>
-                  </div>
-                  <div class="legend-item">
-                    <span class="legend-line" style="background: #F56C6C;"></span>
-                    <span>相似于（similar_to）</span>
-                  </div>
-                  <div class="legend-item">
-                    <span class="legend-line" style="background: #909399;"></span>
-                    <span>派生自（derived_from）</span>
-                  </div>
-                  <div class="legend-item">
-                    <span class="legend-line" style="background: #8B4513;"></span>
-                    <span>反例于（counterexample_of）</span>
+                
+                <!-- 右列：关系类型 -->
+                <div class="legend-column">
+                  <div class="legend-subtitle">关系类型</div>
+                  <div class="legend-items">
+                    <div class="legend-item">
+                      <span class="legend-line" style="background: #C770F0;"></span>
+                      <span>属于</span>
+                    </div>
+                    <div class="legend-item">
+                      <span class="legend-line" style="background: #67C23A;"></span>
+                      <span>前置于</span>
+                    </div>
+                    <div class="legend-item">
+                      <span class="legend-line" style="background: #E6A23C;"></span>
+                      <span>扩展于</span>
+                    </div>
+                    <div class="legend-item">
+                      <span class="legend-line" style="background: #F56C6C;"></span>
+                      <span>相似于</span>
+                    </div>
+                    <div class="legend-item">
+                      <span class="legend-line" style="background: #909399;"></span>
+                      <span>派生自</span>
+                    </div>
+                    <div class="legend-item">
+                      <span class="legend-line" style="background: #8B4513;"></span>
+                      <span>反例于</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -191,14 +196,27 @@
           </div>
           
           <div class="kp-info-content">
-            <!-- 描述 -->
-            <div class="info-section">
+            <!-- 知识点解析 -->
+            <div class="info-section kp-description-section">
               <div class="section-title">
                 <i class="el-icon-document"></i>
-                <span>描述</span>
+                <span>知识点解析</span>
+                <el-button 
+                  type="primary" 
+                  size="mini" 
+                  icon="el-icon-magic-stick"
+                  :loading="aiGenerating"
+                  @click="handleAIGenerate"
+                  class="ai-generate-btn"
+                >
+                  {{ aiGenerating ? 'AI生成中...' : 'AI一键生成知识点详解' }}
+                </el-button>
               </div>
-              <div class="section-content">
-                {{ kpData.description || '暂无描述' }}
+              <div class="section-content markdown-content" v-if="kpData.description">
+                <div v-html="renderMarkdown(kpData.description)"></div>
+              </div>
+              <div class="section-content empty-text" v-else>
+                暂无解析，点击右侧按钮使用AI生成
               </div>
             </div>
 
@@ -274,11 +292,13 @@
 </template>
 
 <script>
-import { getKnowledgePoint, delKnowledgePoint } from "@/api/course/knowledgePoint";
+import { getKnowledgePoint, delKnowledgePoint, updateKnowledgePoint, generateKpDescription } from "@/api/course/knowledgePoint";
 import { listSectionKpByKp } from "@/api/course/sectionKp";
 import { listKpRelation } from "@/api/course/kpRelation";
 import { getSection } from "@/api/course/section";
 import * as echarts from 'echarts';
+import 'highlight.js/styles/github.css';
+import hljs from 'highlight.js';
 
 export default {
   name: "KnowledgePointDetail",
@@ -304,7 +324,9 @@ export default {
       // 是否全屏
       isFullscreen: false,
       // 所有关系数据
-      allRelations: []
+      allRelations: [],
+      // AI生成状态
+      aiGenerating: false
     };
   },
   created() {
@@ -1201,6 +1223,192 @@ export default {
           this.goBack();
         });
       }).catch(() => {});
+    },
+
+    /** AI一键生成知识点详解 */
+    handleAIGenerate() {
+      if (!this.kpData.title) {
+        this.$message.warning('知识点名称不存在');
+        return;
+      }
+      
+      this.aiGenerating = true;
+      
+      // 调用大模型API生成知识点详解
+      generateKpDescription(this.kpData.title)
+        .then(response => {
+          if (response.code === 200) {
+            // 更新本地显示
+            this.kpData.description = response.data || response.msg;
+            
+            // 保存到数据库
+            updateKnowledgePoint({
+              id: this.kpData.id,
+              description: this.kpData.description
+            }).then(() => {
+              this.$message.success('AI生成并保存成功');
+            }).catch(() => {
+              this.$message.warning('AI生成成功，但保存失败，请手动编辑保存');
+            });
+          } else {
+            this.$message.error(response.msg || 'AI生成失败');
+          }
+        })
+        .catch(error => {
+          console.error('AI生成失败：', error);
+          this.$message.error('AI生成失败：' + (error.msg || error.message || '请重试'));
+        })
+        .finally(() => {
+          this.aiGenerating = false;
+        });
+    },
+
+    /** 渲染Markdown内容（支持KaTeX公式） */
+    renderMarkdown(content) {
+      if (!content) return '';
+      
+      let html = content;
+      
+      // 预处理：移除多余的空行和分隔线
+      html = html.replace(/\n{2,}/g, '\n'); // 将2个以上连续换行替换为1个
+      html = html.replace(/^-{3,}$/gm, ''); // 移除分隔线 ---
+      html = html.replace(/^={3,}$/gm, ''); // 移除分隔线 ===
+      html = html.trim(); // 移除首尾空白
+      
+      // 1. 处理KaTeX块级公式 $$...$$
+      html = html.replace(/\$\$([\s\S]+?)\$\$/g, (match, formula) => {
+        try {
+          return `<div class="katex-block">${this.renderKaTeX(formula, true)}</div>`;
+        } catch (e) {
+          return `<div class="katex-error">公式渲染错误: ${match}</div>`;
+        }
+      });
+      
+      // 2. 处理KaTeX行内公式 $...$
+      html = html.replace(/\$([^\$\n]+?)\$/g, (match, formula) => {
+        try {
+          return `<span class="katex-inline">${this.renderKaTeX(formula, false)}</span>`;
+        } catch (e) {
+          return `<span class="katex-error">${match}</span>`;
+        }
+      });
+      
+      // 3. 处理代码块 ```language\ncode\n```
+      html = html.replace(/```(\w+)?\n([\s\S]+?)```/g, (match, language, code) => {
+        const lang = language || 'plaintext';
+        let highlighted;
+        try {
+          if (hljs.getLanguage(lang)) {
+            highlighted = hljs.highlight(code.trim(), { language: lang }).value;
+          } else {
+            highlighted = hljs.highlightAuto(code.trim()).value;
+          }
+        } catch (e) {
+          highlighted = this.escapeHtml(code.trim());
+        }
+        return `<pre><code class="hljs language-${lang}">${highlighted}</code></pre>`;
+      });
+      
+      // 4. 处理行内代码 `code`
+      html = html.replace(/`([^`]+?)`/g, '<code class="inline-code">$1</code>');
+      
+      // 5. 处理标题
+      html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+      html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+      html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+      
+      // 6. 处理加粗 **text**
+      html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+      
+      // 7. 处理斜体 *text*
+      html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+      
+      // 8. 处理无序列表
+      html = html.replace(/^[\-\*] (.+)$/gm, '<li>$1</li>');
+      // 将连续的li标签包裹在ul中
+      html = html.replace(/(<li>[\s\S]*?<\/li>(?:\s*<li>[\s\S]*?<\/li>)*)/g, '<ul>$1</ul>');
+      
+      // 9. 处理有序列表
+      html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+      
+      // 10. 处理表格（简单实现）
+      html = html.replace(/\|(.+)\|/g, (match) => {
+        const cells = match.split('|').filter(cell => cell.trim());
+        const cellsHtml = cells.map(cell => `<td>${cell.trim()}</td>`).join('');
+        return `<tr>${cellsHtml}</tr>`;
+      });
+      html = html.replace(/(<tr>[\s\S]*?<\/tr>(?:\s*<tr>[\s\S]*?<\/tr>)*)/g, '<table class="markdown-table"><tbody>$1</tbody></table>');
+      
+      // 11. 处理段落（连续的非特殊行为一个段落）
+      html = html.replace(/^(?!<[hup]|<li|<table|<pre|<div)(.+)$/gm, '<p>$1</p>');
+      
+      // 12. 处理换行 - 只保留必要的换行
+      html = html.replace(/\n\n+/g, '\n'); // 多个换行替换为单个
+      html = html.replace(/\n/g, ''); // 移除剩余换行，让CSS控制间距
+      
+      // 13. 清理多余的空白标签
+      html = html.replace(/<p>\s*<\/p>/g, ''); // 移除空段落
+      html = html.replace(/<br>\s*<br>/g, '<br>'); // 移除连续的br标签
+      
+      return html;
+    },
+
+    /** 渲染KaTeX公式 */
+    renderKaTeX(formula, displayMode) {
+      // 简单的数学公式渲染（使用Unicode和HTML）
+      // 注意：这是简化版本，真实项目建议使用 katex 库
+      let rendered = formula.trim();
+      
+      // 处理常见数学符号
+      const symbolMap = {
+        '\\alpha': 'α', '\\beta': 'β', '\\gamma': 'γ', '\\delta': 'δ',
+        '\\epsilon': 'ε', '\\theta': 'θ', '\\lambda': 'λ', '\\mu': 'μ',
+        '\\pi': 'π', '\\sigma': 'σ', '\\phi': 'φ', '\\omega': 'ω',
+        '\\sum': '∑', '\\int': '∫', '\\partial': '∂', '\\infty': '∞',
+        '\\leq': '≤', '\\geq': '≥', '\\neq': '≠', '\\approx': '≈',
+        '\\times': '×', '\\div': '÷', '\\pm': '±', '\\sqrt': '√',
+        '\\in': '∈', '\\subset': '⊂', '\\subseteq': '⊆', '\\cup': '∪',
+        '\\cap': '∩', '\\emptyset': '∅', '\\forall': '∀', '\\exists': '∃',
+        '\\rightarrow': '→', '\\Rightarrow': '⇒', '\\leftarrow': '←',
+        '\\Leftarrow': '⇐', '\\leftrightarrow': '↔', '\\Leftrightarrow': '⇔'
+      };
+      
+      // 替换符号
+      for (const [latex, unicode] of Object.entries(symbolMap)) {
+        const escapedLatex = latex.replace(/\\/g, '\\\\');
+        rendered = rendered.replace(new RegExp(escapedLatex, 'g'), unicode);
+      }
+      
+      // 处理上标 ^
+      rendered = rendered.replace(/\^(\{[^}]+\}|.)/g, (match, exp) => {
+        const content = exp.startsWith('{') ? exp.slice(1, -1) : exp;
+        return '<sup>' + content + '</sup>';
+      });
+      
+      // 处理下标 _
+      rendered = rendered.replace(/_(\{[^}]+\}|.)/g, (match, exp) => {
+        const content = exp.startsWith('{') ? exp.slice(1, -1) : exp;
+        return '<sub>' + content + '</sub>';
+      });
+      
+      // 处理分数 \frac{a}{b}
+      rendered = rendered.replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, function(match, numerator, denominator) {
+        return '<span class="frac"><span class="frac-top">' + numerator + '</span><span class="frac-bottom">' + denominator + '</span></span>';
+      });
+      
+      return rendered;
+    },
+
+    /** HTML转义 */
+    escapeHtml(text) {
+      const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+      };
+      return text.replace(/[&<>"']/g, m => map[m]);
     }
   }
 };
@@ -1229,11 +1437,13 @@ export default {
 .detail-content {
   display: flex;
   gap: 20px;
+  max-width: 100%;
 }
 
 /* 左侧：知识点关系图谱和相关知识点 */
 .detail-left {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -1290,64 +1500,66 @@ export default {
       .graph-legend {
         position: absolute;
         top: 10px;
-        right: 10px;
+        left: 10px;
         background: rgba(255, 255, 255, 0.95);
-        padding: 12px 16px;
+        padding: 8px 10px;
         border-radius: 6px;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         font-size: 12px;
-        max-height: 90%;
-        overflow-y: auto;
+        max-width: 150px;
 
         .legend-title {
           font-weight: bold;
-          margin-bottom: 10px;
+          margin-bottom: 6px;
           color: #303133;
           font-size: 13px;
+          text-align: center;
         }
 
-        .legend-section {
-          margin-bottom: 12px;
+        .legend-columns {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
 
-          &:last-child {
-            margin-bottom: 0;
-          }
-
+        .legend-column {
           .legend-subtitle {
             font-weight: 600;
             color: #606266;
             font-size: 11px;
-            margin-bottom: 6px;
+            margin-bottom: 4px;
             padding-left: 2px;
+            border-bottom: 1px solid #EBEEF5;
+            padding-bottom: 2px;
           }
         }
 
         .legend-items {
           display: flex;
           flex-direction: column;
-          gap: 6px;
+          gap: 4px;
 
           .legend-item {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
 
             .legend-dot {
-              width: 12px;
-              height: 12px;
+              width: 10px;
+              height: 10px;
               border-radius: 50%;
               flex-shrink: 0;
             }
 
             .legend-rect {
-              width: 12px;
-              height: 12px;
+              width: 10px;
+              height: 10px;
               border-radius: 2px;
               flex-shrink: 0;
             }
 
             .legend-line {
-              width: 20px;
+              width: 16px;
               height: 2px;
               flex-shrink: 0;
 
@@ -1440,11 +1652,30 @@ export default {
 /* 右侧：知识点基本信息 */
 .detail-right {
   flex-shrink: 0;
-  width: 400px;
+  width: 700px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 
   .kp-info-card {
     border-radius: 8px;
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+
+    ::v-deep .el-card__header {
+      padding: 18px 20px;
+      flex-shrink: 0;
+    }
+
+    ::v-deep .el-card__body {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      padding: 0;
+    }
 
     .card-header {
       display: flex;
@@ -1548,113 +1779,180 @@ export default {
   }
 }
 
-/* 右侧：知识点基本信息 */
-.detail-right {
-  flex-shrink: 0;
-  width: 400px;
+/* Markdown内容样式 */
+.kp-description-section {
+  .section-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
 
-  .kp-info-card {
+    .ai-generate-btn {
+      margin-left: auto;
+      font-size: 12px;
+    }
+  }
+
+  .section-content {
+    max-height: 500px;
+    overflow-y: auto;
+
+    /* 美化滚动条 */
+    &::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 3px;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: #c1c1c1;
+      border-radius: 3px;
+
+      &:hover {
+        background: #a8a8a8;
+      }
+    }
+  }
+
+  .markdown-content {
+    padding: 16px;
+    background: #f9f9f9;
     border-radius: 8px;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+    line-height: 1.6;
+    color: #303133;
+    font-size: 10px;
 
-    .card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+    h1, h2, h3 {
+      margin: 8px 0 4px;
+      color: #409EFF;
+      font-weight: 600;
+      line-height: 1.3;
+    }
 
-      .card-title {
-        font-size: 18px;
-        font-weight: bold;
-        color: #303133;
+    h1 { font-size: 12px; }
+    h2 { font-size: 11px; }
+    h3 { font-size: 10px; }
+
+    p {
+      margin: 3px 0;
+      line-height: 1.6;
+    }
+
+    strong {
+      font-weight: 600;
+      color: #409EFF;
+    }
+
+    em {
+      font-style: italic;
+      color: #606266;
+    }
+
+    ul, ol {
+      margin: 6px 0;
+      padding-left: 20px;
+
+      li {
+        margin: 2px 0;
+        line-height: 1.5;
       }
     }
 
-    .kp-info-content {
-      .info-section {
-        margin-bottom: 24px;
+    code.inline-code {
+      padding: 2px 5px;
+      background: #f0f0f0;
+      border: 1px solid #e0e0e0;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      color: #e83e8c;
+    }
 
-        &:last-child {
-          margin-bottom: 0;
-        }
+    pre {
+      margin: 8px 0;
+      padding: 10px;
+      background: #2d2d2d;
+      border-radius: 6px;
+      overflow-x: auto;
 
-        .section-title {
-          display: flex;
-          align-items: center;
-          margin-bottom: 12px;
-          font-size: 14px;
-          font-weight: 600;
-          color: #606266;
+      code {
+        font-family: 'Courier New', monospace;
+        font-size: 13px;
+        line-height: 1.4;
+        color: #f8f8f2;
+      }
+    }
 
-          i {
-            margin-right: 6px;
-            font-size: 16px;
-            color: #409EFF;
-          }
-        }
+    .markdown-table {
+      width: 100%;
+      margin: 8px 0;
+      border-collapse: collapse;
+      font-size: 13px;
 
-        .section-content {
-          padding-left: 22px;
-          font-size: 14px;
-          color: #303133;
-          line-height: 1.8;
-
-          .section-list {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-          }
-
-          .section-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 12px;
-            background: #f5f7fa;
-            border-radius: 6px;
-            transition: all 0.3s;
-
-            &:hover {
-              background: #e4e7ed;
-            }
-
-            .chapter-tag {
-              font-weight: 600;
-            }
-
-            .section-arrow {
-              color: #909399;
-              font-size: 14px;
-            }
-
-            .section-tag {
-              cursor: pointer;
-              transition: all 0.3s;
-
-              &:hover {
-                transform: scale(1.05);
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-              }
-            }
-          }
-
-          .empty-text {
-            color: #909399;
-            font-style: italic;
-          }
-        }
+      td {
+        padding: 4px 8px;
+        border: 1px solid #ddd;
+        text-align: left;
       }
 
-      .action-buttons {
-        display: flex;
-        gap: 12px;
-        margin-top: 30px;
-        padding-top: 20px;
-        border-top: 1px solid #EBEEF5;
-
-        .el-button {
-          flex: 1;
-        }
+      tr:first-child td {
+        background: #f0f0f0;
+        font-weight: 600;
       }
+    }
+
+    .katex-block {
+      margin: 8px 0;
+      padding: 10px;
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      text-align: center;
+      font-size: 15px;
+      overflow-x: auto;
+    }
+
+    .katex-inline {
+      margin: 0 3px;
+      padding: 1px 3px;
+      background: #f0f0f0;
+      border-radius: 3px;
+      font-size: 14px;
+    }
+
+    .katex-error {
+      color: #f56c6c;
+      font-style: italic;
+    }
+
+    .frac {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      vertical-align: middle;
+      margin: 0 4px;
+
+      .frac-top {
+        border-bottom: 1px solid #303133;
+        padding-bottom: 2px;
+      }
+
+      .frac-bottom {
+        padding-top: 2px;
+      }
+    }
+
+    sup {
+      font-size: 0.75em;
+      vertical-align: super;
+    }
+
+    sub {
+      font-size: 0.75em;
+      vertical-align: sub;
     }
   }
 }
@@ -1667,6 +1965,11 @@ export default {
 
   .detail-left {
     width: 100%;
+  }
+
+  .detail-right {
+    width: 100%;
+    height: auto;
   }
 }
 </style>

@@ -623,6 +623,121 @@ public class AIService
     }
 
     /**
+     * AI生成知识点详解
+     *
+     * @param kpTitle 知识点名称
+     * @return 生成的知识点详解（Markdown + KaTeX格式）
+     */
+    public String generateKnowledgePointDescription(String kpTitle)
+    {
+        if (!aiConfig.getEnabled())
+        {
+            throw new ServiceException("AI功能未启用");
+        }
+
+        try
+        {
+            Generation gen = new Generation();
+            
+            // 构建系统提示词
+            Message systemMsg = Message.builder()
+                .role(Role.SYSTEM.getValue())
+                .content("你是一个专业的计算机科学教育专家。你的任务是为指定的知识点生成详细、易懂的学习解析。" +
+                        "\n\n格式要求：" +
+                        "1. 不要使用一级标题(#)，从二级标题(##)开始" +
+                        "2. 标题之间不要有空行或分隔线(---)" +
+                        "3. 使用紧凑的段落格式，避免过多换行" +
+                        "4. 如果涉及数学公式，使用 KaTeX 语法（行内公式用 $...$ ，块级公式用 $$...$$）" +
+                        "5. 如果涉及代码，使用代码块 ```language\\ncode\\n``` 格式" +
+                        "\n\n内容结构：" +
+                        "## 定义与概念\n简要说明知识点的定义和核心概念" +
+                        "\n\n## 关键要点\n列出重点和难点" +
+                        "\n\n## 示例说明\n提供实际应用示例或代码演示" +
+                        "\n\n## 注意事项\n说明常见误区和注意点" +
+                        "\n\n语言要求：简洁明了，适合学生自学理解，控制在200-400字")
+                .build();
+            
+            // 构建用户提示词
+            String userPrompt = String.format(
+                "请为以下知识点生成详细的学习解析：\\n\\n知识点名称：%s\\n\\n" +
+                "请使用 Markdown 格式，必要时包含 KaTeX 公式（用 $ 或 $$ 包裹）和代码块（用 ``` 包裹）。", 
+                kpTitle
+            );
+            
+            Message userMsg = Message.builder()
+                .role(Role.USER.getValue())
+                .content(userPrompt)
+                .build();
+            
+            // 设置生成参数
+            GenerationParam param = GenerationParam.builder()
+                .apiKey(aiConfig.getApiKey())
+                .model(aiConfig.getModel())
+                .messages(Arrays.asList(systemMsg, userMsg))
+                .resultFormat(GenerationParam.ResultFormat.MESSAGE)
+                .topP(0.8)
+                .temperature(0.7f)
+                .maxTokens(1500)  // 增加token数以支持更详细的内容
+                .build();
+            
+            // 调用AI
+            log.info("开始调用AI生成知识点详解，知识点：{}，模型：{}", kpTitle, aiConfig.getModel());
+            
+            GenerationResult result = gen.call(param);
+            
+            // 检查响应
+            if (result == null || result.getOutput() == null)
+            {
+                log.error("AI返回结果为空");
+                throw new ServiceException("AI服务返回结果为空");
+            }
+            
+            if (result.getOutput().getChoices() == null || result.getOutput().getChoices().isEmpty())
+            {
+                log.error("AI返回的choices为空");
+                throw new ServiceException("AI服务返回的内容为空");
+            }
+            
+            // 提取响应内容
+            String description = result.getOutput().getChoices().get(0).getMessage().getContent();
+            
+            if (description == null || description.trim().isEmpty())
+            {
+                log.error("AI响应内容为空");
+                throw new ServiceException("AI返回的内容为空");
+            }
+            
+            // 保留Markdown格式，只清理首尾空白
+            description = description.trim();
+            
+            log.info("知识点详解生成成功，长度：{}", description.length());
+            log.debug("生成的内容：{}", description);
+            
+            return description;
+        }
+        catch (NoApiKeyException e)
+        {
+            log.error("API Key未设置", e);
+            throw new ServiceException("AI API Key配置错误");
+        }
+        catch (InputRequiredException e)
+        {
+            log.error("输入参数缺失", e);
+            throw new ServiceException("AI调用参数错误");
+        }
+        catch (ApiException e)
+        {
+            log.error("AI API调用失败", e);
+            throw new ServiceException("AI服务调用失败：" + e.getMessage());
+        }
+        catch (Exception e)
+        {
+            log.error("生成知识点详解时发生未知错误", e);
+            throw new ServiceException("生成知识点详解失败：" + e.getMessage());
+        }
+    }
+
+    /**
      * AI智能匹配知识点
      *
      * @param assignmentTitle 作业标题
