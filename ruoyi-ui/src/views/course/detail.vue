@@ -257,7 +257,6 @@
           
           <!-- 2D知识图谱 (ECharts) -->
           <div class="knowledge-graph-container" :class="{ 'is-fullscreen': isGraphFullscreen }">
-            <div class="graph-title">2D 知识图谱</div>
             <el-button 
               class="fullscreen-btn" 
               :icon="isGraphFullscreen ? 'el-icon-close' : 'el-icon-full-screen'"
@@ -267,12 +266,36 @@
               @click="toggleGraphFullscreen"
               :title="isGraphFullscreen ? '退出全屏' : '全屏显示'"
             ></el-button>
+            <!-- 2D图谱搜索框 -->
+            <div class="graph-search-box">
+              <el-autocomplete
+                v-model="graphSearchKeyword"
+                :fetch-suggestions="queryGraphNodes"
+                placeholder="检索分类或知识点"
+                prefix-icon="el-icon-search"
+                size="small"
+                clearable
+                @select="handleGraphNodeSelect"
+                @clear="clearGraphSelection"
+                style="width: 240px;"
+              >
+                <template slot-scope="{ item }">
+                  <div class="graph-search-item">
+                    <span class="node-name">{{ item.value }}</span>
+                    <span class="node-type" :style="{ color: item.typeColor }">{{ item.typeLabel }}</span>
+                  </div>
+                </template>
+              </el-autocomplete>
+            </div>
             <div id="knowledge-graph" style="width: 100%; height: 700px;"></div>
           </div>
 
           <!-- 3D知识图谱 (3d-force-graph) -->
           <div class="knowledge-graph-3d-container" :class="{ 'is-fullscreen': isGraph3DFullscreen }">
-            <div class="graph-title">3D课程知识点图谱</div>
+            <!-- 标题 -->
+            <div class="graph-3d-title">知识点图谱</div>
+            
+            <!-- 全屏按钮 -->
             <el-button 
               class="fullscreen-btn" 
               :icon="isGraph3DFullscreen ? 'el-icon-close' : 'el-icon-full-screen'"
@@ -282,14 +305,53 @@
               @click="toggleGraph3DFullscreen"
               :title="isGraph3DFullscreen ? '退出全屏' : '全屏显示'"
             ></el-button>
-            <div class="graph-controls">
-              <el-button-group size="mini">
-                <el-button @click="resetGraph3DView">重置视角</el-button>
-                <el-button @click="toggleGraph3DRotation">{{ isGraph3DRotating ? '停止旋转' : '自动旋转' }}</el-button>
-                <el-button @click="toggleShowLabels">{{ showLabels ? '隐藏标签' : '显示标签' }}</el-button>
-              </el-button-group>
+            
+            <!-- 3D图谱搜索框 -->
+            <div class="graph-search-box-3d">
+              <el-autocomplete
+                v-model="graph3DSearchKeyword"
+                :fetch-suggestions="queryGraph3DNodes"
+                placeholder="检索分类或知识点"
+                prefix-icon="el-icon-search"
+                size="small"
+                clearable
+                @select="handleGraph3DNodeSelect"
+                @clear="clearGraph3DSelection"
+                style="width: 240px;"
+              >
+                <template slot-scope="{ item }">
+                  <div class="graph-search-item">
+                    <span class="node-name">{{ item.value }}</span>
+                    <span class="node-type" :style="{ color: item.typeColor }">{{ item.typeLabel }}</span>
+                  </div>
+                </template>
+              </el-autocomplete>
             </div>
+            
+            <!-- 右侧控制面板 -->
+            <div class="graph-controls-panel" :class="{ 'collapsed': isControlsPanelCollapsed }">
+              <el-button
+                class="toggle-controls-btn"
+                size="mini"
+                circle
+                :icon="isControlsPanelCollapsed ? 'el-icon-d-arrow-left' : 'el-icon-d-arrow-right'"
+                @click="isControlsPanelCollapsed = !isControlsPanelCollapsed"
+              ></el-button>
+              <div class="controls-content" v-show="!isControlsPanelCollapsed">
+                <el-button size="mini" @click="resetGraph3DView" class="control-btn" title="重置视角">
+                  <i class="el-icon-refresh-left"></i>
+                </el-button>
+                <el-button size="mini" @click="toggleGraph3DRotation" class="control-btn" :title="isGraph3DRotating ? '停止旋转' : '自动旋转'">
+                  <i :class="isGraph3DRotating ? 'el-icon-video-pause' : 'el-icon-video-play'"></i>
+                </el-button>
+                <el-button size="mini" @click="toggleShowLabels" class="control-btn" :title="showLabels ? '隐藏标签' : '显示标签'">
+                  <i :class="showLabels ? 'el-icon-view' : 'el-icon-hide'"></i>
+                </el-button>
+              </div>
+            </div>
+            
             <div id="knowledge-graph-3d" style="width: 100%; height: 700px;"></div>
+            
             <div class="graph-legend">
               <div class="legend-section">
                 <div class="legend-title">节点类型</div>
@@ -724,6 +786,7 @@
                 </div>
                 <el-table
                   :data="props.row.sections || []"
+                  :key="'section-table-' + props.row.id + '-' + sectionTableRefreshKey"
                   size="small"
                   @selection-change="(val) => onSectionSelectionChange(val, props.row)"
                 >
@@ -938,6 +1001,7 @@ export default {
       expandedChaptersInDialog: [], // 对话框中展开的章节ID列表
       chapterSortable: null, // 章节拖拽排序实例
       sectionSortables: {}, // 小节拖拽排序实例（按章节ID存储）
+      sectionTableRefreshKey: 0, // 小节表格刷新计数器
       // AI生成对话框
       aiGenerateDialogVisible: false,
       outlineFiles: [],
@@ -961,7 +1025,9 @@ export default {
       highlightedLinks: new Set(), // 高亮的连线集合
       originalNodeColors: new Map(), // 保存节点原始颜色
       originalNodeColorAccessor: null, // 保存原始的nodeColor访问器
-      isGraph3DRotating: false, // 3D图谱是否自动旋转
+      isGraph3DRotating: true, // 3D图谱是否自动旋转
+      rotationAnimationId: null, // 旋转动画帧ID
+      isControlsPanelCollapsed: false, // 控制面板是否折叠
       showLabels: true, // 是否显示标签
       graph3DData: { nodes: [], links: [] }, // 3D图谱数据
       kpRelations: [], // 知识点关系数据
@@ -979,12 +1045,21 @@ export default {
       clickTimeout: null, // 单击延迟定时器
       // 任务管理相关
       activeTaskType: 'exam', // 当前激活的任务类型标签
+      // 图谱搜索
+      graphSearchKeyword: '', // 2D图谱搜索关键词
+      graph3DSearchKeyword: '', // 3D图谱搜索关键词
+      graphSearchResults: [], // 搜索结果列表
     };
   },
   created() {
     this.courseId = this.$route.params.id;
     this.getCourseInfo();
     this.getChapterList();
+    
+    // 检查URL查询参数，如果有tab参数则切换到对应标签页
+    if (this.$route.query.tab) {
+      this.activeTab = this.$route.query.tab;
+    }
   },
   mounted() {
     // 初始化表格拖拽排序
@@ -1874,12 +1949,28 @@ export default {
               updatePromises.push(updateSection(section));
             });
             
-            // 更新小节列表
-            this.$set(targetChapter, 'sections', newSections);
-            
             if (updatePromises.length > 0) {
               Promise.all(updatePromises).then(() => {
                 this.$message.success('小节排序已更新');
+                
+                // 重新加载该章节的小节数据
+                this.loadSectionsForChapter(targetChapter).then((sections) => {
+                  // 更新计数器强制表格重新渲染
+                  this.sectionTableRefreshKey++;
+                  
+                  // 等待DOM更新后重新初始化拖拽
+                  this.$nextTick(() => {
+                    // 销毁旧的拖拽实例
+                    if (this.sectionSortables[chapter.id]) {
+                      this.sectionSortables[chapter.id].destroy();
+                      this.sectionSortables[chapter.id] = null;
+                    }
+                    // 重新初始化拖拽
+                    this.$nextTick(() => {
+                      this.initSectionTableSort(targetChapter);
+                    });
+                  });
+                });
                 this.renderMindmap();
               }).catch(() => {
                 this.$message.error('更新排序失败');
@@ -2503,7 +2594,7 @@ export default {
           categories: graphData.categories,
           roam: true,
           draggable: true,
-          zoom: 0.24,
+          zoom: 0.2,
           center: ['50%', '50%'],
           label: {
             show: true,
@@ -2804,9 +2895,34 @@ export default {
         }
       });
       
+      // 检查点击的是否是小节节点
+      const isClickedSectionNode = nodeId.startsWith('section-');
+      
       // 更新节点样式
       const updatedNodes = graphData.nodes.map(node => {
         const isAdjacent = adjacentNodeIds.has(node.id);
+        const isKnowledgePoint = node.id.startsWith('kp-');
+        
+        // 如果是知识点节点
+        if (isKnowledgePoint) {
+          // 检查该知识点是否属于被点击的小节
+          const belongsToClickedSection = isClickedSectionNode && node.sectionId && nodeId === 'section-' + node.sectionId;
+          
+          return {
+            ...node,
+            itemStyle: {
+              ...node.itemStyle,
+              opacity: belongsToClickedSection || isAdjacent ? 1 : 0 // 显示相关知识点，隐藏其他
+            },
+            label: {
+              ...node.label,
+              show: belongsToClickedSection || isAdjacent, // 显示标签
+              opacity: belongsToClickedSection || isAdjacent ? 1 : 0
+            }
+          };
+        }
+        
+        // 普通节点
         return {
           ...node,
           itemStyle: {
@@ -2823,11 +2939,13 @@ export default {
       // 更新连线样式
       const updatedLinks = graphData.links.map(link => {
         const isConnected = link.source === nodeId || link.target === nodeId;
+        const isKnowledgePointLink = link.target && link.target.startsWith('kp-');
+        
         return {
           ...link,
           lineStyle: {
             ...link.lineStyle,
-            opacity: isConnected ? 0.8 : 0.1
+            opacity: isConnected ? (isKnowledgePointLink ? 0.6 : 0.8) : 0.1
           }
         };
       });
@@ -3661,23 +3779,42 @@ export default {
     /** 开始3D图谱旋转 */
     startGraph3DRotation() {
       if (!this.graph3DInstance) return;
+      
+      // 如果已经有旋转动画在运行，先停止
+      if (this.rotationAnimationId) {
+        cancelAnimationFrame(this.rotationAnimationId);
+        this.rotationAnimationId = null;
+      }
+      
       this.isGraph3DRotating = true;
       
-      // 旋转时使用较小的距离系数,因为水平旋转会让视角显得更远
-      const nodeCount = this.graph3DInstance.graphData().nodes.length;
-      const distance = Math.max(600, nodeCount * 5);
+      // 获取当前相机位置
+      const currentPos = this.graph3DInstance.cameraPosition();
+      // 计算当前距离
+      const currentDistance = Math.sqrt(currentPos.x * currentPos.x + currentPos.y * currentPos.y + currentPos.z * currentPos.z);
       
-      let angle = 0;
+      let angle = Math.atan2(currentPos.x, currentPos.z) * 180 / Math.PI; // 从当前角度开始
+      
       const rotateCamera = () => {
-        if (!this.isGraph3DRotating || !this.graph3DInstance) return;
+        if (!this.isGraph3DRotating || !this.graph3DInstance) {
+          this.rotationAnimationId = null;
+          return;
+        }
         
-        angle += 0.1; // 降低旋转速度
+        angle += 0.1; // 旋转速度
+        
+        // 获取当前相机位置以保持用户调整的距离
+        const pos = this.graph3DInstance.cameraPosition();
+        const distance = Math.sqrt(pos.x * pos.x + pos.y * pos.y + pos.z * pos.z);
+        
+        // 只改变角度，保持距离
         this.graph3DInstance.cameraPosition({
           x: distance * Math.sin(angle * Math.PI / 180),
+          y: pos.y, // 保持y坐标
           z: distance * Math.cos(angle * Math.PI / 180)
-        });
+        }, null, 0); // 第三个参数0表示立即更新，不使用过渡动画
         
-        requestAnimationFrame(rotateCamera);
+        this.rotationAnimationId = requestAnimationFrame(rotateCamera);
       };
       rotateCamera();
     },
@@ -3685,6 +3822,10 @@ export default {
     /** 停止3D图谱旋转 */
     stopGraph3DRotation() {
       this.isGraph3DRotating = false;
+      if (this.rotationAnimationId) {
+        cancelAnimationFrame(this.rotationAnimationId);
+        this.rotationAnimationId = null;
+      }
     },
 
     /** 处理3D图谱节点点击 */
@@ -4379,6 +4520,322 @@ export default {
     // ==================== 任务管理相关方法 ====================
     
     /** 任务类型标签切换 */
+    handleTaskTabClick(tab) {
+      this.$nextTick(() => {
+        if (tab.name === 'exam' && this.$refs.examManagement) {
+          this.$refs.examManagement.handleQuery();
+        } else if (tab.name === 'homework' && this.$refs.homeworkManagement) {
+          this.$refs.homeworkManagement.handleQuery();
+        }
+      });
+    },
+
+    /** 2D图谱节点联想查询 */
+    queryGraphNodes(queryString, cb) {
+      if (!this.knowledgeGraphChart) {
+        cb([]);
+        return;
+      }
+      
+      const option = this.knowledgeGraphChart.getOption();
+      if (!option.series || !option.series[0]) {
+        cb([]);
+        return;
+      }
+      
+      const nodes = option.series[0].data;
+      const results = nodes.map(node => ({
+        value: node.name,
+        id: node.id,
+        nodeData: node,
+        typeLabel: this.getNodeTypeLabel(node.category),
+        typeColor: this.getNodeTypeColor(node.category)
+      }));
+      
+      if (queryString) {
+        const filtered = results.filter(item => 
+          item.value.toLowerCase().includes(queryString.toLowerCase())
+        );
+        cb(filtered);
+      } else {
+        cb(results);
+      }
+    },
+
+    /** 2D图谱节点选中 */
+    handleGraphNodeSelect(item) {
+      if (!this.knowledgeGraphChart || !item.nodeData) return;
+      
+      const option = this.knowledgeGraphChart.getOption();
+      const graphData = {
+        nodes: option.series[0].data,
+        links: option.series[0].links
+      };
+      
+      // 高亮当前节点及其相关节点
+      this.highlightNodeAndRelated(item.id, graphData);
+      
+      // 模拟节点点击，打开相应抽屉
+      if (item.id && item.id.startsWith('section-')) {
+        this.handleSectionNodeClick(item.nodeData);
+      } else if (item.id && item.id.startsWith('chapter-')) {
+        this.handleChapterNodeClick(item.nodeData);
+      } else if (item.id === 'course-' + this.courseId) {
+        this.handleCourseNodeClick(item.nodeData);
+      }
+    },
+
+    /** 清除2D图谱选中 */
+    clearGraphSelection() {
+      if (!this.knowledgeGraphChart) return;
+      
+      const option = this.knowledgeGraphChart.getOption();
+      if (!option.series || !option.series[0]) return;
+      
+      const graphData = {
+        nodes: option.series[0].data,
+        links: option.series[0].links
+      };
+      
+      // 恢复所有节点
+      this.knowledgeGraphChart.setOption({
+        series: [{
+          data: graphData.nodes,
+          links: graphData.links
+        }]
+      });
+      
+      this.graphSearchKeyword = '';
+      // 关闭抽屉
+      this.sectionDrawerVisible = false;
+    },
+
+    /** 3D图谱节点联想查询 */
+    queryGraph3DNodes(queryString, cb) {
+      if (!this.graph3DInstance) {
+        cb([]);
+        return;
+      }
+      
+      const graphData = this.graph3DInstance.graphData();
+      const results = graphData.nodes.map(node => ({
+        value: node.label || node.id,
+        id: node.id,
+        nodeData: node,
+        typeLabel: this.getNodeTypeLabel(node.type),
+        typeColor: this.getNodeTypeColor(node.type)
+      }));
+      
+      if (queryString) {
+        const filtered = results.filter(item => 
+          item.value.toLowerCase().includes(queryString.toLowerCase())
+        );
+        cb(filtered);
+      } else {
+        cb(results);
+      }
+    },
+
+    /** 3D图谱节点选中 */
+    handleGraph3DNodeSelect(item) {
+      if (!this.graph3DInstance || !item.nodeData) return;
+      
+      const node = item.nodeData;
+      
+      // 聚焦到选中的节点
+      this.graph3DInstance.cameraPosition(
+        { x: node.x, y: node.y, z: node.z + 200 },
+        node,
+        1000
+      );
+      
+      // 模拟节点点击
+      this.handle3DNodeClick(node);
+    },
+
+    /** 清除3D图谱选中 */
+    clearGraph3DSelection() {
+      if (!this.graph3DInstance) return;
+      
+      this.graph3DSearchKeyword = '';
+      // 关闭抽屉
+      this.sectionDrawerVisible = false;
+      // 重置视角
+      this.resetGraph3DView();
+    },
+
+    /** 获取节点类型标签 */
+    getNodeTypeLabel(type) {
+      const labels = {
+        0: '课程',
+        1: '章节',
+        2: '小节',
+        3: '知识点',
+        'course': '课程',
+        'chapter': '章节',
+        'section': '小节',
+        'knowledge': '知识点'
+      };
+      return labels[type] || '未知';
+    },
+
+    /** 获取节点类型颜色 */
+    getNodeTypeColor(type) {
+      const colors = {
+        0: '#5b8ff9',
+        1: '#5ad8a6',
+        2: '#f6bd16',
+        3: '#e86452',
+        'course': '#5b8ff9',
+        'chapter': '#5ad8a6',
+        'section': '#f6bd16',
+        'knowledge': '#e86452'
+      };
+      return colors[type] || '#999';
+    },
+
+    /** 2D图谱搜索 */
+    handleGraphSearch() {
+      if (!this.graphSearchKeyword || !this.myChart) {
+        this.clearGraphSearch();
+        return;
+      }
+      
+      const keyword = this.graphSearchKeyword.toLowerCase();
+      const option = this.myChart.getOption();
+      
+      if (!option.series || !option.series[0]) return;
+      
+      const nodes = option.series[0].data;
+      const matchedNodes = nodes.filter(node => 
+        node.name && node.name.toLowerCase().includes(keyword)
+      );
+      
+      if (matchedNodes.length === 0) {
+        this.$message.info('未找到匹配的节点');
+        return;
+      }
+      
+      // 高亮匹配的节点
+      nodes.forEach(node => {
+        if (matchedNodes.some(n => n.id === node.id)) {
+          node.itemStyle = {
+            ...node.itemStyle,
+            borderColor: '#ff0000',
+            borderWidth: 3,
+            shadowBlur: 10,
+            shadowColor: '#ff0000'
+          };
+        } else {
+          // 降低未匹配节点的不透明度
+          node.itemStyle = {
+            ...node.itemStyle,
+            opacity: 0.3
+          };
+        }
+      });
+      
+      this.myChart.setOption(option);
+      this.$message.success(`找到 ${matchedNodes.length} 个匹配节点`);
+    },
+
+    /** 清除2D图谱搜索 */
+    clearGraphSearch() {
+      if (!this.myChart) return;
+      
+      const option = this.myChart.getOption();
+      if (!option.series || !option.series[0]) return;
+      
+      const nodes = option.series[0].data;
+      nodes.forEach(node => {
+        node.itemStyle = {
+          ...node.itemStyle,
+          borderColor: null,
+          borderWidth: 0,
+          shadowBlur: 0,
+          opacity: 1
+        };
+      });
+      
+      this.myChart.setOption(option);
+      this.graphSearchKeyword = '';
+    },
+
+    /** 3D图谱搜索 */
+    handleGraph3DSearch() {
+      if (!this.graph3DSearchKeyword || !this.graph3DInstance) {
+        this.clearGraph3DSearch();
+        return;
+      }
+      
+      const keyword = this.graph3DSearchKeyword.toLowerCase();
+      const graphData = this.graph3DInstance.graphData();
+      
+      const matchedNodes = graphData.nodes.filter(node => 
+        node.label && node.label.toLowerCase().includes(keyword)
+      );
+      
+      if (matchedNodes.length === 0) {
+        this.$message.info('未找到匹配的节点');
+        return;
+      }
+      
+      // 高亮匹配的节点并聚焦第一个
+      graphData.nodes.forEach(node => {
+        if (matchedNodes.some(n => n.id === node.id)) {
+          // 保存原始颜色
+          if (!this.originalNodeColors.has(node.id)) {
+            this.originalNodeColors.set(node.id, node.color);
+          }
+          node.color = '#ff0000'; // 高亮为红色
+        } else {
+          // 降低未匹配节点的不透明度
+          if (!this.originalNodeColors.has(node.id)) {
+            this.originalNodeColors.set(node.id, node.color);
+          }
+          const originalColor = this.originalNodeColors.get(node.id);
+          node.color = originalColor + '40'; // 添加透明度
+        }
+      });
+      
+      // 刷新图谱
+      this.graph3DInstance.nodeColor(node => node.color);
+      
+      // 聚焦到第一个匹配的节点
+      if (matchedNodes.length > 0) {
+        const targetNode = matchedNodes[0];
+        this.graph3DInstance.cameraPosition(
+          { x: targetNode.x, y: targetNode.y, z: targetNode.z + 200 },
+          targetNode,
+          1000
+        );
+      }
+      
+      this.$message.success(`找到 ${matchedNodes.length} 个匹配节点`);
+    },
+
+    /** 清除3D图谱搜索 */
+    clearGraph3DSearch() {
+      if (!this.graph3DInstance) return;
+      
+      const graphData = this.graph3DInstance.graphData();
+      
+      // 恢复所有节点的原始颜色
+      graphData.nodes.forEach(node => {
+        if (this.originalNodeColors.has(node.id)) {
+          node.color = this.originalNodeColors.get(node.id);
+        } else {
+          node.color = this.getNodeColor(node);
+        }
+      });
+      
+      this.originalNodeColors.clear();
+      this.graph3DInstance.nodeColor(node => node.color);
+      this.graph3DSearchKeyword = '';
+    },
+
+    /** 任务类型标签切换 */
+
     handleTaskTabClick(tab) {
       this.$nextTick(() => {
         if (tab.name === 'exam' && this.$refs.examManagement) {
@@ -5365,6 +5822,23 @@ body > .el-drawer__wrapper {
   border: 1px solid #e4e7ed;
   transition: all 0.3s ease;
   
+  .graph-title {
+    position: absolute;
+    top: 30px;
+    left: 30px;
+    font-size: 16px;
+    font-weight: bold;
+    color: #303133;
+    z-index: 1000;
+  }
+  
+  .graph-search-box {
+    position: absolute;
+    top: 26px;
+    left: 30px;
+    z-index: 1000;
+  }
+  
   .fullscreen-btn {
     position: absolute;
     top: 30px;
@@ -5372,6 +5846,37 @@ body > .el-drawer__wrapper {
     z-index: 1000;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   }
+}
+
+/* 图谱搜索项样式 */
+.graph-search-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  
+  .node-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 14px;
+  }
+  
+  .node-type {
+    font-size: 12px;
+    margin-left: 10px;
+    font-weight: bold;
+  }
+}
+
+.knowledge-graph-container {
+  position: relative;
+  padding: 20px;
+  background: #f5f7fa;
+  border-radius: 8px;
+  border: 1px solid #e4e7ed;
+  transition: all 0.3s ease;
   
   #knowledge-graph {
     background: white;
@@ -5423,13 +5928,22 @@ body > .el-drawer__wrapper {
   overflow: visible;
   width: calc(100% + 40px); // 补偿负边距
   
-  .graph-title {
+  .graph-3d-title {
     position: absolute;
     top: 20px;
-    left: 20px;
-    font-size: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 18px;
     font-weight: bold;
     color: #ffffff;
+    z-index: 10;
+    letter-spacing: 2px;
+  }
+
+  .graph-search-box-3d {
+    position: absolute;
+    top: 30px;
+    left: 30px;
     z-index: 10;
   }
 
@@ -5440,12 +5954,65 @@ body > .el-drawer__wrapper {
     z-index: 10;
   }
 
-  .graph-controls {
+  // 右侧控制面板
+  .graph-controls-panel {
     position: absolute;
-    top: 20px;
-    left: 50%;
-    transform: translateX(-50%);
+    top: 35%;
+    right: 25px;
+    transform: translateY(-50%);
     z-index: 10;
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 8px;
+    padding: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease;
+
+    &.collapsed {
+      padding: 6px;
+      
+      .controls-content {
+        display: none;
+      }
+    }
+
+    .toggle-controls-btn {
+      position: absolute;
+      left: -15px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: #409EFF;
+      border-color: #409EFF;
+      color: white;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+
+      &:hover {
+        background: #66b1ff;
+        border-color: #66b1ff;
+      }
+    }
+
+    .controls-content {
+      display: flex;
+      flex-direction: row;
+      gap: 4px;
+      align-items: center;
+
+      .control-btn {
+        width: auto;
+        padding: 0 6px;
+        border: none;
+        background: transparent;
+        
+        &:hover {
+          background: rgba(64, 158, 255, 0.1);
+        }
+        
+        i {
+          font-size: 16px;
+          margin: 0;
+        }
+      }
+    }
   }
 
   #knowledge-graph-3d {

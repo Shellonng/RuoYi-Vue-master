@@ -37,6 +37,24 @@ public class SectionKp extends BaseEntity
     /** 知识点对象（用于关联查询） */
     private KnowledgePoint knowledgePoint;
 
+    /** 小节标题（用于关联查询） */
+    private String sectionTitle;
+
+    /** 小节排序（用于关联查询） */
+    private Integer sectionOrder;
+
+    /** 章节ID（用于关联查询） */
+    private Long chapterId;
+
+    /** 章节标题（用于关联查询） */
+    private String chapterTitle;
+
+    /** 章节排序（用于关联查询） */
+    private Integer chapterOrder;
+
+    /** 课程ID（用于关联查询） */
+    private Long courseId;
+
     public Long getId() {
         return id;
     }
@@ -85,6 +103,54 @@ public class SectionKp extends BaseEntity
         this.knowledgePoint = knowledgePoint;
     }
 
+    public String getSectionTitle() {
+        return sectionTitle;
+    }
+
+    public void setSectionTitle(String sectionTitle) {
+        this.sectionTitle = sectionTitle;
+    }
+
+    public Integer getSectionOrder() {
+        return sectionOrder;
+    }
+
+    public void setSectionOrder(Integer sectionOrder) {
+        this.sectionOrder = sectionOrder;
+    }
+
+    public Long getChapterId() {
+        return chapterId;
+    }
+
+    public void setChapterId(Long chapterId) {
+        this.chapterId = chapterId;
+    }
+
+    public String getChapterTitle() {
+        return chapterTitle;
+    }
+
+    public void setChapterTitle(String chapterTitle) {
+        this.chapterTitle = chapterTitle;
+    }
+
+    public Integer getChapterOrder() {
+        return chapterOrder;
+    }
+
+    public void setChapterOrder(Integer chapterOrder) {
+        this.chapterOrder = chapterOrder;
+    }
+
+    public Long getCourseId() {
+        return courseId;
+    }
+
+    public void setCourseId(Long courseId) {
+        this.courseId = courseId;
+    }
+
     @Override
     public String toString() {
         return new ToStringBuilder(this, ToStringStyle.MULTI_LINE_STYLE)
@@ -94,6 +160,12 @@ public class SectionKp extends BaseEntity
             .append("sequence", getSequence())
             .append("createTime", getCreateTime())
             .append("knowledgePoint", getKnowledgePoint())
+            .append("sectionTitle", getSectionTitle())
+            .append("sectionOrder", getSectionOrder())
+            .append("chapterId", getChapterId())
+            .append("chapterTitle", getChapterTitle())
+            .append("chapterOrder", getChapterOrder())
+            .append("courseId", getCourseId())
             .toString();
     }
 }

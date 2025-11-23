@@ -42,6 +42,9 @@ public class KpRelation extends BaseEntity
     private String fromKpTitle;
     private String toKpTitle;
 
+    // 用于查询参数：查询与某个知识点相关的所有关系
+    private Long kpId;
+
     public Long getId() {
         return id;
     }
@@ -106,6 +109,14 @@ public class KpRelation extends BaseEntity
 
     public void setToKpTitle(String toKpTitle) {
         this.toKpTitle = toKpTitle;
+    }
+
+    public Long getKpId() {
+        return kpId;
+    }
+
+    public void setKpId(Long kpId) {
+        this.kpId = kpId;
     }
 
     @Override

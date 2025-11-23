@@ -170,10 +170,10 @@ public class SectionKpServiceImpl implements ISectionKpService
         // 先删除该小节的所有知识点关联
         sectionKpMapper.deleteSectionKpBySectionId(sectionId);
         
-        // 如果没有新的知识点，直接返回
+        // 如果没有新的知识点，返回1表示成功（已删除旧关联）
         if (kpIds == null || kpIds.length == 0)
         {
-            return 0;
+            return 1;
         }
         
         // 创建新的关联

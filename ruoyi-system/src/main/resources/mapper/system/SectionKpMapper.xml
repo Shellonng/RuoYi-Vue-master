@@ -25,6 +25,16 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         </association>
     </resultMap>
 
+    <!-- 带小节和章节信息的结果映射 -->
+    <resultMap type="SectionKp" id="SectionKpWithSectionChapterResult" extends="SectionKpResult">
+        <result property="sectionTitle"     column="section_title"    />
+        <result property="sectionOrder"     column="section_order"    />
+        <result property="chapterId"        column="chapter_id"       />
+        <result property="chapterTitle"     column="chapter_title"    />
+        <result property="chapterOrder"     column="chapter_order"    />
+        <result property="courseId"         column="course_id"        />
+    </resultMap>
+
     <sql id="selectSectionKpVo">
         select id, section_id, kp_id, sequence, create_time
         from section_kp
@@ -61,11 +71,18 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         order by sk.sequence asc
     </select>
 
-    <!-- 根据知识点ID查询关联的小节列表 -->
-    <select id="selectSectionKpListByKpId" parameterType="Long" resultMap="SectionKpResult">
-        <include refid="selectSectionKpVo"/>
-        where kp_id = #{kpId}
-        order by sequence asc
+    <!-- 根据知识点ID查询关联的小节列表（含小节和章节信息） -->
+    <select id="selectSectionKpListByKpId" parameterType="Long" resultMap="SectionKpWithSectionChapterResult">
+        select 
+            sk.id, sk.section_id, sk.kp_id, sk.sequence, sk.create_time,
+            s.title as section_title, s.sort_order as section_order,
+            c.id as chapter_id, c.title as chapter_title, c.sort_order as chapter_order,
+            c.course_id
+        from section_kp sk
+        left join section s on sk.section_id = s.id and s.is_deleted = 0
+        left join chapter c on s.chapter_id = c.id and c.is_deleted = 0
+        where sk.kp_id = #{kpId}
+        order by sk.sequence asc
     </select>
 
     <!-- 检查小节和知识点是否已关联 -->

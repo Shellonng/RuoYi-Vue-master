@@ -187,7 +187,11 @@
           <el-select
             v-model="form.sectionIds"
             multiple
+            clearable
+            collapse-tags
+            filterable
             placeholder="请选择关联的小节"
+            popper-append-to-body
             style="width: 100%"
           >
             <el-option
@@ -304,6 +308,9 @@ export default {
         ],
         level: [
           { required: true, message: "请选择难度等级", trigger: "change" }
+        ],
+        sectionIds: [
+          { required: true, message: "请至少选择一个关联小节", trigger: "change", type: "array", min: 1 }
         ]
       }
     };
@@ -456,11 +463,14 @@ export default {
       
       // 获取知识点详情
       getKnowledgePoint(id).then(response => {
-        this.form = response.data;
+        // 使用 Object.assign 而不是直接赋值，保留 sectionIds 数组
+        this.form = Object.assign({}, this.form, response.data, { sectionIds: [] });
         
         // 获取关联的小节ID列表
         listSectionKpByKp(id).then(res => {
-          this.form.sectionIds = (res.data || []).map(item => item.sectionId);
+          const sectionIds = (res.data || []).map(item => item.sectionId);
+          // 使用 $set 确保响应式更新
+          this.$set(this.form, 'sectionIds', sectionIds);
           this.open = true;
           this.title = "修改知识点";
         });
@@ -468,16 +478,17 @@ export default {
     },
     /** 查看按钮操作 */
     handleView(row) {
-      // 获取知识点详情和关联的小节
-      getKnowledgePoint(row.id).then(response => {
-        this.viewData = response.data;
-        
-        // 获取关联的小节名称
-        listSectionKpByKp(row.id).then(res => {
-          this.viewData.sectionNames = (res.data || []).map(item => item.sectionTitle || item.title);
-          this.viewOpen = true;
-        });
-      });
+      // 跳转到知识点详情页
+      const routeData = {
+        path: '/knowledgepoint/detail/' + row.id
+      };
+      
+      // 如果当前组件是在课程详情页中使用（有courseId），则传递fromCourse参数
+      if (this.courseId) {
+        routeData.query = { fromCourse: this.courseId };
+      }
+      
+      this.$router.push(routeData);
     },
     /** 提交按钮 */
     submitForm() {
@@ -500,41 +511,94 @@ export default {
                 
                 // 为新小节添加关联
                 toAdd.forEach(sectionId => {
-                  promises.push(
-                    listSectionKpByKp(this.form.id).then(kps => {
-                      const existingKpIds = (kps.data || [])
-                        .filter(item => item.sectionId === sectionId)
-                        .map(item => item.kpId);
+                  const promise = listSectionKpBySection(sectionId)
+                    .then(res => {
+                      console.log(`[添加] 获取小节 ${sectionId} 的完整响应:`, res);
+                      console.log(`[添加] res.data 类型:`, typeof res.data, Array.isArray(res.data));
+                      const dataArray = Array.isArray(res.data) ? res.data : (res.data ? [res.data] : []);
+                      const existingKpIds = dataArray.map(item => item.kpId);
                       if (!existingKpIds.includes(this.form.id)) {
                         existingKpIds.push(this.form.id);
                       }
-                      return setSectionKnowledgePoints(sectionId, existingKpIds);
+                      console.log(`[添加] 调用 setSectionKnowledgePoints，参数:`, { sectionId, kpIds: existingKpIds });
+                      return setSectionKnowledgePoints(sectionId, existingKpIds)
+                        .then(resp => {
+                          console.log(`[添加] setSectionKnowledgePoints 成功:`, resp);
+                          return resp;
+                        })
+                        .catch(err => {
+                          console.error(`[添加] setSectionKnowledgePoints 失败:`, err);
+                          console.error(`[添加] 错误详情:`, err.message, err.response);
+                          throw err;
+                        });
                     })
-                  );
+                    .then(response => {
+                      console.log(`[添加] 小节 ${sectionId} 成功，后端响应:`, response);
+                      return { success: true, sectionId, response };
+                    });
+                  promises.push(promise);
                 });
                 
                 // 从旧小节移除关联
                 toRemove.forEach(sectionId => {
-                  promises.push(
-                    listSectionKpBySection(sectionId).then(res => {
-                      const kpIds = (res.data || [])
+                  const promise = listSectionKpBySection(sectionId)
+                    .then(res => {
+                      console.log(`[移除] 获取小节 ${sectionId} 的完整响应:`, res);
+                      console.log(`[移除] res.data 类型:`, typeof res.data, Array.isArray(res.data));
+                      const dataArray = Array.isArray(res.data) ? res.data : (res.data ? [res.data] : []);
+                      const kpIds = dataArray
                         .map(item => item.kpId)
                         .filter(id => id !== this.form.id);
-                      return setSectionKnowledgePoints(sectionId, kpIds);
+                      console.log(`[移除] 调用 setSectionKnowledgePoints，参数:`, { sectionId, kpIds });
+                      return setSectionKnowledgePoints(sectionId, kpIds)
+                        .then(resp => {
+                          console.log(`[移除] setSectionKnowledgePoints 成功:`, resp);
+                          return resp;
+                        })
+                        .catch(err => {
+                          console.error(`[移除] setSectionKnowledgePoints 失败:`, err);
+                          console.error(`[移除] 错误详情:`, err.message, err.response);
+                          throw err;
+                        });
                     })
-                  );
+                    .then(response => {
+                      console.log(`[移除] 小节 ${sectionId} 成功，后端响应:`, response);
+                      return { success: true, sectionId, response };
+                    });
+                  promises.push(promise);
                 });
                 
-                Promise.all(promises).then(() => {
+                if (promises.length > 0) {
+                  Promise.allSettled(promises).then(results => {
+                    const failed = results.filter(r => r.status === 'rejected');
+                    console.log('小节关联更新结果:', results);
+                    
+                    if (failed.length === 0) {
+                      this.$modal.msgSuccess("修改成功");
+                    } else if (failed.length < results.length) {
+                      this.$modal.msgWarning(`知识点已修改，但有 ${failed.length} 个小节关联更新失败`);
+                      console.error('失败的操作:', failed);
+                    } else {
+                      this.$modal.msgWarning("知识点已修改，但小节关联更新失败，请检查后台日志");
+                      console.error('所有小节关联更新都失败了:', failed);
+                    }
+                    
+                    this.open = false;
+                    this.getList();
+                  });
+                } else {
+                  // 没有小节关联变化
                   this.$modal.msgSuccess("修改成功");
                   this.open = false;
                   this.getList();
-                }).catch(() => {
-                  this.$modal.msgSuccess("修改成功，但部分小节关联更新失败");
-                  this.open = false;
-                  this.getList();
-                });
+                }
+              }).catch(error => {
+                console.error('获取小节关联失败:', error);
+                this.$modal.msgError("修改失败");
               });
+            }).catch(error => {
+              console.error('更新知识点失败:', error);
+              this.$modal.msgError("修改失败");
             });
           } else {
             // 新增知识点
@@ -662,6 +726,7 @@ export default {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 14px;
 }
 
 .autocomplete-item .level-tag {

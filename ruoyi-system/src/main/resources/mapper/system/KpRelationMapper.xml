@@ -32,6 +32,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="toKpId != null">
                 and r.to_kp_id = #{toKpId}
             </if>
+            <if test="kpId != null">
+                and (r.from_kp_id = #{kpId} or r.to_kp_id = #{kpId})
+            </if>
             <if test="relationType != null and relationType != ''">
                 and r.relation_type = #{relationType}
             </if>
