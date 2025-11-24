@@ -1051,6 +1051,7 @@ export default {
       renderingChapterIndex: 0, // 当前渲染的章节索引
       renderingSectionIndex: 0, // 当前渲染的小节索引
       knowledgeGraphChart: null, // 课程图谱实例
+      originalGraphData: null, // 保存原始图谱数据(用于高亮计算)
       isGraphFullscreen: false, // 知识图谱是否全屏
       isStructureFullscreen: false, // 课程结构是否全屏
       generatingGraph: false, // 知识点图谱生成状态
@@ -2716,6 +2717,40 @@ export default {
         }]
       };
       
+      // 保存原始图谱数据(深拷贝),并确保知识点节点在原始数据中是可见的
+      this.originalGraphData = {
+        nodes: JSON.parse(JSON.stringify(graphData.nodes)).map(node => {
+          // 如果是知识点节点,在原始数据中设置为可见状态
+          if (node.id && node.id.startsWith('kp-')) {
+            return {
+              ...node,
+              itemStyle: {
+                ...node.itemStyle,
+                opacity: 1 // 原始数据中知识点是可见的
+              },
+              label: {
+                ...node.label,
+                show: true // 原始数据中标签是显示的
+              }
+            };
+          }
+          return node;
+        }),
+        links: JSON.parse(JSON.stringify(graphData.links)).map(link => {
+          // 如果是知识点连线,在原始数据中设置为可见状态
+          if (link.target && link.target.startsWith('kp-')) {
+            return {
+              ...link,
+              lineStyle: {
+                ...link.lineStyle,
+                opacity: 0.8 // 原始数据中连线是可见的
+              }
+            };
+          }
+          return link;
+        })
+      };
+      
       this.knowledgeGraphChart.setOption(option);
       
       // 添加点击事件处理 - 使用时间间隔判断双击
@@ -2806,7 +2841,7 @@ export default {
               // 知识点节点 - 使用和抽屉中点击知识点一样的处理方式
               console.log('[知识图谱] 单击知识点节点:', params.data);
               if (params.data.kpData) {
-                this.handleDrawerKnowledgeClick(params.data.kpData);
+                this.handleDrawerKnowledgeClick(params.data.kpData, true); // 传递true跳过图谱高亮
               } else {
                 console.error('[知识图谱] 知识点节点缺少kpData:', params.data);
               }
@@ -2959,7 +2994,7 @@ export default {
                 const kpColor = colorScheme; // 使用章节主颜色，更鲜艳
                 
                 const kpNode = {
-                  id: 'kp-' + section.id + '-' + kpIndex,
+                  id: 'kp-' + kp.id, // 使用知识点的真实ID,而不是section.id + index
                   name: kp.name || kp.title,
                   symbolSize: 28, // 稍微增大一点
                   category: 3,
@@ -3064,6 +3099,7 @@ export default {
         // 如果是知识点节点
         if (isKnowledgePoint) {
           let shouldShow = false;
+          let isSelectedNode = false; // 是否是被选中的节点
           
           // 情况1：点击的是小节节点，只显示该小节的知识点
           if (isClickedSectionNode) {
@@ -3075,6 +3111,7 @@ export default {
           // 情况2：点击的是知识点节点本身，只显示这个知识点
           else if (isClickedKnowledgePoint) {
             shouldShow = node.id === nodeId;
+            isSelectedNode = node.id === nodeId; // 标记为选中节点
           }
           // 情况3：点击的是章节或课程节点，不显示任何知识点
           else {
@@ -3085,12 +3122,19 @@ export default {
             ...node,
             itemStyle: {
               ...node.itemStyle,
-              opacity: shouldShow ? 1 : 0 // 完全显示或完全隐藏
+              opacity: shouldShow ? 1 : 0,
+              borderWidth: isSelectedNode ? 4 : (node.itemStyle?.borderWidth || 2), // 选中节点加粗边框
+              borderColor: isSelectedNode ? '#FFD700' : (node.itemStyle?.borderColor || '#fff'), // 选中节点金色边框
+              shadowBlur: isSelectedNode ? 20 : 0, // 选中节点添加光晕效果
+              shadowColor: isSelectedNode ? '#FFD700' : 'transparent'
             },
+            symbolSize: isSelectedNode ? (node.symbolSize || 40) * 1.3 : (node.symbolSize || 40), // 选中节点放大30%
             label: {
               ...node.label,
-              show: shouldShow, // 显示或隐藏标签
-              opacity: shouldShow ? 1 : 0 // 标签完全不透明
+              show: shouldShow,
+              opacity: shouldShow ? 1 : 0,
+              fontWeight: isSelectedNode ? 'bold' : 'normal', // 选中节点文字加粗
+              fontSize: isSelectedNode ? 14 : 12 // 选中节点文字放大
             }
           };
         }
@@ -4434,7 +4478,7 @@ export default {
     },
 
     /** 显示3D图谱知识点详情抽屉 */
-    async show3DKnowledgeDrawer(node) {
+    async show3DKnowledgeDrawer(node, from2DGraph = false) {
       console.log('[3D图谱] 显示知识点抽屉:', node);
       
       // 节点的data字段包含了完整的知识点数据
@@ -4535,6 +4579,12 @@ export default {
       // 加载该知识点的作业/考试/测验资源
       await this.loadKnowledgePointResources(kp.id);
       
+      // 同步到2D图谱 - 只在不是从2D图谱点击来的时候执行
+      if (!from2DGraph && this.knowledgeGraphChart && this.originalGraphData) {
+        const nodeId = 'kp-' + kp.id;
+        this.highlightNodeAndRelated(nodeId, this.originalGraphData);
+      }
+      
       this.sectionDrawerVisible = true;
     },
     
@@ -4609,88 +4659,53 @@ export default {
     },
 
     /** 处理抽屉中知识点点击 */
-    async handleDrawerKnowledgeClick(kp) {
-      const kpName = kp.name || kp.title || kp.pointName;
-      const kpId = kp.id || kp.kpId || kp.pointId;
-      
+    async handleDrawerKnowledgeClick(kp, from2DGraph = false) {
       // 重置当前资源类型，确保显示资源统计列表
       this.currentResourceType = null;
       this.currentResourceList = [];
       
-      // 查找该知识点的所有关系
-      const relatedKnowledgePoints = {
-        prerequisite_of: [],    // 前置于
-        similar_to: [],         // 相似于
-        extension_of: [],       // 扩展于
-        derived_from: [],       // 派生自
-        counterexample_of: []   // 反例于
+      // 1. 更新抽屉内容(传递来源信息)
+      const node = {
+        type: 'knowledge',
+        data: kp
       };
+      await this.show3DKnowledgeDrawer(node, from2DGraph);
       
-      // 从kpRelations中查找该知识点的关系
-      if (this.kpRelations && this.kpRelations.length > 0) {
-        this.kpRelations.forEach(rel => {
-          // 如果该知识点是source(起点)
-          if (rel.fromKpId === kpId) {
-            const targetKp = this.findKnowledgePointById(rel.toKpId);
-            if (targetKp && rel.relationType) {
-              if (!relatedKnowledgePoints[rel.relationType]) {
-                relatedKnowledgePoints[rel.relationType] = [];
-              }
-              relatedKnowledgePoints[rel.relationType].push(targetKp);
-            }
-          }
-          // 如果该知识点是target(终点),需要反向处理关系
-          if (rel.toKpId === kpId) {
-            const sourceKp = this.findKnowledgePointById(rel.fromKpId);
-            if (sourceKp && rel.relationType) {
-              // 反向关系映射
-              const reverseTypeMap = {
-                'prerequisite_of': 'derived_from',
-                'derived_from': 'prerequisite_of',
-                'similar_to': 'similar_to',
-                'extension_of': 'extension_of',
-                'counterexample_of': 'counterexample_of'
-              };
-              const reverseType = reverseTypeMap[rel.relationType] || rel.relationType;
-              if (!relatedKnowledgePoints[reverseType]) {
-                relatedKnowledgePoints[reverseType] = [];
-              }
-              relatedKnowledgePoints[reverseType].push(sourceKp);
-            }
-          }
-        });
+      // 2. 同步更新图谱显示
+      // 2.1 处理3D图谱 - 总是执行
+      if (this.graph3DInstance) {
+        // 在3D图谱中找到对应节点
+        const graphData = this.graph3DInstance.graphData();
+        const targetNode = graphData.nodes.find(n => 
+          n.type === 'knowledge' && n.data && n.data.id === kp.id
+        );
+        
+        if (targetNode) {
+          // 高亮节点及其关系
+          this.highlight3DNode(targetNode);
+          
+          // 相机聚焦到节点
+          const distance = 200;
+          this.graph3DInstance.cameraPosition(
+            { x: targetNode.x, y: targetNode.y, z: targetNode.z + distance },
+            { x: targetNode.x, y: targetNode.y, z: targetNode.z },
+            1000
+          );
+        }
       }
       
-      // 将知识点设置为当前选中的小节
-      this.selectedSection = {
-        id: kpId,
-        title: kpName,
-        sectionName: kpName,
-        name: kpName,
-        description: kp.description || '',
-        knowledgePoints: [kp],
-        kpData: kp,
-        relatedKnowledgePoints: relatedKnowledgePoints,
-        isKnowledgePointView: true,
-        isKnowledgePoint: true,
-        // 初始化资源数量为0
-        learningMaterials: 0,
-        materials: 0,
-        activities: 0,
-        assignments: 0,
-        tests: 0,
-        exams: 0
-      };
-      
-      // 确保抽屉打开
-      if (!this.sectionDrawerVisible) {
-        this.sectionDrawerVisible = true;
+      // 2.2 处理2D图谱 - 只在不是从2D图谱点击来的时候执行
+      if (!from2DGraph && this.knowledgeGraphChart) {
+        // 需要保存原始图谱数据
+        if (!this.originalGraphData) {
+          console.warn('[2D图谱] 缺少原始图谱数据');
+          return;
+        }
+        
+        const nodeId = 'kp-' + kp.id;
+        // 使用保存的原始数据
+        this.highlightNodeAndRelated(nodeId, this.originalGraphData);
       }
-      
-      await this.$nextTick();
-      
-      // 加载该知识点关联的资源并更新计数
-      await this.loadKnowledgePointResources(kpId);
     },
     
     /** 加载知识点关联的资源并更新计数 */
