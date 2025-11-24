@@ -522,42 +522,60 @@
             <div class="stat-item clickable" @click="viewResourceDetail('learningMaterials')">
               <i class="el-icon-reading stat-icon" style="color: #409EFF;"></i>
               <div class="stat-content">
-                <div class="stat-value">{{ selectedSection.learningMaterials || 0 }}</div>
+                <div class="stat-value">
+                  <i v-if="loadingResourceStats" class="el-icon-loading"></i>
+                  <span v-else>{{ selectedSection.learningMaterials || 0 }}</span>
+                </div>
                 <div class="stat-label">题库</div>
               </div>
             </div>
             <div class="stat-item clickable" @click="viewResourceDetail('materials')">
               <i class="el-icon-document stat-icon" style="color: #E6A23C;"></i>
               <div class="stat-content">
-                <div class="stat-value">{{ selectedSection.materials || 0 }}</div>
+                <div class="stat-value">
+                  <i v-if="loadingResourceStats" class="el-icon-loading"></i>
+                  <span v-else>{{ selectedSection.materials || 0 }}</span>
+                </div>
                 <div class="stat-label">资料</div>
               </div>
             </div>
             <div class="stat-item clickable" @click="viewResourceDetail('activities')">
               <i class="el-icon-video-camera stat-icon" style="color: #67C23A;"></i>
               <div class="stat-content">
-                <div class="stat-value">{{ selectedSection.activities || 0 }}</div>
+                <div class="stat-value">
+                  <i v-if="loadingResourceStats" class="el-icon-loading"></i>
+                  <span v-else>{{ selectedSection.activities || 0 }}</span>
+                </div>
                 <div class="stat-label">视频</div>
               </div>
             </div>
             <div class="stat-item clickable" @click="viewResourceDetail('assignments')">
               <i class="el-icon-edit-outline stat-icon" style="color: #909399;"></i>
               <div class="stat-content">
-                <div class="stat-value">{{ selectedSection.assignments || 0 }}</div>
+                <div class="stat-value">
+                  <i v-if="loadingResourceStats" class="el-icon-loading"></i>
+                  <span v-else>{{ selectedSection.assignments || 0 }}</span>
+                </div>
                 <div class="stat-label">作业</div>
               </div>
             </div>
             <div class="stat-item clickable" @click="viewResourceDetail('tests')">
               <i class="el-icon-medal stat-icon" style="color: #F56C6C;"></i>
               <div class="stat-content">
-                <div class="stat-value">{{ selectedSection.tests || 0 }}</div>
+                <div class="stat-value">
+                  <i v-if="loadingResourceStats" class="el-icon-loading"></i>
+                  <span v-else>{{ selectedSection.tests || 0 }}</span>
+                </div>
                 <div class="stat-label">测验</div>
               </div>
             </div>
             <div class="stat-item clickable" @click="viewResourceDetail('exams')">
               <i class="el-icon-tickets stat-icon" style="color: #C71585;"></i>
               <div class="stat-content">
-                <div class="stat-value">{{ selectedSection.exams || 0 }}</div>
+                <div class="stat-value">
+                  <i v-if="loadingResourceStats" class="el-icon-loading"></i>
+                  <span v-else>{{ selectedSection.exams || 0 }}</span>
+                </div>
                 <div class="stat-label">考试</div>
               </div>
             </div>
@@ -1092,6 +1110,7 @@ export default {
       currentResourceType: null, // 当前查看的资源类型
       currentResourceList: [], // 当前资源列表数据
       loadingResources: false, // 资源加载状态
+      loadingResourceStats: false, // 资源统计加载状态
     };
   },
   created() {
@@ -3348,6 +3367,9 @@ export default {
       this.knowledgePointsCurrentPage = 1; // 重置分页
       this.sectionDrawerVisible = true;
       
+      // 预加载章节的资源统计
+      this.preloadChapterResourceStats(this.selectedSection);
+      
       // 同步到3D图谱 - 高亮对应的章节节点
       if (this.graph3DInstance) {
         const graphData = this.graph3DInstance.graphData();
@@ -3410,6 +3432,9 @@ export default {
         
         this.knowledgePointsCurrentPage = 1; // 重置分页
         this.sectionDrawerVisible = true;
+        
+        // 预加载小节的资源统计
+        this.preloadSectionResourceStats(foundSection);
         
         // 同步到3D图谱 - 高亮对应的小节节点
         if (this.graph3DInstance) {
@@ -3584,6 +3609,291 @@ export default {
         this.currentResourceList = [];
       } finally {
         this.loadingResources = false;
+      }
+    },
+    
+    /** 根据小节加载作业/考试/测验(汇总该小节下所有知识点的资源) */
+    async loadAssignmentsBySection(section, resourceType) {
+      this.loadingResources = true;
+      try {
+        console.log('[抽屉] 小节资源加载 - 小节:', section.title, '资源类型:', resourceType);
+        
+        // 收集该小节下所有知识点的ID
+        const knowledgePoints = section.knowledgePoints || [];
+        if (knowledgePoints.length === 0) {
+          console.log('[抽屉] 该小节没有知识点');
+          this.currentResourceList = [];
+          return;
+        }
+        
+        console.log('[抽屉] 小节包含', knowledgePoints.length, '个知识点');
+        
+        // 收集所有资源(不按类型过滤,用于统计)
+        const allResourceMap = new Map();
+        
+        // 遍历每个知识点,获取其资源
+        for (const kp of knowledgePoints) {
+          const kpId = kp.id || kp.pointId || kp.kpId;
+          if (!kpId) {
+            console.warn('[抽屉] 知识点缺少ID:', kp);
+            continue;
+          }
+          
+          try {
+            const response = await getAssignmentsByKnowledgePoint(kpId);
+            if (response && response.data) {
+              const assignments = response.data;
+              
+              // 添加到总资源集合(去重)
+              assignments.forEach(item => {
+                if (!allResourceMap.has(item.id)) {
+                  allResourceMap.set(item.id, item);
+                }
+              });
+            }
+          } catch (error) {
+            console.error(`[抽屉] 加载知识点${kpId}的资源失败:`, error);
+          }
+        }
+        
+        // 统计各类型资源数量
+        const allResources = Array.from(allResourceMap.values());
+        const exams = allResources.filter(item => item.type === 'exam');
+        const assignments = allResources.filter(item => item.type === 'homework' && item.mode !== 'question');
+        const tests = allResources.filter(item => item.type === 'homework' && item.mode === 'question');
+        
+        // 更新selectedSection的资源统计
+        this.selectedSection = {
+          ...this.selectedSection,
+          assignments: assignments.length,
+          tests: tests.length,
+          exams: exams.length
+        };
+        
+        // 根据当前查看的资源类型过滤列表
+        if (resourceType === 'exams') {
+          this.currentResourceList = exams;
+        } else if (resourceType === 'assignments') {
+          this.currentResourceList = assignments;
+        } else if (resourceType === 'tests') {
+          this.currentResourceList = tests;
+        }
+        
+        console.log(`[抽屉] 小节资源汇总完成 - 作业:${assignments.length} 测验:${tests.length} 考试:${exams.length}`);
+        
+      } catch (error) {
+        console.error('[抽屉] 小节资源加载失败:', error);
+        this.$message.error('加载资源失败：' + (error.message || '未知错误'));
+        this.currentResourceList = [];
+      } finally {
+        this.loadingResources = false;
+      }
+    },
+    
+    /** 根据章节加载作业/考试/测验(汇总该章节下所有小节的资源) */
+    async loadAssignmentsByChapter(chapterSection, resourceType) {
+      this.loadingResources = true;
+      try {
+        console.log('[抽屉] 章节资源加载 - 章节:', chapterSection.title, '资源类型:', resourceType);
+        
+        // 提取章节ID
+        const chapterId = typeof chapterSection.id === 'string' 
+          ? parseInt(chapterSection.id.replace('chapter-', ''))
+          : chapterSection.id;
+        
+        // 找到对应的章节对象
+        const chapter = this.chapterList.find(c => c.id === chapterId);
+        if (!chapter || !chapter.sections || chapter.sections.length === 0) {
+          console.log('[抽屉] 章节没有小节');
+          this.currentResourceList = [];
+          return;
+        }
+        
+        console.log('[抽屉] 章节包含', chapter.sections.length, '个小节');
+        
+        // 收集所有资源(不按类型过滤,用于统计)
+        const allResourceMap = new Map();
+        
+        // 遍历每个小节下的每个知识点
+        for (const section of chapter.sections) {
+          const knowledgePoints = section.knowledgePoints || [];
+          
+          for (const kp of knowledgePoints) {
+            const kpId = kp.id || kp.pointId || kp.kpId;
+            if (!kpId) continue;
+            
+            try {
+              const response = await getAssignmentsByKnowledgePoint(kpId);
+              if (response && response.data) {
+                const assignments = response.data;
+                
+                // 添加到总资源集合(去重)
+                assignments.forEach(item => {
+                  if (!allResourceMap.has(item.id)) {
+                    allResourceMap.set(item.id, item);
+                  }
+                });
+              }
+            } catch (error) {
+              console.error(`[抽屉] 加载知识点${kpId}的资源失败:`, error);
+            }
+          }
+        }
+        
+        // 统计各类型资源数量
+        const allResources = Array.from(allResourceMap.values());
+        const exams = allResources.filter(item => item.type === 'exam');
+        const assignments = allResources.filter(item => item.type === 'homework' && item.mode !== 'question');
+        const tests = allResources.filter(item => item.type === 'homework' && item.mode === 'question');
+        
+        // 更新selectedSection的资源统计
+        this.selectedSection = {
+          ...this.selectedSection,
+          assignments: assignments.length,
+          tests: tests.length,
+          exams: exams.length
+        };
+        
+        // 根据当前查看的资源类型过滤列表
+        if (resourceType === 'exams') {
+          this.currentResourceList = exams;
+        } else if (resourceType === 'assignments') {
+          this.currentResourceList = assignments;
+        } else if (resourceType === 'tests') {
+          this.currentResourceList = tests;
+        }
+        
+        console.log(`[抽屉] 章节资源汇总完成 - 作业:${assignments.length} 测验:${tests.length} 考试:${exams.length}`);
+        
+      } catch (error) {
+        console.error('[抽屉] 章节资源加载失败:', error);
+        this.$message.error('加载资源失败：' + (error.message || '未知错误'));
+        this.currentResourceList = [];
+      } finally {
+        this.loadingResources = false;
+      }
+    },
+    
+    /** 预加载小节的资源统计(在打开抽屉时调用) */
+    async preloadSectionResourceStats(section) {
+      this.loadingResourceStats = true; // 开始加载
+      try {
+        console.log('[抽屉] 预加载小节资源统计:', section.title);
+        
+        const knowledgePoints = section.knowledgePoints || [];
+        if (knowledgePoints.length === 0) {
+          console.log('[抽屉] 小节没有知识点,资源统计为0');
+          this.loadingResourceStats = false;
+          return;
+        }
+        
+        // 收集所有资源
+        const allResourceMap = new Map();
+        
+        for (const kp of knowledgePoints) {
+          const kpId = kp.id || kp.pointId || kp.kpId;
+          if (!kpId) continue;
+          
+          try {
+            const response = await getAssignmentsByKnowledgePoint(kpId);
+            if (response && response.data) {
+              response.data.forEach(item => {
+                if (!allResourceMap.has(item.id)) {
+                  allResourceMap.set(item.id, item);
+                }
+              });
+            }
+          } catch (error) {
+            console.error(`[抽屉] 预加载知识点${kpId}资源失败:`, error);
+          }
+        }
+        
+        // 统计各类型资源
+        const allResources = Array.from(allResourceMap.values());
+        const exams = allResources.filter(item => item.type === 'exam');
+        const assignments = allResources.filter(item => item.type === 'homework' && item.mode !== 'question');
+        const tests = allResources.filter(item => item.type === 'homework' && item.mode === 'question');
+        
+        // 更新统计
+        this.selectedSection = {
+          ...this.selectedSection,
+          assignments: assignments.length,
+          tests: tests.length,
+          exams: exams.length
+        };
+        
+        console.log(`[抽屉] 小节资源统计完成 - 作业:${assignments.length} 测验:${tests.length} 考试:${exams.length}`);
+        
+      } catch (error) {
+        console.error('[抽屉] 预加载小节资源统计失败:', error);
+      } finally {
+        this.loadingResourceStats = false; // 加载完成
+      }
+    },
+    
+    /** 预加载章节的资源统计(在打开抽屉时调用) */
+    async preloadChapterResourceStats(chapterSection) {
+      this.loadingResourceStats = true; // 开始加载
+      try {
+        console.log('[抽屉] 预加载章节资源统计:', chapterSection.title);
+        
+        // 提取章节ID
+        const chapterId = typeof chapterSection.id === 'string' 
+          ? parseInt(chapterSection.id.replace('chapter-', ''))
+          : chapterSection.id;
+        
+        const chapter = this.chapterList.find(c => c.id === chapterId);
+        if (!chapter || !chapter.sections || chapter.sections.length === 0) {
+          console.log('[抽屉] 章节没有小节,资源统计为0');
+          this.loadingResourceStats = false;
+          return;
+        }
+        
+        // 收集所有资源
+        const allResourceMap = new Map();
+        
+        for (const section of chapter.sections) {
+          const knowledgePoints = section.knowledgePoints || [];
+          
+          for (const kp of knowledgePoints) {
+            const kpId = kp.id || kp.pointId || kp.kpId;
+            if (!kpId) continue;
+            
+            try {
+              const response = await getAssignmentsByKnowledgePoint(kpId);
+              if (response && response.data) {
+                response.data.forEach(item => {
+                  if (!allResourceMap.has(item.id)) {
+                    allResourceMap.set(item.id, item);
+                  }
+                });
+              }
+            } catch (error) {
+              console.error(`[抽屉] 预加载知识点${kpId}资源失败:`, error);
+            }
+          }
+        }
+        
+        // 统计各类型资源
+        const allResources = Array.from(allResourceMap.values());
+        const exams = allResources.filter(item => item.type === 'exam');
+        const assignments = allResources.filter(item => item.type === 'homework' && item.mode !== 'question');
+        const tests = allResources.filter(item => item.type === 'homework' && item.mode === 'question');
+        
+        // 更新统计
+        this.selectedSection = {
+          ...this.selectedSection,
+          assignments: assignments.length,
+          tests: tests.length,
+          exams: exams.length
+        };
+        
+        console.log(`[抽屉] 章节资源统计完成 - 作业:${assignments.length} 测验:${tests.length} 考试:${exams.length}`);
+        
+      } catch (error) {
+        console.error('[抽屉] 预加载章节资源统计失败:', error);
+      } finally {
+        this.loadingResourceStats = false; // 加载完成
       }
     },
     
@@ -4507,6 +4817,9 @@ export default {
       this.knowledgePointsCurrentPage = 1;
       this.sectionDrawerVisible = true;
       
+      // 预加载章节的资源统计
+      this.preloadChapterResourceStats(this.selectedSection);
+      
       // 同步到2D图谱 - 高亮对应的章节节点
       if (this.knowledgeGraphChart && this.originalGraphData) {
         const nodeId = 'chapter-' + chapter.id;
@@ -4549,6 +4862,9 @@ export default {
       
       this.knowledgePointsCurrentPage = 1;
       this.sectionDrawerVisible = true;
+      
+      // 预加载小节的资源统计
+      this.preloadSectionResourceStats(section);
       
       // 同步到2D图谱 - 高亮对应的小节节点并显示知识点
       if (this.knowledgeGraphChart && this.originalGraphData) {
