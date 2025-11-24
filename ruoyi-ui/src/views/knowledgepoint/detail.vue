@@ -338,25 +338,105 @@
               </div>
             </div>
 
-            <!-- 创建时间 -->
-            <div class="info-section">
+            <!-- 知识点资源 -->
+            <div class="info-section resources-section">
               <div class="section-title">
-                <i class="el-icon-time"></i>
-                <span>创建时间</span>
+                <i class="el-icon-folder-opened"></i>
+                <span>知识点资源</span>
               </div>
               <div class="section-content">
-                {{ parseTime(kpData.createTime) || '- -' }}
-              </div>
-            </div>
-
-            <!-- 更新时间 -->
-            <div class="info-section">
-              <div class="section-title">
-                <i class="el-icon-refresh"></i>
-                <span>更新时间</span>
-              </div>
-              <div class="section-content">
-                {{ parseTime(kpData.updateTime) || '- -' }}
+                <!-- 资源统计列表 -->
+                <div v-if="!currentResourceType" class="resource-stats">
+                  <div class="stat-item clickable" @click="viewResourceDetail('assignments')">
+                    <i class="el-icon-edit-outline stat-icon" style="color: #909399;"></i>
+                    <div class="stat-content">
+                      <div class="stat-value">
+                        <i v-if="loadingResourceStats" class="el-icon-loading"></i>
+                        <span v-else>{{ kpResourceStats.assignments || 0 }}</span>
+                      </div>
+                      <div class="stat-label">作业</div>
+                    </div>
+                  </div>
+                  <div class="stat-item clickable" @click="viewResourceDetail('tests')">
+                    <i class="el-icon-medal stat-icon" style="color: #F56C6C;"></i>
+                    <div class="stat-content">
+                      <div class="stat-value">
+                        <i v-if="loadingResourceStats" class="el-icon-loading"></i>
+                        <span v-else>{{ kpResourceStats.tests || 0 }}</span>
+                      </div>
+                      <div class="stat-label">测验</div>
+                    </div>
+                  </div>
+                  <div class="stat-item clickable" @click="viewResourceDetail('exams')">
+                    <i class="el-icon-tickets stat-icon" style="color: #C71585;"></i>
+                    <div class="stat-content">
+                      <div class="stat-value">
+                        <i v-if="loadingResourceStats" class="el-icon-loading"></i>
+                        <span v-else>{{ kpResourceStats.exams || 0 }}</span>
+                      </div>
+                      <div class="stat-label">考试</div>
+                    </div>
+                  </div>
+                  <div class="stat-item clickable" @click="viewResourceDetail('learningMaterials')">
+                    <i class="el-icon-reading stat-icon" style="color: #409EFF;"></i>
+                    <div class="stat-content">
+                      <div class="stat-value">
+                        <i v-if="loadingResourceStats" class="el-icon-loading"></i>
+                        <span v-else>{{ kpResourceStats.learningMaterials || 0 }}</span>
+                      </div>
+                      <div class="stat-label">题库</div>
+                    </div>
+                  </div>
+                  <div class="stat-item clickable" @click="viewResourceDetail('materials')">
+                    <i class="el-icon-document stat-icon" style="color: #E6A23C;"></i>
+                    <div class="stat-content">
+                      <div class="stat-value">
+                        <i v-if="loadingResourceStats" class="el-icon-loading"></i>
+                        <span v-else>{{ kpResourceStats.materials || 0 }}</span>
+                      </div>
+                      <div class="stat-label">资料</div>
+                    </div>
+                  </div>
+                  <div class="stat-item clickable" @click="viewResourceDetail('activities')">
+                    <i class="el-icon-video-camera stat-icon" style="color: #67C23A;"></i>
+                    <div class="stat-content">
+                      <div class="stat-value">
+                        <i v-if="loadingResourceStats" class="el-icon-loading"></i>
+                        <span v-else>{{ kpResourceStats.activities || 0 }}</span>
+                      </div>
+                      <div class="stat-label">视频</div>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- 资源详情列表 -->
+                <div v-if="currentResourceType" class="resource-detail-view">
+                  <div class="resource-detail-header">
+                    <el-button type="text" icon="el-icon-back" @click="backToResourceStats" class="back-btn"></el-button>
+                    <span class="resource-type-title">{{ getResourceTypeName(currentResourceType) }}</span>
+                  </div>
+                  <div class="resource-list" v-loading="loadingResources">
+                    <div v-if="currentResourceList.length === 0 && !loadingResources" class="empty-resource">
+                      <i class="el-icon-warning-outline"></i>
+                      <p>暂无{{ getResourceTypeName(currentResourceType) }}</p>
+                    </div>
+                    <div v-else>
+                      <div v-for="(item, index) in currentResourceList" :key="index" class="resource-item">
+                        <div class="resource-item-icon">
+                          <i :class="getResourceIcon(currentResourceType)"></i>
+                        </div>
+                        <div class="resource-item-content">
+                          <div class="resource-item-title">{{ item.title || item.name }}</div>
+                          <div class="resource-item-meta">
+                            <span v-if="item.createTime">{{ parseTime(item.createTime) }}</span>
+                            <span v-if="item.status === 1" class="status-tag success">已发布</span>
+                            <span v-else-if="item.status === 0" class="status-tag draft">草稿</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -564,6 +644,7 @@ import { getKnowledgePoint, delKnowledgePoint, updateKnowledgePoint, generateKpD
 import { listSectionKpByKp } from "@/api/course/sectionKp";
 import { listKpRelation } from "@/api/course/kpRelation";
 import { getSection } from "@/api/course/section";
+import { getAssignmentsByKnowledgePoint } from "@/api/system/assignment";
 import * as echarts from 'echarts';
 import { marked } from 'marked';
 import katex from 'katex';
@@ -677,7 +758,21 @@ export default {
           { required: true, message: '请选择难度等级', trigger: 'change' }
         ]
       },
-      availableSections: []  // 可选的小节列表
+      availableSections: [],  // 可选的小节列表
+      
+      // 知识点资源相关
+      kpResourceStats: {
+        assignments: 0,
+        tests: 0,
+        exams: 0,
+        learningMaterials: 0,
+        materials: 0,
+        activities: 0
+      },
+      currentResourceType: null,  // 当前查看的资源类型
+      currentResourceList: [],  // 当前资源列表
+      loadingResources: false,  // 资源加载状态
+      loadingResourceStats: false  // 资源统计加载状态
     };
   },
   created() {
@@ -686,6 +781,7 @@ export default {
       this.getKpDetail();
       this.getRelatedSections();
       this.getKpRelations();
+      this.loadKpResourceStats();  // 加载资源统计
     } else {
       this.$message.error('知识点ID不存在');
       this.goBack();
@@ -2119,6 +2215,113 @@ export default {
         'counterexample_of': 'danger'
       };
       return typeMap[relationType] || 'info';
+    },
+    
+    /** 加载知识点资源统计 */
+    async loadKpResourceStats() {
+      this.loadingResourceStats = true;
+      try {
+        const response = await getAssignmentsByKnowledgePoint(this.kpId);
+        if (response && response.data) {
+          const assignments = response.data;
+          
+          // 统计各类型资源
+          this.kpResourceStats.exams = assignments.filter(item => item.type === 'exam').length;
+          this.kpResourceStats.assignments = assignments.filter(
+            item => item.type === 'homework' && item.mode !== 'question'
+          ).length;
+          this.kpResourceStats.tests = assignments.filter(
+            item => item.type === 'homework' && item.mode === 'question'
+          ).length;
+          
+          // 其他资源类型暂时为0
+          this.kpResourceStats.learningMaterials = 0;
+          this.kpResourceStats.materials = 0;
+          this.kpResourceStats.activities = 0;
+        }
+      } catch (error) {
+        console.error('加载资源统计失败:', error);
+      } finally {
+        this.loadingResourceStats = false;
+      }
+    },
+    
+    /** 查看资源详情 */
+    async viewResourceDetail(resourceType) {
+      this.currentResourceType = resourceType;
+      this.currentResourceList = [];
+      
+      // 对于作业、考试、测验，从后端API获取
+      if (['assignments', 'tests', 'exams'].includes(resourceType)) {
+        await this.loadResourcesByType(resourceType);
+      } else {
+        // 其他资源类型暂时显示空列表
+        this.currentResourceList = [];
+      }
+    },
+    
+    /** 根据类型加载资源 */
+    async loadResourcesByType(resourceType) {
+      this.loadingResources = true;
+      try {
+        const response = await getAssignmentsByKnowledgePoint(this.kpId);
+        if (response && response.data) {
+          const assignments = response.data;
+          
+          // 根据资源类型过滤
+          if (resourceType === 'exams') {
+            this.currentResourceList = assignments.filter(item => item.type === 'exam');
+          } else if (resourceType === 'assignments') {
+            this.currentResourceList = assignments.filter(
+              item => item.type === 'homework' && item.mode !== 'question'
+            );
+          } else if (resourceType === 'tests') {
+            this.currentResourceList = assignments.filter(
+              item => item.type === 'homework' && item.mode === 'question'
+            );
+          }
+        } else {
+          this.currentResourceList = [];
+        }
+      } catch (error) {
+        console.error('加载资源失败:', error);
+        this.$message.error('加载资源失败：' + (error.message || '未知错误'));
+        this.currentResourceList = [];
+      } finally {
+        this.loadingResources = false;
+      }
+    },
+    
+    /** 返回资源统计 */
+    backToResourceStats() {
+      this.currentResourceType = null;
+      this.currentResourceList = [];
+    },
+    
+    /** 获取资源类型名称 */
+    getResourceTypeName(resourceType) {
+      const typeNames = {
+        learningMaterials: '题库',
+        materials: '资料',
+        activities: '视频',
+        assignments: '作业',
+        tests: '测验',
+        exams: '考试'
+      };
+      return typeNames[resourceType] || '资源';
+    },
+    
+    /** 获取资源图标 */
+    getResourceIcon(resourceType) {
+      const icons = {
+        learningMaterials: 'el-icon-reading',
+        materials: 'el-icon-document',
+        activities: 'el-icon-video-camera',
+        assignments: 'el-icon-edit-outline',
+        tests: 'el-icon-medal',
+        exams: 'el-icon-tickets'
+      };
+      return icons[resourceType] || 'el-icon-document';
     }
   }
 };
@@ -2658,6 +2861,159 @@ export default {
           .empty-text {
             color: #909399;
             font-style: italic;
+          }
+        }
+      }
+      
+      // 资源模块样式
+      .resources-section {
+        .section-content {
+          padding-left: 0;
+        }
+        
+        .resource-stats {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 12px;
+
+          .stat-item {
+            display: flex;
+            align-items: center;
+            padding: 16px;
+            background: #fff;
+            border: 1px solid #e4e7ed;
+            border-radius: 8px;
+            transition: all 0.3s;
+            cursor: pointer;
+
+            &:hover {
+              box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+              transform: translateY(-2px);
+              border-color: #409EFF;
+            }
+
+            .stat-icon {
+              font-size: 28px;
+              margin-right: 12px;
+            }
+
+            .stat-content {
+              flex: 1;
+
+              .stat-value {
+                font-size: 24px;
+                font-weight: bold;
+                color: #303133;
+                line-height: 1;
+                margin-bottom: 4px;
+              }
+
+              .stat-label {
+                font-size: 12px;
+                color: #909399;
+              }
+            }
+          }
+        }
+        
+        .resource-detail-view {
+          .resource-detail-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e4e7ed;
+            
+            .back-btn {
+              padding: 0;
+              font-size: 14px;
+              margin-right: 12px;
+              
+              &:hover {
+                color: #409EFF;
+              }
+            }
+            
+            .resource-type-title {
+              font-size: 16px;
+              font-weight: bold;
+              color: #303133;
+            }
+          }
+          
+          .resource-list {
+            .empty-resource {
+              text-align: center;
+              padding: 40px 0;
+              color: #909399;
+              
+              i {
+                font-size: 48px;
+                margin-bottom: 12px;
+                display: block;
+              }
+              
+              p {
+                margin: 0;
+                font-size: 14px;
+              }
+            }
+            
+            .resource-item {
+              display: flex;
+              align-items: center;
+              padding: 14px;
+              background: #fff;
+              border: 1px solid #e4e7ed;
+              border-radius: 8px;
+              margin-bottom: 12px;
+              transition: all 0.3s;
+              
+              &:hover {
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+                border-color: #c0c4cc;
+              }
+              
+              .resource-item-icon {
+                font-size: 24px;
+                color: #409EFF;
+                margin-right: 12px;
+              }
+              
+              .resource-item-content {
+                flex: 1;
+                
+                .resource-item-title {
+                  font-size: 14px;
+                  font-weight: 500;
+                  color: #303133;
+                  margin-bottom: 4px;
+                }
+                
+                .resource-item-meta {
+                  font-size: 12px;
+                  color: #909399;
+                  
+                  .status-tag {
+                    display: inline-block;
+                    padding: 2px 8px;
+                    border-radius: 4px;
+                    margin-left: 8px;
+                    font-size: 12px;
+                    
+                    &.success {
+                      background: #f0f9ff;
+                      color: #67C23A;
+                    }
+                    
+                    &.draft {
+                      background: #f4f4f5;
+                      color: #909399;
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }

@@ -29,23 +29,52 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </select>
 
     <select id="selectKnowledgePointList" parameterType="KnowledgePoint" resultMap="KnowledgePointResult">
-        <include refid="selectKnowledgePointVo"/>
-        <where>
-            is_deleted = 0
-            <if test="courseId != null">
-                AND course_id = #{courseId}
-            </if>
-            <if test="title != null and title != ''">
-                AND title like concat('%', #{title}, '%')
-            </if>
-            <if test="level != null and level != ''">
-                AND level = #{level}
-            </if>
-            <if test="creatorUserId != null">
-                AND creator_user_id = #{creatorUserId}
-            </if>
-        </where>
-        order by create_time desc
+        <choose>
+            <!-- 如果指定了 sectionId，需要通过 section_kp 关联表查询 -->
+            <when test="sectionId != null">
+                select kp.id, kp.course_id, kp.title, kp.description, kp.level, kp.creator_user_id,
+                       kp.create_time, kp.update_time, kp.is_deleted, kp.delete_time
+                from knowledge_point kp
+                inner join section_kp skp on kp.id = skp.kp_id
+                <where>
+                    kp.is_deleted = 0
+                    AND skp.section_id = #{sectionId}
+                    <if test="courseId != null">
+                        AND kp.course_id = #{courseId}
+                    </if>
+                    <if test="title != null and title != ''">
+                        AND kp.title like concat('%', #{title}, '%')
+                    </if>
+                    <if test="level != null and level != ''">
+                        AND kp.level = #{level}
+                    </if>
+                    <if test="creatorUserId != null">
+                        AND kp.creator_user_id = #{creatorUserId}
+                    </if>
+                </where>
+                order by kp.create_time desc
+            </when>
+            <!-- 否则直接查询 knowledge_point 表 -->
+            <otherwise>
+                <include refid="selectKnowledgePointVo"/>
+                <where>
+                    is_deleted = 0
+                    <if test="courseId != null">
+                        AND course_id = #{courseId}
+                    </if>
+                    <if test="title != null and title != ''">
+                        AND title like concat('%', #{title}, '%')
+                    </if>
+                    <if test="level != null and level != ''">
+                        AND level = #{level}
+                    </if>
+                    <if test="creatorUserId != null">
+                        AND creator_user_id = #{creatorUserId}
+                    </if>
+                </where>
+                order by create_time desc
+            </otherwise>
+        </choose>
     </select>
 
     <select id="selectKnowledgePointListByCourseId" parameterType="Long" resultMap="KnowledgePointResult">

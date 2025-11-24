@@ -55,6 +55,9 @@ public class KnowledgePoint extends BaseEntity
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private Date deleteTime;
 
+    /** 查询参数：所属小节ID（用于筛选） */
+    private Long sectionId;
+
     public Long getId() {
         return id;
     }
@@ -133,6 +136,14 @@ public class KnowledgePoint extends BaseEntity
 
     public void setDeleteTime(Date deleteTime) {
         this.deleteTime = deleteTime;
+    }
+
+    public Long getSectionId() {
+        return sectionId;
+    }
+
+    public void setSectionId(Long sectionId) {
+        this.sectionId = sectionId;
     }
 
     @Override
