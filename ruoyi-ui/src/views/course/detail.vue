@@ -980,6 +980,7 @@
       :visible="homeworkDialogVisible"
       :edit-data="editHomeworkData"
       :hide-course-select="true"
+      :hide-knowledge-points="true"
       :course-id="courseId"
       @close="homeworkDialogVisible = false"
       @submit="handleHomeworkSubmit"
@@ -4004,22 +4005,25 @@ export default {
     /** 查看资源 */
     handleViewResource(item) {
       console.log('[资源] 查看资源:', item);
-      // 根据资源类型跳转到对应的详情页
-      if (item.id) {
-        if (item.type === 'exam') {
-          // 考试详情
-          this.$router.push({
-            path: '/assignment/exam/detail',
-            query: { id: item.id }
-          });
-        } else if (item.type === 'homework') {
-          // 作业/测验详情
-          this.$router.push({
-            path: '/assignment/homework/detail',
-            query: { id: item.id }
-          });
+      // 切换到任务管理标签页
+      this.activeTab = 'tasks';
+      // 等待DOM更新后，滚动到对应的任务
+      this.$nextTick(() => {
+        // 设置任务类型筛选
+        if (this.$refs.homeworkManagement || this.$refs.examManagement) {
+          if (item.type === 'exam') {
+            // 切换到考试标签
+            if (this.$refs.examManagement) {
+              this.$refs.examManagement.currentTaskType = 'exam';
+            }
+          } else if (item.type === 'homework') {
+            // 切换到作业标签
+            if (this.$refs.homeworkManagement) {
+              this.$refs.homeworkManagement.currentTaskType = 'homework';
+            }
+          }
         }
-      }
+      });
     },
     
     /** 修改资源 */

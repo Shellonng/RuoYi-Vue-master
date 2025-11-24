@@ -2381,20 +2381,18 @@ export default {
     /** 查看资源 */
     handleViewResource(item) {
       console.log('[资源] 查看资源:', item);
-      if (item.id) {
-        if (item.type === 'exam') {
-          // 考试详情
-          this.$router.push({
-            path: '/assignment/exam/detail',
-            query: { id: item.id }
-          });
-        } else if (item.type === 'homework') {
-          // 作业/测验详情
-          this.$router.push({
-            path: '/assignment/homework/detail',
-            query: { id: item.id }
-          });
-        }
+      // 跳转到课程详情页的任务管理标签
+      if (this.kpData.courseId && item.id) {
+        this.$router.push({
+          path: `/detail/${this.kpData.courseId}`,
+          query: { 
+            tab: 'tasks',
+            taskType: item.type === 'exam' ? 'exam' : 'homework',
+            viewId: item.id
+          }
+        });
+      } else {
+        this.$message.warning('无法获取课程信息');
       }
     },
     

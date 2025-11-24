@@ -1,6 +1,6 @@
 <template>
   <div>
-    <el-dialog :visible="visible" @open="onOpen" @close="onClose" :title="editData ? '修改考试' : '添加考试'" append-to-body>
+    <el-dialog :visible="visible" @open="onOpen" @close="onClose" :title="editData ? '修改考试' : '添加考试'" append-to-body width="40%">
       <el-form ref="elForm" :model="formData" :rules="rules" size="small" label-width="100px">
         <el-form-item label="考试标题" prop="field101">
           <el-input v-model="formData.field101" placeholder="请输入考试标题" clearable :style="{width: '100%'}">
