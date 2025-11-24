@@ -146,6 +146,16 @@ export default {
         }
       },
       immediate: true
+    },
+    // 监听 editData 变化
+    editData: {
+      handler(newVal) {
+        if (newVal && this.visible) {
+          console.log('editData变化，重新加载数据:', newVal);
+          this.loadEditData();
+        }
+      },
+      deep: true
     }
   },
   created() {},

@@ -433,6 +433,25 @@
                             <span v-else-if="item.status === 0" class="status-tag draft">草稿</span>
                           </div>
                         </div>
+                        <div class="resource-item-actions">
+                          <el-tooltip content="查看" placement="top">
+                            <el-button type="text" icon="el-icon-view" size="small" @click="handleViewResource(item)" />
+                          </el-tooltip>
+                          <el-tooltip content="修改" placement="top">
+                            <el-button type="text" icon="el-icon-edit" size="small" @click="handleEditResource(item)" />
+                          </el-tooltip>
+                          <el-tooltip :content="item.status === 1 ? '取消发布' : '发布'" placement="top">
+                            <el-button 
+                              type="text" 
+                              :icon="item.status === 1 ? 'el-icon-close' : 'el-icon-check'" 
+                              size="small" 
+                              :style="{ color: item.status === 1 ? '#F56C6C' : '#67C23A' }"
+                              @click="handlePublishResource(item)" />
+                          </el-tooltip>
+                          <el-tooltip content="删除" placement="top">
+                            <el-button type="text" icon="el-icon-delete" size="small" style="color: #F56C6C;" @click="handleDeleteResource(item)" />
+                          </el-tooltip>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -636,6 +655,29 @@
         <el-button type="primary" @click="handleSaveKpInfo" :loading="kpFormSaving">确 定</el-button>
       </div>
     </el-dialog>
+
+    <!-- 作业弹窗 -->
+    <HomeworkDialog
+      v-if="homeworkDialogVisible"
+      :visible="homeworkDialogVisible"
+      :edit-data="editHomeworkData"
+      :course-id="kpData.courseId"
+      :hide-course-select="true"
+      :hide-knowledge-points="true"
+      @submit="handleHomeworkSubmit"
+      @close="homeworkDialogVisible = false"
+    />
+
+    <!-- 考试弹窗 -->
+    <ExamDialog
+      v-if="examDialogVisible"
+      :visible="examDialogVisible"
+      :edit-data="editExamData"
+      :course-id="kpData.courseId"
+      :hide-course-select="true"
+      @submit="handleExamSubmit"
+      @close="examDialogVisible = false"
+    />
   </div>
 </template>
 
@@ -644,7 +686,9 @@ import { getKnowledgePoint, delKnowledgePoint, updateKnowledgePoint, generateKpD
 import { listSectionKpByKp } from "@/api/course/sectionKp";
 import { listKpRelation } from "@/api/course/kpRelation";
 import { getSection } from "@/api/course/section";
-import { getAssignmentsByKnowledgePoint } from "@/api/system/assignment";
+import { getAssignmentsByKnowledgePoint, getAssignment, addAssignment, updateAssignment, delAssignment } from "@/api/system/assignment";
+import HomeworkDialog from "@/views/assignment/homework.vue";
+import ExamDialog from "@/views/assignment/exam.vue";
 import * as echarts from 'echarts';
 import { marked } from 'marked';
 import katex from 'katex';
@@ -654,6 +698,10 @@ import 'highlight.js/styles/github.css';
 
 export default {
   name: "KnowledgePointDetail",
+  components: {
+    HomeworkDialog,
+    ExamDialog
+  },
   computed: {
     // 实时渲染的内容：编辑时显示 editableDescription，非编辑时显示 kpData.description
     displayContent() {
@@ -772,7 +820,13 @@ export default {
       currentResourceType: null,  // 当前查看的资源类型
       currentResourceList: [],  // 当前资源列表
       loadingResources: false,  // 资源加载状态
-      loadingResourceStats: false  // 资源统计加载状态
+      loadingResourceStats: false,  // 资源统计加载状态
+      
+      // 对话框相关
+      homeworkDialogVisible: false,
+      editHomeworkData: null,
+      examDialogVisible: false,
+      editExamData: null
     };
   },
   created() {
@@ -2322,6 +2376,178 @@ export default {
         exams: 'el-icon-tickets'
       };
       return icons[resourceType] || 'el-icon-document';
+    },
+    
+    /** 查看资源 */
+    handleViewResource(item) {
+      console.log('[资源] 查看资源:', item);
+      if (item.id) {
+        if (item.type === 'exam') {
+          // 考试详情
+          this.$router.push({
+            path: '/assignment/exam/detail',
+            query: { id: item.id }
+          });
+        } else if (item.type === 'homework') {
+          // 作业/测验详情
+          this.$router.push({
+            path: '/assignment/homework/detail',
+            query: { id: item.id }
+          });
+        }
+      }
+    },
+    
+    /** 修改资源 */
+    handleEditResource(item) {
+      console.log('[资源] 修改资源:', item);
+      // 获取资源详情并打开对应的编辑弹窗
+      getAssignment(item.id).then(response => {
+        console.log('[资源] API响应:', response);
+        const assignmentData = response.data || response;
+        console.log('[资源] 任务数据:', assignmentData);
+        
+        if (item.type === 'exam') {
+          this.editExamData = assignmentData;
+          console.log('[资源] 打开考试对话框，数据:', this.editExamData);
+          this.examDialogVisible = true;
+        } else {
+          this.editHomeworkData = assignmentData;
+          console.log('[资源] 打开作业对话框，数据:', this.editHomeworkData);
+          this.homeworkDialogVisible = true;
+        }
+      }).catch(error => {
+        console.error('[资源] 获取资源详情失败:', error);
+        this.$message.error('获取资源详情失败：' + (error.msg || error.message));
+      });
+    },
+    
+    /** 发布资源 */
+    handlePublishResource(item) {
+      console.log('[资源] 发布资源:', item);
+      const newStatus = item.status === 1 ? 0 : 1;
+      const statusText = newStatus === 1 ? '发布' : '取消发布';
+      
+      this.$confirm(`确认${statusText}该资源"${item.title}"吗？`, '提示', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }).then(() => {
+        const data = { ...item, status: newStatus };
+        return updateAssignment(data);
+      }).then(() => {
+        this.$message.success(`${statusText}成功`);
+        // 更新本地状态
+        item.status = newStatus;
+        // 重新加载资源列表
+        this.viewResourceDetail(this.currentResourceType);
+        // 重新加载资源统计
+        this.loadKpResourceStats();
+      }).catch(() => {});
+    },
+    
+    /** 删除资源 */
+    handleDeleteResource(item) {
+      console.log('[资源] 删除资源:', item);
+      this.$confirm(`是否确认删除资源"${item.title}"？删除后无法恢复！`, '警告', {
+        confirmButtonText: '确定删除',
+        cancelButtonText: '取消',
+        type: 'error'
+      }).then(() => {
+        return delAssignment(item.id);
+      }).then(() => {
+        this.$message.success('删除成功');
+        // 重新加载资源列表
+        this.viewResourceDetail(this.currentResourceType);
+        // 重新加载资源统计
+        this.loadKpResourceStats();
+      }).catch(() => {});
+    },
+
+    /** 处理作业提交 */
+    handleHomeworkSubmit(data, selectedKpIds) {
+      console.log('[资源] 作业提交:', data, '知识点IDs:', selectedKpIds);
+      
+      // 添加当前用户ID作为发布者ID
+      data.publisherUserId = this.$store.state.user.id;
+      
+      // 根据是否包含id字段判断是新增还是修改
+      if (data.id) {
+        // 修改操作
+        updateAssignment(data).then(response => {
+          console.log('[资源] 修改成功:', response);
+          this.$message.success('修改成功');
+          this.homeworkDialogVisible = false;
+          // 重新加载资源列表
+          if (this.currentResourceType) {
+            this.viewResourceDetail(this.currentResourceType);
+          }
+          // 重新加载资源统计
+          this.loadKpResourceStats();
+        }).catch(error => {
+          console.error('[资源] 修改失败:', error);
+          this.$message.error('修改失败：' + (error.msg || error.message || '未知错误'));
+        });
+      } else {
+        // 新增操作
+        addAssignment(data).then(response => {
+          console.log('[资源] 添加成功:', response);
+          this.$message.success('添加成功');
+          this.homeworkDialogVisible = false;
+          // 重新加载资源列表
+          if (this.currentResourceType) {
+            this.viewResourceDetail(this.currentResourceType);
+          }
+          // 重新加载资源统计
+          this.loadKpResourceStats();
+        }).catch(error => {
+          console.error('[资源] 添加失败:', error);
+          this.$message.error('添加失败：' + (error.msg || error.message || '未知错误'));
+        });
+      }
+    },
+
+    /** 处理考试提交 */
+    handleExamSubmit(data, selectedKpIds) {
+      console.log('[资源] 考试提交:', data, '知识点IDs:', selectedKpIds);
+      
+      // 添加当前用户ID作为发布者ID
+      data.publisherUserId = this.$store.state.user.id;
+      
+      // 根据是否包含id字段判断是新增还是修改
+      if (data.id) {
+        // 修改操作
+        updateAssignment(data).then(response => {
+          console.log('[资源] 修改成功:', response);
+          this.$message.success('修改成功');
+          this.examDialogVisible = false;
+          // 重新加载资源列表
+          if (this.currentResourceType) {
+            this.viewResourceDetail(this.currentResourceType);
+          }
+          // 重新加载资源统计
+          this.loadKpResourceStats();
+        }).catch(error => {
+          console.error('[资源] 修改失败:', error);
+          this.$message.error('修改失败：' + (error.msg || error.message || '未知错误'));
+        });
+      } else {
+        // 新增操作
+        addAssignment(data).then(response => {
+          console.log('[资源] 添加成功:', response);
+          this.$message.success('添加成功');
+          this.examDialogVisible = false;
+          // 重新加载资源列表
+          if (this.currentResourceType) {
+            this.viewResourceDetail(this.currentResourceType);
+          }
+          // 重新加载资源统计
+          this.loadKpResourceStats();
+        }).catch(error => {
+          console.error('[资源] 添加失败:', error);
+          this.$message.error('添加失败：' + (error.msg || error.message || '未知错误'));
+        });
+      }
     }
   }
 };
@@ -3010,6 +3236,22 @@ export default {
                       background: #f4f4f5;
                       color: #909399;
                     }
+                  }
+                }
+              }
+              
+              .resource-item-actions {
+                margin-left: 12px;
+                display: flex;
+                gap: 4px;
+                flex-shrink: 0;
+                
+                .el-button {
+                  padding: 5px 8px;
+                  font-size: 12px;
+                  
+                  &:hover {
+                    background-color: #f5f7fa;
                   }
                 }
               }

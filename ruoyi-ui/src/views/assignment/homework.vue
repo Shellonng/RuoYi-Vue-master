@@ -30,7 +30,7 @@
         <el-form-item label="总分" prop="field109">
           <el-input-number v-model="formData.field109" placeholder="总分"></el-input-number>
         </el-form-item>
-        <el-form-item label="关联知识点" prop="knowledgePoints">
+        <el-form-item v-if="!hideKnowledgePoints" label="关联知识点" prop="knowledgePoints">
           <knowledge-point-selector
             v-model="selectedKpIds"
             :available-kps="availableKps"
@@ -85,6 +85,10 @@ export default {
     courseId: {
       type: [Number, String],
       default: null
+    },
+    hideKnowledgePoints: {
+      type: Boolean,
+      default: false
     }
   },
   data() {
@@ -178,6 +182,16 @@ export default {
         }
       },
       immediate: true
+    },
+    // 监听 editData 变化
+    editData: {
+      handler(newVal) {
+        if (newVal && this.visible) {
+          console.log('editData变化，重新加载数据:', newVal);
+          this.loadEditData();
+        }
+      },
+      deep: true
     },
     // 监听课程选择变化，加载对应的知识点列表
     'formData.field105': {

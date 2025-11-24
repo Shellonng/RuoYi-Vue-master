@@ -611,7 +611,23 @@
                     </div>
                   </div>
                   <div class="resource-item-actions">
-                    <el-button type="text" size="small" @click="viewResourceItem(item)">查看</el-button>
+                    <el-tooltip content="查看" placement="top">
+                      <el-button type="text" icon="el-icon-view" size="small" @click="handleViewResource(item)" />
+                    </el-tooltip>
+                    <el-tooltip content="修改" placement="top">
+                      <el-button type="text" icon="el-icon-edit" size="small" @click="handleEditResource(item)" />
+                    </el-tooltip>
+                    <el-tooltip :content="item.status === 1 ? '取消发布' : '发布'" placement="top">
+                      <el-button 
+                        type="text" 
+                        :icon="item.status === 1 ? 'el-icon-close' : 'el-icon-check'" 
+                        size="small" 
+                        :style="{ color: item.status === 1 ? '#F56C6C' : '#67C23A' }"
+                        @click="handlePublishResource(item)" />
+                    </el-tooltip>
+                    <el-tooltip content="删除" placement="top">
+                      <el-button type="text" icon="el-icon-delete" size="small" style="color: #F56C6C;" @click="handleDeleteResource(item)" />
+                    </el-tooltip>
                   </div>
                 </div>
               </div>
@@ -958,6 +974,26 @@
         </el-button>
       </div>
     </el-dialog>
+
+    <!-- 作业编辑对话框 -->
+    <homework-dialog
+      :visible="homeworkDialogVisible"
+      :edit-data="editHomeworkData"
+      :hide-course-select="true"
+      :course-id="courseId"
+      @close="homeworkDialogVisible = false"
+      @submit="handleHomeworkSubmit"
+    />
+
+    <!-- 考试编辑对话框 -->
+    <exam-dialog
+      :visible="examDialogVisible"
+      :edit-data="editExamData"
+      :hide-course-select="true"
+      :course-id="courseId"
+      @close="examDialogVisible = false"
+      @submit="handleExamSubmit"
+    />
   </div>
 </template>
 
@@ -968,9 +1004,11 @@ import { listSectionByChapter, addSection, updateSection, delSection } from "@/a
 import { listKnowledgePointBySection } from "@/api/course/knowledgePoint";
 import { uploadAndGenerate } from "@/api/course/generation";
 import { generateKnowledgeGraph, listKpRelationByCourse } from "@/api/course/kpRelation";
-import { getAssignmentsByKnowledgePoint } from "@/api/system/assignment";
+import { getAssignmentsByKnowledgePoint, getAssignment, updateAssignment, delAssignment } from "@/api/system/assignment";
 import ExamManagement from "@/views/assignment/exam/index.vue";
 import HomeworkManagement from "@/views/assignment/homework/index.vue";
+import HomeworkDialog from "@/views/assignment/homework.vue";
+import ExamDialog from "@/views/assignment/exam.vue";
 import KnowledgePoint from "@/views/knowledgepoint/index.vue";
 import Discussion from "@/views/discussion/index.vue";
 import Sortable from 'sortablejs';
@@ -982,6 +1020,8 @@ export default {
   components: {
     ExamManagement,
     HomeworkManagement,
+    HomeworkDialog,
+    ExamDialog,
     KnowledgePoint,
     Discussion
   },
@@ -1111,6 +1151,11 @@ export default {
       currentResourceList: [], // 当前资源列表数据
       loadingResources: false, // 资源加载状态
       loadingResourceStats: false, // 资源统计加载状态
+      // 作业/考试编辑对话框
+      homeworkDialogVisible: false, // 作业编辑对话框显示状态
+      editHomeworkData: null, // 编辑的作业数据
+      examDialogVisible: false, // 考试编辑对话框显示状态
+      editExamData: null, // 编辑的考试数据
     };
   },
   created() {
@@ -3956,6 +4001,121 @@ export default {
       // 这里可以添加跳转到资源详情页的逻辑
     },
     
+    /** 查看资源 */
+    handleViewResource(item) {
+      console.log('[资源] 查看资源:', item);
+      // 根据资源类型跳转到对应的详情页
+      if (item.id) {
+        if (item.type === 'exam') {
+          // 考试详情
+          this.$router.push({
+            path: '/assignment/exam/detail',
+            query: { id: item.id }
+          });
+        } else if (item.type === 'homework') {
+          // 作业/测验详情
+          this.$router.push({
+            path: '/assignment/homework/detail',
+            query: { id: item.id }
+          });
+        }
+      }
+    },
+    
+    /** 修改资源 */
+    handleEditResource(item) {
+      console.log('[资源] 修改资源:', item);
+      // 获取资源详情并打开编辑对话框
+      getAssignment(item.id).then(response => {
+        console.log('[资源] API响应:', response);
+        const assignmentData = response.data || response;
+        console.log('[资源] 任务数据:', assignmentData);
+        
+        if (item.type === 'exam') {
+          // 考试
+          this.editExamData = assignmentData;
+          console.log('[资源] 打开考试对话框，数据:', this.editExamData);
+          this.examDialogVisible = true;
+        } else if (item.type === 'homework') {
+          // 作业
+          this.editHomeworkData = assignmentData;
+          console.log('[资源] 打开作业对话框，数据:', this.editHomeworkData);
+          this.homeworkDialogVisible = true;
+        }
+      }).catch(error => {
+        console.error('[资源] 获取资源详情失败:', error);
+        this.$message.error('获取资源详情失败：' + (error.msg || error.message));
+      });
+    },
+    
+    /** 作业提交处理 */
+    handleHomeworkSubmit(data, selectedKpIds) {
+      console.log('[资源] 作业提交:', data);
+      // 调用作业管理组件的提交方法
+      if (this.$refs.homeworkManagement) {
+        this.$refs.homeworkManagement.handleAssignmentSubmit(data, selectedKpIds);
+      }
+      // 关闭对话框
+      this.homeworkDialogVisible = false;
+      // 重新加载资源列表
+      if (this.currentResourceType) {
+        this.viewResourceDetail(this.currentResourceType);
+      }
+    },
+    
+    /** 考试提交处理 */
+    handleExamSubmit(data, selectedKpIds) {
+      console.log('[资源] 考试提交:', data);
+      // 调用考试管理组件的提交方法
+      if (this.$refs.examManagement) {
+        this.$refs.examManagement.handleAssignmentSubmit(data, selectedKpIds);
+      }
+      // 关闭对话框
+      this.examDialogVisible = false;
+      // 重新加载资源列表
+      if (this.currentResourceType) {
+        this.viewResourceDetail(this.currentResourceType);
+      }
+    },
+    
+    /** 发布资源 */
+    handlePublishResource(item) {
+      console.log('[资源] 发布资源:', item);
+      const newStatus = item.status === 1 ? 0 : 1;
+      const statusText = newStatus === 1 ? '发布' : '取消发布';
+      
+      this.$confirm(`确认${statusText}该资源"${item.title}"吗？`, '提示', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }).then(() => {
+        const data = { ...item, status: newStatus };
+        return updateAssignment(data);
+      }).then(() => {
+        this.$message.success(`${statusText}成功`);
+        // 更新本地状态
+        item.status = newStatus;
+        // 重新加载资源列表
+        this.viewResourceDetail(this.currentResourceType);
+      }).catch(() => {});
+    },
+    
+    /** 删除资源 */
+    handleDeleteResource(item) {
+      console.log('[资源] 删除资源:', item);
+      this.$confirm(`是否确认删除资源"${item.title}"？删除后无法恢复！`, '警告', {
+        confirmButtonText: '确定删除',
+        cancelButtonText: '取消',
+        type: 'error'
+      }).then(() => {
+        return delAssignment(item.id);
+      }).then(() => {
+        this.$message.success('删除成功');
+        // 重新加载资源列表
+        this.viewResourceDetail(this.currentResourceType);
+      }).catch(() => {});
+    },
+    
     /** 知识点分页切换 */
     handleKnowledgePageChange(page) {
       this.knowledgePointsCurrentPage = page;
@@ -6728,6 +6888,18 @@ body > .el-drawer__wrapper {
         
         .resource-item-actions {
           margin-left: 12px;
+          display: flex;
+          gap: 4px;
+          flex-shrink: 0;
+          
+          .el-button {
+            padding: 5px 8px;
+            font-size: 12px;
+            
+            &:hover {
+              background-color: #f5f7fa;
+            }
+          }
         }
       }
     }
