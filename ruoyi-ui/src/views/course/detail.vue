@@ -3347,6 +3347,27 @@ export default {
       
       this.knowledgePointsCurrentPage = 1; // 重置分页
       this.sectionDrawerVisible = true;
+      
+      // 同步到3D图谱 - 高亮对应的章节节点
+      if (this.graph3DInstance) {
+        const graphData = this.graph3DInstance.graphData();
+        const targetNode = graphData.nodes.find(n => 
+          n.type === 'chapter' && n.data && n.data.id === chapterId
+        );
+        
+        if (targetNode) {
+          // 高亮节点及其关系
+          this.highlight3DNode(targetNode);
+          
+          // 相机聚焦到节点
+          const distance = 200;
+          this.graph3DInstance.cameraPosition(
+            { x: targetNode.x, y: targetNode.y, z: targetNode.z + distance },
+            { x: targetNode.x, y: targetNode.y, z: targetNode.z },
+            1000
+          );
+        }
+      }
     },
     /** 处理小节节点点击 */
     handleSectionNodeClick(nodeData) {
@@ -3389,6 +3410,27 @@ export default {
         
         this.knowledgePointsCurrentPage = 1; // 重置分页
         this.sectionDrawerVisible = true;
+        
+        // 同步到3D图谱 - 高亮对应的小节节点
+        if (this.graph3DInstance) {
+          const graphData = this.graph3DInstance.graphData();
+          const targetNode = graphData.nodes.find(n => 
+            n.type === 'section' && n.data && n.data.id === sectionId
+          );
+          
+          if (targetNode) {
+            // 高亮节点及其关系
+            this.highlight3DNode(targetNode);
+            
+            // 相机聚焦到节点
+            const distance = 200;
+            this.graph3DInstance.cameraPosition(
+              { x: targetNode.x, y: targetNode.y, z: targetNode.z + distance },
+              { x: targetNode.x, y: targetNode.y, z: targetNode.z },
+              1000
+            );
+          }
+        }
       }
     },
     
@@ -3464,14 +3506,14 @@ export default {
     
     /** 查看资源详情 */
     async viewResourceDetail(resourceType) {
-      console.log('[抽屉] 查看资源详情:', resourceType);
+      console.log('[抽屉] 查看资源详情:', resourceType, 'selectedSection:', this.selectedSection);
       this.currentResourceType = resourceType;
       this.currentResourceList = [];
       
-      // 如果是知识点类型且有知识点数据
+      // 1. 知识点类型
       if (this.selectedSection && this.selectedSection.isKnowledgePoint && this.selectedSection.kpData) {
         const kpId = this.selectedSection.kpData.id;
-        console.log('[抽屉] 根据知识点ID加载资源:', kpId);
+        console.log('[抽屉] 知识点类型 - 根据知识点ID加载资源:', kpId);
         
         // 对于作业、考试、测验，从后端API获取
         if (['assignments', 'tests', 'exams'].includes(resourceType)) {
@@ -3480,8 +3522,30 @@ export default {
           // 其他资源类型使用模拟数据
           this.loadMockResourceData(resourceType);
         }
-      } else {
-        // 非知识点类型，使用模拟数据
+      }
+      // 2. 章节汇总类型
+      else if (this.selectedSection && this.selectedSection.isAggregate && this.selectedSection.aggregateType === 'chapter') {
+        console.log('[抽屉] 章节汇总类型 - 加载章节下所有小节的资源');
+        
+        if (['assignments', 'tests', 'exams'].includes(resourceType)) {
+          await this.loadAssignmentsByChapter(this.selectedSection, resourceType);
+        } else {
+          this.loadMockResourceData(resourceType);
+        }
+      }
+      // 3. 小节类型
+      else if (this.selectedSection && this.selectedSection.id && !this.selectedSection.isAggregate) {
+        console.log('[抽屉] 小节类型 - 加载小节下所有知识点的资源');
+        
+        if (['assignments', 'tests', 'exams'].includes(resourceType)) {
+          await this.loadAssignmentsBySection(this.selectedSection, resourceType);
+        } else {
+          this.loadMockResourceData(resourceType);
+        }
+      }
+      // 4. 其他类型，使用模拟数据
+      else {
+        console.log('[抽屉] 其他类型 - 使用模拟数据');
         this.loadMockResourceData(resourceType);
       }
     },
@@ -3655,8 +3719,11 @@ export default {
           }
           if (typeof point === 'object') {
             return {
+              ...point, // 先展开完整的知识点对象
+              id: point.id || point.pointId || point.kpId, // 确保ID字段存在
               name: point.name || point.title || JSON.stringify(point),
-              level: point.level ? this.getLevelChinese(point.level) : null
+              level: point.level ? this.getLevelChinese(point.level) : null, // 最后设置转换后的中文level,覆盖原始英文
+              description: point.description
             };
           }
           return { name: JSON.stringify(point), level: null };
@@ -4439,6 +4506,13 @@ export default {
       
       this.knowledgePointsCurrentPage = 1;
       this.sectionDrawerVisible = true;
+      
+      // 同步到2D图谱 - 高亮对应的章节节点
+      if (this.knowledgeGraphChart && this.originalGraphData) {
+        const nodeId = 'chapter-' + chapter.id;
+        // 高亮章节节点
+        this.highlightNodeAndRelated(nodeId, this.originalGraphData);
+      }
     },
 
     /** 显示3D图谱小节详情抽屉 */
@@ -4475,6 +4549,13 @@ export default {
       
       this.knowledgePointsCurrentPage = 1;
       this.sectionDrawerVisible = true;
+      
+      // 同步到2D图谱 - 高亮对应的小节节点并显示知识点
+      if (this.knowledgeGraphChart && this.originalGraphData) {
+        const nodeId = 'section-' + section.id;
+        // 高亮小节节点及其知识点
+        this.highlightNodeAndRelated(nodeId, this.originalGraphData);
+      }
     },
 
     /** 显示3D图谱知识点详情抽屉 */
@@ -4566,6 +4647,8 @@ export default {
         knowledgePoints: [kp],
         relatedKnowledgePoints: relatedKnowledgePoints,
         isKnowledgePointView: true, // 标记这是知识点视图
+        isKnowledgePoint: true, // 标记为知识点类型
+        kpData: kp, // 保存知识点数据
         learningMaterials: 0,
         materials: 0,
         activities: 0,
@@ -4660,9 +4743,19 @@ export default {
 
     /** 处理抽屉中知识点点击 */
     async handleDrawerKnowledgeClick(kp, from2DGraph = false) {
+      console.log('[抽屉] 知识点点击:', kp, 'from2DGraph:', from2DGraph);
+      
       // 重置当前资源类型，确保显示资源统计列表
       this.currentResourceType = null;
       this.currentResourceList = [];
+      
+      // 提取知识点ID(兼容多种ID字段名)
+      const kpId = kp.id || kp.pointId || kp.kpId;
+      if (!kpId) {
+        console.error('[抽屉] 知识点缺少ID:', kp);
+        this.$message.warning('知识点数据异常');
+        return;
+      }
       
       // 1. 更新抽屉内容(传递来源信息)
       const node = {
@@ -4677,10 +4770,11 @@ export default {
         // 在3D图谱中找到对应节点
         const graphData = this.graph3DInstance.graphData();
         const targetNode = graphData.nodes.find(n => 
-          n.type === 'knowledge' && n.data && n.data.id === kp.id
+          n.type === 'knowledge' && n.data && (n.data.id === kpId || n.data.pointId === kpId || n.data.kpId === kpId)
         );
         
         if (targetNode) {
+          console.log('[抽屉] 找到3D节点:', targetNode);
           // 高亮节点及其关系
           this.highlight3DNode(targetNode);
           
@@ -4691,6 +4785,8 @@ export default {
             { x: targetNode.x, y: targetNode.y, z: targetNode.z },
             1000
           );
+        } else {
+          console.warn('[抽屉] 未找到3D节点,kpId:', kpId);
         }
       }
       
@@ -4702,7 +4798,8 @@ export default {
           return;
         }
         
-        const nodeId = 'kp-' + kp.id;
+        const nodeId = 'kp-' + kpId;
+        console.log('[抽屉] 尝试在2D图谱中高亮节点:', nodeId);
         // 使用保存的原始数据
         this.highlightNodeAndRelated(nodeId, this.originalGraphData);
       }
@@ -5118,7 +5215,12 @@ export default {
       this.highlightNodeAndRelated(item.id, graphData);
       
       // 模拟节点点击，打开相应抽屉
-      if (item.id && item.id.startsWith('section-')) {
+      if (item.id && item.id.startsWith('kp-')) {
+        // 知识点节点 - 从nodeData中提取知识点对象
+        if (item.nodeData && item.nodeData.kpData) {
+          this.handleDrawerKnowledgeClick(item.nodeData.kpData, true); // 传true跳过2D图谱重复高亮
+        }
+      } else if (item.id && item.id.startsWith('section-')) {
         this.handleSectionNodeClick(item.nodeData);
       } else if (item.id && item.id.startsWith('chapter-')) {
         this.handleChapterNodeClick(item.nodeData);
