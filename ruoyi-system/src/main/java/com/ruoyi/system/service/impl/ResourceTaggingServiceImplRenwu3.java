@@ -217,6 +217,94 @@ public class ResourceTaggingServiceImplRenwu3 implements IResourceTaggingService
         }
     }
 
+    /**
+     * 创建新知识点并关联到资源
+     * 
+     * @param resourceId 资源ID
+     * @param courseId 课程ID
+     * @param kpTitle 知识点标题
+     * @param creatorUserId 创建者ID
+     * @return 新创建的知识点ID,失败返回null
+     */
+    @Transactional
+    public Long createAndLinkKnowledgePoint(Long resourceId, Long courseId, String kpTitle, Long creatorUserId)
+    {
+        try
+        {
+            log.info("【任务3】开始创建新知识点: {}", kpTitle);
+            
+            // 1. 创建知识点对象
+            KnowledgePointRenwu3 kp = new KnowledgePointRenwu3();
+            kp.setCourseId(courseId);
+            kp.setTitle(kpTitle);
+            kp.setDescription("由资源智能打标自动创建"); // 可以后续通过AI生成更详细的描述
+            kp.setLevel("BASIC"); // 默认基础级别
+            kp.setCreatorUserId(creatorUserId);
+            kp.setCreateTime(new Date());
+            kp.setIsDeleted(0);
+            
+            // 2. 插入数据库
+            int result = knowledgePointMapper.insertKnowledgePoint(kp);
+            if (result > 0 && kp.getId() != null)
+            {
+                log.info("【任务3】成功创建知识点，ID: {}, 标题: {}", kp.getId(), kpTitle);
+                
+                // 3. 创建资源-知识点关联
+                CourseResourceKpRenwu3 relation = new CourseResourceKpRenwu3();
+                relation.setResourceId(resourceId);
+                relation.setKpId(kp.getId());
+                relation.setIsConfirmed(1);
+                relation.setCreateTime(new Date());
+                courseResourceKpMapper.insertCourseResourceKp(relation);
+                
+                log.info("【任务3】成功关联资源ID: {} 和知识点ID: {}", resourceId, kp.getId());
+                return kp.getId();
+            }
+            
+            log.warn("【任务3】创建知识点失败");
+            return null;
+        }
+        catch (Exception e)
+        {
+            log.error("【任务3】创建知识点异常: {}", e.getMessage(), e);
+            throw new RuntimeException("创建知识点失败: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * 批量创建知识点并关联到资源
+     * 
+     * @param resourceId 资源ID
+     * @param courseId 课程ID
+     * @param kpTitles 知识点标题列表
+     * @param creatorUserId 创建者ID
+     * @return 创建成功的知识点ID列表
+     */
+    @Transactional
+    public List<Long> batchCreateAndLinkKnowledgePoints(Long resourceId, Long courseId, List<String> kpTitles, Long creatorUserId)
+    {
+        List<Long> createdIds = new ArrayList<>();
+        
+        for (String title : kpTitles)
+        {
+            try
+            {
+                Long kpId = createAndLinkKnowledgePoint(resourceId, courseId, title, creatorUserId);
+                if (kpId != null)
+                {
+                    createdIds.add(kpId);
+                }
+            }
+            catch (Exception e)
+            {
+                log.error("【任务3】批量创建知识点时出错，跳过: {}", title, e);
+            }
+        }
+        
+        log.info("【任务3】批量创建完成，成功创建{}个知识点", createdIds.size());
+        return createdIds;
+    }
+
     @Override
     public List<KnowledgePointRenwu3> getResourceKnowledgePoints(Long resourceId)
     {

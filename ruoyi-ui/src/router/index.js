@@ -87,19 +87,6 @@ export const constantRoutes = [
         meta: { title: '个人中心', icon: 'user' }
       }
     ]
-  },
-  {
-    path: '/system/resourceTaggingRenwu3',
-    component: Layout,
-    hidden: false,
-    children: [
-      {
-        path: '',
-        component: () => import('@/views/system/resourceTaggingRenwu3'),
-        name: 'ResourceTaggingRenwu3',
-        meta: { title: '资源智能打标', icon: 'education' }
-      }
-    ]
   }
 ]
 

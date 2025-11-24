@@ -46,4 +46,26 @@ public interface IResourceTaggingServiceRenwu3
      * @return 知识点列表
      */
     List<KnowledgePointRenwu3> getResourceKnowledgePoints(Long resourceId);
+    
+    /**
+     * 创建新知识点并关联到资源
+     * 
+     * @param resourceId 资源ID
+     * @param courseId 课程ID
+     * @param kpTitle 知识点标题
+     * @param creatorUserId 创建者ID
+     * @return 新创建的知识点ID
+     */
+    Long createAndLinkKnowledgePoint(Long resourceId, Long courseId, String kpTitle, Long creatorUserId);
+    
+    /**
+     * 批量创建知识点并关联到资源
+     * 
+     * @param resourceId 资源ID
+     * @param courseId 课程ID
+     * @param kpTitles 知识点标题列表
+     * @param creatorUserId 创建者ID
+     * @return 创建成功的知识点ID列表
+     */
+    List<Long> batchCreateAndLinkKnowledgePoints(Long resourceId, Long courseId, List<String> kpTitles, Long creatorUserId);
 }

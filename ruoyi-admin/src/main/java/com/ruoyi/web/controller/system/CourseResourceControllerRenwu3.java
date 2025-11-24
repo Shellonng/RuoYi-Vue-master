@@ -169,6 +169,57 @@ public class CourseResourceControllerRenwu3 extends BaseController
         return success(knowledgePoints);
     }
 
+    /**
+     * 创建新知识点并关联到资源
+     */
+    @Log(title = "创建知识点-任务3", businessType = BusinessType.INSERT)
+    @PostMapping("/createKnowledgePoint")
+    public AjaxResult createKnowledgePoint(
+        @RequestParam("resourceId") Long resourceId,
+        @RequestParam("courseId") Long courseId,
+        @RequestParam("kpTitle") String kpTitle
+    )
+    {
+        logger.info("【任务3】创建新知识点: resourceId={}, courseId={}, title={}", resourceId, courseId, kpTitle);
+        
+        Long creatorUserId = SecurityUtils.getUserId();
+        Long kpId = resourceTaggingService.createAndLinkKnowledgePoint(resourceId, courseId, kpTitle, creatorUserId);
+        
+        if (kpId != null)
+        {
+            AjaxResult result = success("知识点创建成功");
+            result.put("kpId", kpId);
+            return result;
+        }
+        else
+        {
+            return error("知识点创建失败");
+        }
+    }
+
+    /**
+     * 批量创建知识点并关联到资源
+     */
+    @Log(title = "批量创建知识点-任务3", businessType = BusinessType.INSERT)
+    @PostMapping("/batchCreateKnowledgePoints")
+    public AjaxResult batchCreateKnowledgePoints(
+        @RequestParam("resourceId") Long resourceId,
+        @RequestParam("courseId") Long courseId,
+        @RequestParam("kpTitles") List<String> kpTitles
+    )
+    {
+        logger.info("【任务3】批量创建知识点: resourceId={}, courseId={}, count={}", resourceId, courseId, kpTitles.size());
+        
+        Long creatorUserId = SecurityUtils.getUserId();
+        List<Long> createdIds = resourceTaggingService.batchCreateAndLinkKnowledgePoints(resourceId, courseId, kpTitles, creatorUserId);
+        
+        AjaxResult result = success("成功创建" + createdIds.size() + "个知识点");
+        result.put("createdIds", createdIds);
+        result.put("successCount", createdIds.size());
+        result.put("totalCount", kpTitles.size());
+        return result;
+    }
+
     @Log(title = "课程资源-任务3", businessType = BusinessType.INSERT)
     @PostMapping
     public AjaxResult add(@RequestBody CourseResourceRenwu3 courseResource)
