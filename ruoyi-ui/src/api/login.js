@@ -1,13 +1,12 @@
 import request from '@/utils/request'
 
 // 登录方法
-export function login(username, password, code, uuid, userType) {
+export function login(username, password, code, uuid) {
   const data = {
     username,
     password,
     code,
-    uuid,
-    userType
+    uuid
   }
   return request({
     url: '/login',
@@ -57,17 +56,5 @@ export function getCodeImg() {
     },
     method: 'get',
     timeout: 20000
-  })
-}
-
-// 验证用户同步状态
-export function verifySyncStatus(username) {
-  return request({
-    url: '/verifySyncStatus',
-    headers: {
-      isToken: false
-    },
-    method: 'get',
-    params: { username }
   })
 }

@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.CourseResourceKpMapperRenwu3">
+    
+    <resultMap type="com.ruoyi.system.domain.CourseResourceKpRenwu3" id="CourseResourceKpResult">
+        <result property="id"    column="id"    />
+        <result property="resourceId"    column="resource_id"    />
+        <result property="kpId"    column="kp_id"    />
+        <result property="isConfirmed"    column="is_confirmed"    />
+        <result property="createTime"    column="create_time"    />
+    </resultMap>
+
+    <sql id="selectCourseResourceKpVo">
+        select id, resource_id, kp_id, is_confirmed, create_time from course_resource_kp
+    </sql>
+
+    <select id="selectCourseResourceKpList" parameterType="com.ruoyi.system.domain.CourseResourceKpRenwu3" resultMap="CourseResourceKpResult">
+        <include refid="selectCourseResourceKpVo"/>
+        <where>  
+            <if test="resourceId != null "> and resource_id = #{resourceId}</if>
+            <if test="kpId != null "> and kp_id = #{kpId}</if>
+            <if test="isConfirmed != null "> and is_confirmed = #{isConfirmed}</if>
+        </where>
+    </select>
+    
+    <select id="selectCourseResourceKpById" parameterType="Long" resultMap="CourseResourceKpResult">
+        <include refid="selectCourseResourceKpVo"/>
+        where id = #{id}
+    </select>
+
+    <select id="selectKpIdsByResourceId" parameterType="Long" resultType="Long">
+        select kp_id from course_resource_kp where resource_id = #{resourceId}
+    </select>
+        
+    <insert id="insertCourseResourceKp" parameterType="com.ruoyi.system.domain.CourseResourceKpRenwu3" useGeneratedKeys="true" keyProperty="id">
+        insert into course_resource_kp
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="resourceId != null">resource_id,</if>
+            <if test="kpId != null">kp_id,</if>
+            <if test="isConfirmed != null">is_confirmed,</if>
+            <if test="createTime != null">create_time,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="resourceId != null">#{resourceId},</if>
+            <if test="kpId != null">#{kpId},</if>
+            <if test="isConfirmed != null">#{isConfirmed},</if>
+            <if test="createTime != null">#{createTime},</if>
+         </trim>
+    </insert>
+
+    <insert id="batchInsertCourseResourceKp" parameterType="java.util.List">
+        insert into course_resource_kp (resource_id, kp_id, is_confirmed, create_time)
+        values
+        <foreach collection="list" item="item" separator=",">
+            (#{item.resourceId}, #{item.kpId}, #{item.isConfirmed}, #{item.createTime})
+        </foreach>
+    </insert>
+
+    <update id="updateCourseResourceKp" parameterType="com.ruoyi.system.domain.CourseResourceKpRenwu3">
+        update course_resource_kp
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="resourceId != null">resource_id = #{resourceId},</if>
+            <if test="kpId != null">kp_id = #{kpId},</if>
+            <if test="isConfirmed != null">is_confirmed = #{isConfirmed},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteCourseResourceKpById" parameterType="Long">
+        delete from course_resource_kp where id = #{id}
+    </delete>
+
+    <delete id="deleteCourseResourceKpByIds" parameterType="String">
+        delete from course_resource_kp where id in 
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <delete id="deleteCourseResourceKpByResourceId" parameterType="Long">
+        delete from course_resource_kp where resource_id = #{resourceId}
+    </delete>
+</mapper>

@@ -88,20 +88,6 @@ export const constantRoutes = [
       }
     ]
   }
-  // {
-  //   path: '/course',
-  //   component: Layout,
-  //   hidden: true,
-  //   redirect: 'noredirect',
-  //   children: [
-  //     {
-  //       path: 'detail/:id',
-  //       component: () => import('@/views/course/detail'),
-  //       name: 'CourseDetail',
-  //       meta: { title: '课程详情', icon: 'education', activeMenu: '/course' }
-  //     }
-  //   ]
-  // }
 ]
 
 // 动态路由，基于用户权限动态去加载

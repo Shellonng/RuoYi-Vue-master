@@ -49,7 +49,7 @@ public class SysLoginController
 
     /**
      * 登录方法
-     *
+     * 
      * @param loginBody 登录信息
      * @return 结果
      */
@@ -59,7 +59,7 @@ public class SysLoginController
         AjaxResult ajax = AjaxResult.success();
         // 生成令牌
         String token = loginService.login(loginBody.getUsername(), loginBody.getPassword(), loginBody.getCode(),
-                loginBody.getUuid(), loginBody.getUserType());
+                loginBody.getUuid());
         ajax.put(Constants.TOKEN, token);
         return ajax;
     }
@@ -69,7 +69,7 @@ public class SysLoginController
      * 
      * @return 用户信息
      */
-    @GetMapping("getInfo")
+    @GetMapping("/getInfo")
     public AjaxResult getInfo()
     {
         LoginUser loginUser = SecurityUtils.getLoginUser();
@@ -97,7 +97,7 @@ public class SysLoginController
      * 
      * @return 路由信息
      */
-    @GetMapping("getRouters")
+    @GetMapping("/getRouters")
     public AjaxResult getRouters()
     {
         Long userId = SecurityUtils.getUserId();
