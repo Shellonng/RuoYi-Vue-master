@@ -1,149 +1,305 @@
 <template>
   <div class="app-container">
-    <h2>资源智能打标</h2>
-    
-    <!-- 文件上传表单 -->
-    <el-card class="upload-card" style="margin-bottom: 20px;">
-      <div slot="header">
-        <span>上传课程资源</span>
-      </div>
+    <!-- 左右分栏布局 -->
+    <el-row :gutter="20">
+      <!-- 左侧：文件上传表单 -->
+      <el-col :span="12">
+        <el-card class="upload-card" style="height: 660px;">
+          <div slot="header">
+            <span>上传课程资源</span>
+          </div>
+          
+          <el-form ref="uploadForm" :model="uploadForm" label-width="80px">
+            <el-form-item label="选择课程" required>
+              <el-select 
+                v-model="uploadForm.courseId" 
+                placeholder="请选择课程" 
+                style="width: 100%;"
+                @change="handleCourseChange"
+                filterable
+              >
+                <el-option
+                  v-for="course in courseOptions"
+                  :key="course.id"
+                  :label="course.courseName"
+                  :value="course.id"
+                />
+              </el-select>
+            </el-form-item>
+        
+            <el-form-item label="资源描述">
+              <el-input 
+                v-model="uploadForm.description" 
+                type="textarea" 
+                placeholder="请输入资源描述（可选）"
+                :rows="8"
+                style="width: 100%;"
+              />
+            </el-form-item>
+            
+            <el-form-item label="选择文件" required>
+              <el-upload
+                ref="upload"
+                :limit="1"
+                :on-exceed="handleExceed"
+                :auto-upload="false"
+                :on-change="handleFileChange"
+                :file-list="fileList"
+                accept=".pdf,.doc,.docx,.mp4,.avi,.mov,.wmv,.flv,.mkv"
+                action="#"
+              >
+                <el-button slot="trigger" size="small" type="primary">选取文件</el-button>
+                <div slot="tip" class="el-upload__tip">
+                  支持文档：PDF、Word（.pdf, .doc, .docx）<br/>
+                  支持视频：MP4、AVI、MOV、WMV、FLV、MKV<br/>
+                  单个文件不超过500MB（视频识别需要较长时间，请耐心等待）
+                </div>
+              </el-upload>
+            </el-form-item>
+            
+            <el-form-item>
+              <el-row :gutter="6">
+                <el-col :span="8">
+                  <el-button 
+                    type="primary"
+                    size="mini"
+                    @click="handleAnalyze"
+                    :loading="uploading"
+                    :disabled="!selectedFile || !uploadForm.courseId"
+                    style="width: 100%;"
+                  >
+                    智能分析
+                  </el-button>
+                </el-col>
+                <el-col :span="8">
+                  <el-button 
+                    type="success"
+                    size="mini"
+                    @click="handleSave"
+                    :disabled="!currentResourceId"
+                    style="width: 100%;"
+                  >
+                    保存
+                  </el-button>
+                </el-col>
+                <el-col :span="8">
+                  <el-button
+                    size="mini"
+                    @click="handleCancel"
+                    style="width: 100%;"
+                  >
+                    取消
+                  </el-button>
+                </el-col>
+              </el-row>
+              <div v-if="uploading" style="margin-top: 10px; color: #409EFF; text-align: center; font-size: 13px;">
+                正在上传并调用DeepSeek API分析中，请稍候...
+              </div>
+            </el-form-item>
+          </el-form>
+        </el-card>
+      </el-col>
       
-      <el-form ref="uploadForm" :model="uploadForm" label-width="120px">
-        <el-form-item label="课程ID" required>
-          <el-input v-model="uploadForm.courseId" placeholder="请输入课程ID" style="width: 300px;" />
-        </el-form-item>
-        
-        <el-form-item label="课程名称" required>
-          <el-input v-model="uploadForm.courseTitle" placeholder="请输入课程名称" style="width: 300px;" />
-        </el-form-item>
-        
-        <el-form-item label="资源描述">
-          <el-input 
-            v-model="uploadForm.description" 
-            type="textarea" 
-            placeholder="请输入资源描述（可选）"
-            :rows="3"
-            style="width: 500px;"
-          />
-        </el-form-item>
-        
-        <el-form-item label="选择文件" required>
-          <el-upload
-            ref="upload"
-            :limit="1"
-            :on-exceed="handleExceed"
-            :auto-upload="false"
-            :on-change="handleFileChange"
-            :file-list="fileList"
-            accept=".pdf,.doc,.docx,.mp4,.avi,.mov,.wmv,.flv,.mkv"
-            action="#"
-          >
-            <el-button slot="trigger" size="small" type="primary">选取文件</el-button>
-            <div slot="tip" class="el-upload__tip">
-              支持文档：PDF、Word（.pdf, .doc, .docx）<br/>
-              支持视频：MP4、AVI、MOV、WMV、FLV、MKV<br/>
-              单个文件不超过500MB（视频识别需要较长时间，请耐心等待）
-            </div>
-          </el-upload>
-        </el-form-item>
-        
-        <el-form-item>
-          <el-button 
-            type="success" 
-            @click="handleUpload"
-            :loading="uploading"
-            :disabled="!selectedFile"
-          >
-            <i class="el-icon-upload"></i> 上传并智能分析
-          </el-button>
-          <span v-if="uploading" style="margin-left: 10px; color: #409EFF;">
-            正在上传并调用DeepSeek API分析中，请稍候...
-          </span>
-        </el-form-item>
-      </el-form>
-    </el-card>
-
-    <!-- AI推荐结果展示 -->
-    <el-card v-if="recommendations.length > 0" class="result-card">
-      <div slot="header">
-        <span>AI智能推荐的知识点（共{{ recommendations.length }}个）</span>
-        <el-button 
-          size="mini"
-          type="primary"
-          icon="el-icon-chat-dot-round"
-          @click="openChatDialog"
-          style="float: right;"
-        >
-          与AI对话
-        </el-button>
-      </div>
-      
-      <el-table :data="recommendations" border style="width: 100%">
-        <el-table-column prop="extractedTitle" label="AI提取的知识点" width="200" />
-        
-        <el-table-column label="匹配状态" width="120">
-          <template slot-scope="scope">
-            <el-tag v-if="scope.row.matched" type="success">已匹配</el-tag>
-            <el-tag v-else type="warning">新知识点</el-tag>
-          </template>
-        </el-table-column>
-        
-        <el-table-column label="匹配的知识点" width="200">
-          <template slot-scope="scope">
-            <span v-if="scope.row.matched">{{ scope.row.kpTitle }}</span>
-            <span v-else style="color: #909399;">--</span>
-          </template>
-        </el-table-column>
-        
-        <el-table-column label="相似度" width="100">
-          <template slot-scope="scope">
-            <span v-if="scope.row.matched">
-              {{ (scope.row.similarity * 100).toFixed(1) }}%
-            </span>
-            <span v-else style="color: #909399;">--</span>
-          </template>
-        </el-table-column>
-        
-        <el-table-column label="操作" width="250">
-          <template slot-scope="scope">
-            <el-checkbox 
-              v-model="scope.row.selected"
-              @change="handleSelectionChange"
+      <!-- 右侧：AI推荐结果展示 -->
+      <el-col :span="12">
+        <el-card class="result-card" style="height: 660px;">
+          <div slot="header">
+            <span>知识点管理</span>
+            <el-button 
+              size="mini"
+              type="primary"
+              icon="el-icon-chat-dot-round"
+              @click="openChatDialog"
+              style="float: right;"
+              :disabled="recommendations.length === 0"
             >
-              <span v-if="scope.row.matched">关联到：{{ scope.row.kpTitle }}</span>
-              <span v-else style="color: #E6A23C;">创建新知识点</span>
-            </el-checkbox>
-          </template>
-        </el-table-column>
-      </el-table>
-      
-      <div style="margin-top: 20px; text-align: center;">
-        <el-button 
-          type="primary" 
-          @click="handleConfirmSelected"
-          :disabled="totalSelectedCount === 0"
-        >
-          确认选中项（{{ totalSelectedCount }}个：{{ selectedKpIds.length }}个关联，{{ selectedNewKps.length }}个新建）
-        </el-button>
-      </div>
-    </el-card>
+              与AI对话
+            </el-button>
+          </div>
+          
+          <div style="max-height: 600px; overflow-y: auto;">
+            <!-- 1. 匹配知识点 -->
+            <div style="margin-bottom: 20px; min-height: 180px;">
+              <el-table 
+                v-if="matchedKnowledgePoints.length > 0"
+                :data="matchedKnowledgePoints" 
+                border 
+                size="small" 
+                max-height="180" 
+                @selection-change="handleMatchedSelectionChange"
+              >
+                <el-table-column type="selection" width="45" align="center" />
+                
+                <el-table-column label="匹配状态" width="100" align="center">
+                  <template slot-scope="scope">
+                    <el-tag type="success" size="mini">已匹配</el-tag>
+                  </template>
+                </el-table-column>
+                
+                <el-table-column label="知识点" min-width="150">
+                  <template slot-scope="scope">
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                      <span style="font-weight: bold; color: #303133;">{{ scope.row.extractedTitle }}</span>
+                      <el-tag type="success" size="mini" effect="plain" style="margin-left: 10px;">
+                        {{ (scope.row.similarity * 100).toFixed(1) }}%
+                      </el-tag>
+                    </div>
+                  </template>
+                </el-table-column>
+                
+                <el-table-column label="操作" width="80" align="center">
+                  <template slot="header">
+                    <span 
+                      class="batch-action-header"
+                      @click="handleBatchCancelMatch"
+                      :style="{ cursor: 'pointer', color: matchedSelection.length > 0 ? '#F56C6C' : '#909399' }"
+                    >
+                      操作
+                    </span>
+                  </template>
+                  <template slot-scope="scope">
+                    <el-button 
+                      type="text" 
+                      icon="el-icon-close"
+                      style="color: #F56C6C; font-size: 16px;"
+                      @click="handleCancelMatch(scope.row)"
+                    />
+                  </template>
+                </el-table-column>
+              </el-table>
+              <div v-else>
+                <el-table :data="[]" border size="small" height="180">
+                  <el-table-column type="selection" width="45" align="center" />
+                  <el-table-column label="匹配状态" width="100" align="center" />
+                  <el-table-column label="知识点" min-width="150" />
+                  <el-table-column label="操作" width="80" align="center">
+                    <template slot="header">
+                      <span style="color: #909399;">操作</span>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </div>
+            </div>
 
-    <!-- 上传成功提示 -->
-    <el-alert
-      v-if="uploadResult"
-      :title="uploadResult.message"
-      type="success"
-      :closable="false"
-      show-icon
-      style="margin-top: 20px;"
-    >
-      <div>
-        <p><strong>资源ID:</strong> {{ uploadResult.resource.id }}</p>
-        <p><strong>文件名:</strong> {{ uploadResult.resource.name }}</p>
-        <p><strong>文件类型:</strong> {{ uploadResult.resource.fileType }}</p>
-        <p><strong>AI推荐知识点数量:</strong> {{ uploadResult.recommendationCount }}</p>
-      </div>
-    </el-alert>
+            <!-- 2. 新增知识点 -->
+            <div style="margin-bottom: 20px; min-height: 180px;">
+              <el-table 
+                v-if="newKnowledgePoints.length > 0"
+                :data="newKnowledgePoints" 
+                border 
+                size="small" 
+                max-height="180" 
+                @selection-change="handleNewSelectionChange"
+              >
+                <el-table-column type="selection" width="45" align="center" />
+                
+                <el-table-column label="匹配状态" width="100" align="center">
+                  <template slot-scope="scope">
+                    <el-tag type="warning" size="mini">新知识点</el-tag>
+                  </template>
+                </el-table-column>
+                
+                <el-table-column label="知识点" min-width="150">
+                  <template slot-scope="scope">
+                    <span style="font-weight: bold; color: #303133;">{{ scope.row.extractedTitle }}</span>
+                  </template>
+                </el-table-column>
+                
+                <el-table-column label="操作" width="80" align="center">
+                  <template slot="header">
+                    <span 
+                      class="batch-action-header"
+                      @click="handleBatchCreateNew"
+                      :style="{ cursor: 'pointer', color: newSelection.length > 0 ? '#E6A23C' : '#909399' }"
+                    >
+                      操作
+                    </span>
+                  </template>
+                  <template slot-scope="scope">
+                    <el-button 
+                      type="text" 
+                      icon="el-icon-plus"
+                      style="color: #E6A23C; font-size: 16px;"
+                      @click="handleCreateSingleNew(scope.row)"
+                    />
+                  </template>
+                </el-table-column>
+              </el-table>
+              <div v-else>
+                <el-table :data="[]" border size="small" height="180">
+                  <el-table-column type="selection" width="45" align="center" />
+                  <el-table-column label="匹配状态" width="100" align="center" />
+                  <el-table-column label="知识点" min-width="150" />
+                  <el-table-column label="操作" width="80" align="center">
+                    <template slot="header">
+                      <span style="color: #909399;">操作</span>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </div>
+            </div>
+
+            <!-- 3. 已有知识点 -->
+            <div style="margin-bottom: 20px; min-height: 180px;">
+              <el-table 
+                v-if="availableKnowledgePoints.length > 0"
+                :data="availableKnowledgePoints" 
+                border 
+                size="small" 
+                max-height="180" 
+                @selection-change="handleAvailableSelectionChange"
+              >
+                <el-table-column type="selection" width="45" align="center" />
+                
+                <el-table-column label="匹配状态" width="100" align="center">
+                  <template slot-scope="scope">
+                    <el-tag type="info" size="mini">未匹配</el-tag>
+                  </template>
+                </el-table-column>
+                
+                <el-table-column label="知识点" min-width="150">
+                  <template slot-scope="scope">
+                    <span style="color: #606266;">{{ scope.row.title }}</span>
+                  </template>
+                </el-table-column>
+                
+                <el-table-column label="操作" width="80" align="center">
+                  <template slot="header">
+                    <span 
+                      class="batch-action-header"
+                      @click="handleBatchAddAvailable"
+                      :style="{ cursor: 'pointer', color: availableSelection.length > 0 ? '#409EFF' : '#909399' }"
+                    >
+                      操作
+                    </span>
+                  </template>
+                  <template slot-scope="scope">
+                    <el-button 
+                      type="text" 
+                      icon="el-icon-plus"
+                      style="color: #409EFF; font-size: 16px;"
+                      @click="handleAddSingleAvailable(scope.row)"
+                    />
+                  </template>
+                </el-table-column>
+              </el-table>
+              <div v-else>
+                <el-table :data="[]" border size="small" height="180">
+                  <el-table-column type="selection" width="45" align="center" />
+                  <el-table-column label="匹配状态" width="100" align="center" />
+                  <el-table-column label="知识点" min-width="150" />
+                  <el-table-column label="操作" width="80" align="center">
+                    <template slot="header">
+                      <span style="color: #909399;">操作</span>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </div>
+            </div>
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
 
     <!-- AI对话界面 (ChatGPT风格) -->
     <el-dialog
@@ -321,11 +477,19 @@
 
 <script>
 import { uploadAndAnalyzeRenwu3, confirmKnowledgePointsRenwu3, chatWithAIRenwu3 } from '@/api/system/courseResourceRenwu3'
+import { listCourse } from '@/api/course/course'
+import { listKnowledgePointByCourse } from '@/api/course/knowledgePoint'
 
 export default {
   name: 'ResourceTaggingRenwu3',
   data() {
     return {
+      // 课程选项
+      courseOptions: [],
+      
+      // 课程所有知识点列表
+      allCourseKnowledgePoints: [],
+      
       // 上传表单
       uploadForm: {
         courseId: '',
@@ -353,32 +517,220 @@ export default {
       chatMessages: [],
       chatInput: '',
       chatSending: false,
-      chatContext: null // 存储当前分析上下文
+      chatContext: null, // 存储当前分析上下文
+      
+      // 多选相关
+      matchedSelection: [], // 匹配知识点的多选
+      newSelection: [], // 新知识点的多选
+      availableSelection: [] // 已有知识点的多选
     }
   },
   
+  created() {
+    this.loadCourses()
+  },
+  
   computed: {
-    // 已选中的知识点ID列表（只包含已匹配的知识点）
-    selectedKpIds() {
+    // 1. AI匹配到的知识点（已匹配，默认全选）
+    matchedKnowledgePoints() {
       return this.recommendations
-        .filter(item => item.matched && item.selected && item.kpId)
+        .filter(item => item.matched)
+        .map(item => ({
+          ...item,
+          selected: true // 匹配的知识点默认选中
+        }))
+    },
+    
+    // 2. AI提取的新知识点（未匹配）
+    newKnowledgePoints() {
+      return this.recommendations.filter(item => !item.matched)
+    },
+    
+    // 3. 课程中可用的知识点（排除已被AI匹配的）
+    availableKnowledgePoints() {
+      const matchedKpIds = this.matchedKnowledgePoints.map(item => item.kpId)
+      return this.allCourseKnowledgePoints
+        .filter(kp => !matchedKpIds.includes(kp.id))
+        .map(kp => ({
+          ...kp,
+          selected: false
+        }))
+    },
+    
+    // 已选中的匹配知识点ID列表
+    selectedKpIds() {
+      return this.matchedKnowledgePoints
+        .filter(item => item.selected && item.kpId)
         .map(item => item.kpId)
     },
     
     // 选中要创建的新知识点列表
     selectedNewKps() {
-      return this.recommendations
-        .filter(item => !item.matched && item.selected)
+      return this.newKnowledgePoints
+        .filter(item => item.selected)
         .map(item => item.extractedTitle)
+    },
+    
+    // 选中要添加的已有知识点列表
+    selectedAvailableKps() {
+      return this.availableKnowledgePoints
+        .filter(kp => kp.selected)
+        .map(kp => kp.id)
     },
     
     // 总选中数量
     totalSelectedCount() {
-      return this.selectedKpIds.length + this.selectedNewKps.length
+      return this.selectedKpIds.length + this.selectedNewKps.length + this.selectedAvailableKps.length
     }
   },
   
   methods: {
+    // 加载教师教授的课程列表
+    async loadCourses() {
+      try {
+        // 获取当前登录用户的课程列表
+        const response = await listCourse({})
+        if (response.code === 200) {
+          this.courseOptions = response.rows || []
+        }
+      } catch (error) {
+        console.error('加载课程列表失败:', error)
+        this.$message.error('加载课程列表失败')
+      }
+    },
+    
+    // 课程选择变化
+    handleCourseChange(courseId) {
+      const selectedCourse = this.courseOptions.find(c => c.id === courseId)
+      if (selectedCourse) {
+        this.uploadForm.courseTitle = selectedCourse.courseName
+        // 加载课程的所有知识点
+        this.loadCourseKnowledgePoints(courseId)
+      }
+    },
+    
+    // 加载课程的所有知识点
+    async loadCourseKnowledgePoints(courseId) {
+      try {
+        const response = await listKnowledgePointByCourse(courseId)
+        if (response.code === 200) {
+          this.allCourseKnowledgePoints = response.data || []
+        }
+      } catch (error) {
+        console.error('加载课程知识点失败:', error)
+      }
+    },
+    
+    // 取消匹配
+    handleCancelMatch(row) {
+      this.$confirm('取消匹配后，该知识点将从匹配列表中移除，是否继续？', '提示', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }).then(() => {
+        // 从recommendations中移除该项
+        const index = this.recommendations.findIndex(item => item.kpId === row.kpId)
+        if (index !== -1) {
+          this.recommendations.splice(index, 1)
+        }
+        this.$message.success('已取消匹配')
+      }).catch(() => {})
+    },
+    
+    // 匹配知识点多选变化
+    handleMatchedSelectionChange(selection) {
+      this.matchedSelection = selection
+    },
+    
+    // 新知识点多选变化
+    handleNewSelectionChange(selection) {
+      this.newSelection = selection
+    },
+    
+    // 已有知识点多选变化
+    handleAvailableSelectionChange(selection) {
+      this.availableSelection = selection
+    },
+    
+    // 批量取消匹配
+    handleBatchCancelMatch() {
+      if (this.matchedSelection.length === 0) {
+        this.$message.warning('请先选择要取消的知识点')
+        return
+      }
+      
+      this.$confirm(`确定要取消选中的 ${this.matchedSelection.length} 个匹配吗？`, '批量取消', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }).then(() => {
+        const kpIds = this.matchedSelection.map(item => item.kpId)
+        this.recommendations = this.recommendations.filter(item => !kpIds.includes(item.kpId))
+        this.matchedSelection = []
+        this.$message.success('批量取消成功')
+      }).catch(() => {})
+    },
+    
+    // 批量创建新知识点
+    handleBatchCreateNew() {
+      if (this.newSelection.length === 0) {
+        this.$message.warning('请先选择要创建的知识点')
+        return
+      }
+      
+      const titles = this.newSelection.map(item => item.extractedTitle).join('、')
+      this.$message.info(`待创建 ${this.newSelection.length} 个新知识点：${titles}`)
+      // TODO: 调用后端批量创建接口
+      this.newSelection = []
+    },
+    
+    // 单个创建新知识点
+    handleCreateSingleNew(row) {
+      this.$message.info(`待创建新知识点：${row.extractedTitle}`)
+      // TODO: 调用后端创建接口
+    },
+    
+    // 批量添加已有知识点
+    async handleBatchAddAvailable() {
+      if (this.availableSelection.length === 0) {
+        this.$message.warning('请先选择要添加的知识点')
+        return
+      }
+      
+      try {
+        const kpIds = this.availableSelection.map(item => item.id)
+        const response = await confirmKnowledgePointsRenwu3({
+          resourceId: this.currentResourceId,
+          kpIds: kpIds
+        })
+        
+        if (response.code === 200) {
+          this.$message.success(`成功添加 ${kpIds.length} 个知识点`)
+          this.availableSelection = []
+        }
+      } catch (error) {
+        console.error('批量添加失败:', error)
+        this.$message.error('批量添加失败')
+      }
+    },
+    
+    // 单个添加已有知识点
+    async handleAddSingleAvailable(row) {
+      try {
+        const response = await confirmKnowledgePointsRenwu3({
+          resourceId: this.currentResourceId,
+          kpIds: [row.id]
+        })
+        
+        if (response.code === 200) {
+          this.$message.success(`成功添加知识点：${row.title}`)
+        }
+      } catch (error) {
+        console.error('添加失败:', error)
+        this.$message.error('添加失败')
+      }
+    },
+    
     // 文件选择变化
     handleFileChange(file, fileList) {
       this.selectedFile = file.raw
@@ -394,11 +746,7 @@ export default {
     async handleUpload() {
       // 验证表单
       if (!this.uploadForm.courseId) {
-        this.$message.error('请输入课程ID')
-        return
-      }
-      if (!this.uploadForm.courseTitle) {
-        this.$message.error('请输入课程名称')
+        this.$message.error('请选择课程')
         return
       }
       if (!this.selectedFile) {
@@ -497,6 +845,43 @@ export default {
         this.uploading = false
       }
     },
+    
+    // 智能分析按钮
+    handleAnalyze() {
+      this.handleUpload()
+    },
+    
+    // 保存按钮
+    handleSave() {
+      if (!this.currentResourceId) {
+        this.$message.warning('没有可保存的资源')
+        return
+      }
+      this.$message.success('资源已保存')
+      // 可以在这里添加额外的保存逻辑
+    },
+    
+    // 取消按钮
+    handleCancel() {
+      this.$confirm('确定要取消吗？未保存的数据将丢失。', '提示', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }).then(() => {
+        // 清空表单
+        this.uploadForm = {
+          courseId: '',
+          courseTitle: '',
+          description: ''
+        }
+        this.fileList = []
+        this.selectedFile = null
+        this.recommendations = []
+        this.currentResourceId = null
+        this.uploadResult = null
+        this.$message.info('已取消')
+      }).catch(() => {})
+    },
 
     // 初始化AI对话框
     initAiDialog() {
@@ -569,6 +954,7 @@ export default {
     async handleConfirmSelected() {
       console.log('点击确认按钮, selectedKpIds:', this.selectedKpIds) // 调试日志
       console.log('selectedNewKps:', this.selectedNewKps) // 调试日志
+      console.log('selectedAvailableKps:', this.selectedAvailableKps) // 调试日志
       console.log('currentResourceId:', this.currentResourceId) // 调试日志
       
       if (this.totalSelectedCount === 0) {
@@ -579,9 +965,9 @@ export default {
       try {
         let successCount = 0
         
-        // 1. 关联已存在的知识点
+        // 1. 关联已匹配的知识点
         if (this.selectedKpIds.length > 0) {
-          console.log('准备关联已存在的知识点...') // 调试日志
+          console.log('准备关联已匹配的知识点...') // 调试日志
           const response = await confirmKnowledgePointsRenwu3({
             resourceId: this.currentResourceId,
             kpIds: this.selectedKpIds
@@ -594,7 +980,22 @@ export default {
           }
         }
         
-        // 2. 创建新知识点（目前只提示，实际创建需要后端接口）
+        // 2. 关联手动添加的已有知识点
+        if (this.selectedAvailableKps.length > 0) {
+          console.log('准备关联手动添加的知识点...') // 调试日志
+          const response = await confirmKnowledgePointsRenwu3({
+            resourceId: this.currentResourceId,
+            kpIds: this.selectedAvailableKps
+          })
+          
+          console.log('手动添加关联接口响应:', response) // 调试日志
+          
+          if (response.code === 200) {
+            successCount += this.selectedAvailableKps.length
+          }
+        }
+        
+        // 3. 创建新知识点（目前只提示，实际创建需要后端接口）
         if (this.selectedNewKps.length > 0) {
           console.log('需要创建的新知识点:', this.selectedNewKps)
           this.$message.info(`待创建${this.selectedNewKps.length}个新知识点：${this.selectedNewKps.join('、')}`)
@@ -1015,5 +1416,25 @@ export default {
 
 .chat-messages::-webkit-scrollbar-thumb:hover {
   background: #555;
+}
+
+/* 批量操作表头样式 */
+.batch-action-header {
+  transition: all 0.3s;
+  user-select: none;
+}
+
+.batch-action-header:hover {
+  font-weight: bold;
+}
+
+/* 表格行高优化 */
+::v-deep .el-table--small .el-table__cell {
+  padding: 4px 0;
+}
+
+::v-deep .el-table--small td,
+::v-deep .el-table--small th {
+  padding: 4px 0;
 }
 </style>
