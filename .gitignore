@@ -45,3 +45,10 @@ nbdist/
 !*/build/*.java
 !*/build/*.html
 !*/build/*.xml
+
+######################################################################
+# Python
+whisper-service/venv/
+__pycache__/
+*.py[cod]
+*$py.class

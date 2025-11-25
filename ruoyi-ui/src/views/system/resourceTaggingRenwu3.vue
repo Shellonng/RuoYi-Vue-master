@@ -708,7 +708,15 @@ export default {
       } catch (error) {
         console.error('AI对话API调用失败:', error)
         this.chatMessages[messageIndex].loading = false
-        this.chatMessages[messageIndex].content = '抱歉，网络连接失败，请稍后再试。'
+        
+        // 更友好的错误提示
+        if (error.message && error.message.includes('timeout')) {
+          this.chatMessages[messageIndex].content = '😅 AI思考时间有点长，请稍后再试一次吧~'
+        } else if (error.message && error.message.includes('Network Error')) {
+          this.chatMessages[messageIndex].content = '🌐 网络似乎不太稳定，请检查网络连接后重试。'
+        } else {
+          this.chatMessages[messageIndex].content = '😔 抱歉，我暂时无法回答。您可以：\n1. 稍后重试\n2. 检查网络连接\n3. 联系技术支持'
+        }
       }
     },
 

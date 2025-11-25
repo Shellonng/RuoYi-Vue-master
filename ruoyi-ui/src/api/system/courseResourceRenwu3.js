@@ -93,6 +93,7 @@ export function chatWithAIRenwu3(data) {
   return request({
     url: '/system/resource/renwu3/chat',
     method: 'post',
-    params: data
+    params: data,
+    timeout: 60000 // AI对话可能需要较长时间，设置60秒超时
   })
 }
