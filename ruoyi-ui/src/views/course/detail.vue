@@ -982,6 +982,7 @@
       :hide-course-select="true"
       :hide-knowledge-points="true"
       :course-id="courseId"
+      :dialog-width="homeworkDialogWidth"
       @close="homeworkDialogVisible = false"
       @submit="handleHomeworkSubmit"
     />
@@ -992,6 +993,7 @@
       :edit-data="editExamData"
       :hide-course-select="true"
       :course-id="courseId"
+      :dialog-width="examDialogWidth"
       @close="examDialogVisible = false"
       @submit="handleExamSubmit"
     />
@@ -1155,8 +1157,10 @@ export default {
       // 作业/考试编辑对话框
       homeworkDialogVisible: false, // 作业编辑对话框显示状态
       editHomeworkData: null, // 编辑的作业数据
+      homeworkDialogWidth: '40%', // 作业对话框宽度
       examDialogVisible: false, // 考试编辑对话框显示状态
       editExamData: null, // 编辑的考试数据
+      examDialogWidth: '40%', // 考试对话框宽度
     };
   },
   created() {
@@ -4036,12 +4040,14 @@ export default {
         console.log('[资源] 任务数据:', assignmentData);
         
         if (item.type === 'exam') {
-          // 考试
+          // 考试 - 在图谱抽屉中使用较窄宽度
+          this.examDialogWidth = '40%';
           this.editExamData = assignmentData;
           console.log('[资源] 打开考试对话框，数据:', this.editExamData);
           this.examDialogVisible = true;
         } else if (item.type === 'homework') {
-          // 作业
+          // 作业 - 在图谱抽屉中使用较窄宽度
+          this.homeworkDialogWidth = '40%';
           this.editHomeworkData = assignmentData;
           console.log('[资源] 打开作业对话框，数据:', this.editHomeworkData);
           this.homeworkDialogVisible = true;

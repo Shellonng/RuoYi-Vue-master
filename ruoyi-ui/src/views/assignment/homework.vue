@@ -1,6 +1,6 @@
 <template>
   <div>
-    <el-dialog :visible="visible" @close="onClose" :title="editData ? '修改作业' : '添加作业'" append-to-body width="40%">
+    <el-dialog :visible="visible" @close="onClose" :title="editData ? '修改作业' : '添加作业'" append-to-body :width="dialogWidth">
       <el-form ref="elForm" :model="formData" :rules="rules" size="medium" label-width="100px">
         <el-form-item label="作业标题" prop="field103">
           <el-input v-model="formData.field103" placeholder="请输入作业标题" clearable :style="{width: '100%'}">
@@ -89,6 +89,10 @@ export default {
     hideKnowledgePoints: {
       type: Boolean,
       default: false
+    },
+    dialogWidth: {
+      type: String,
+      default: '50%'
     }
   },
   data() {
