@@ -35,6 +35,15 @@ export function batchAddKpRelations(data) {
   })
 }
 
+// 修改知识点关系
+export function updateKpRelation(data) {
+  return request({
+    url: '/kpRelation',
+    method: 'put',
+    data: data
+  })
+}
+
 // 删除知识点关系
 export function delKpRelation(id) {
   return request({

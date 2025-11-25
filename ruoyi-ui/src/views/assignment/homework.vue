@@ -1,6 +1,6 @@
 <template>
   <div>
-    <el-dialog :visible="visible" @close="onClose" :title="editData ? '修改作业' : '添加作业'" append-to-body>
+    <el-dialog :visible="visible" @close="onClose" :title="editData ? '修改作业' : '添加作业'" append-to-body :width="dialogWidth">
       <el-form ref="elForm" :model="formData" :rules="rules" size="medium" label-width="100px">
         <el-form-item label="作业标题" prop="field103">
           <el-input v-model="formData.field103" placeholder="请输入作业标题" clearable :style="{width: '100%'}">
@@ -30,7 +30,7 @@
         <el-form-item label="总分" prop="field109">
           <el-input-number v-model="formData.field109" placeholder="总分"></el-input-number>
         </el-form-item>
-        <el-form-item label="关联知识点" prop="knowledgePoints">
+        <el-form-item v-if="!hideKnowledgePoints" label="关联知识点" prop="knowledgePoints">
           <knowledge-point-selector
             v-model="selectedKpIds"
             :available-kps="availableKps"
@@ -85,6 +85,14 @@ export default {
     courseId: {
       type: [Number, String],
       default: null
+    },
+    hideKnowledgePoints: {
+      type: Boolean,
+      default: false
+    },
+    dialogWidth: {
+      type: String,
+      default: '50%'
     }
   },
   data() {
@@ -178,6 +186,16 @@ export default {
         }
       },
       immediate: true
+    },
+    // 监听 editData 变化
+    editData: {
+      handler(newVal) {
+        if (newVal && this.visible) {
+          console.log('editData变化，重新加载数据:', newVal);
+          this.loadEditData();
+        }
+      },
+      deep: true
     },
     // 监听课程选择变化，加载对应的知识点列表
     'formData.field105': {

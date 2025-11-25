@@ -106,4 +106,15 @@ public class AssignmentController extends BaseController
     {
         return toAjax(assignmentService.deleteAssignmentByIds(ids));
     }
+    
+    /**
+     * 根据知识点ID查询关联的作业/考试/测验列表
+     */
+    @PreAuthorize("@ss.hasPermi('system:assignment:query')")
+    @GetMapping("/byKnowledgePoint/{kpId}")
+    public AjaxResult getByKnowledgePoint(@PathVariable("kpId") Long kpId)
+    {
+        List<Assignment> list = assignmentService.selectAssignmentsByKnowledgePointId(kpId);
+        return success(list);
+    }
 }

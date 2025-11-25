@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.CourseEnrollmentRequestMapper">
+
+    <resultMap type="CourseEnrollmentRequest" id="EnrollmentResult">
+        <result property="id" column="id"/>
+        <result property="studentUserId" column="student_user_id"/>
+        <result property="studentName" column="student_name"/>
+        <result property="courseId" column="course_id"/>
+        <result property="courseName" column="course_name"/>
+        <result property="status" column="status"/>
+        <result property="reason" column="reason"/>
+        <result property="reviewComment" column="review_comment"/>
+        <result property="submitTime" column="submit_time"/>
+        <result property="reviewTime" column="review_time"/>
+    </resultMap>
+
+    <sql id="selectEnrollmentVo">
+        SELECT 
+            cer.id,
+            cer.student_user_id,
+            u.real_name AS student_name,
+            cer.course_id,
+            c.title AS course_name,
+            cer.status,
+            cer.reason,
+            cer.review_comment,
+            cer.submit_time,
+            cer.review_time
+        FROM course_enrollment_request cer
+        LEFT JOIN user u ON cer.student_user_id = u.id
+        LEFT JOIN course c ON cer.course_id = c.id
+    </sql>
+
+    <select id="selectEnrollmentList" parameterType="CourseEnrollmentRequest" resultMap="EnrollmentResult">
+        <include refid="selectEnrollmentVo"/>
+        <where>
+            <if test="studentUserId != null">
+                AND cer.student_user_id = #{studentUserId}
+            </if>
+            <if test="courseId != null">
+                AND cer.course_id = #{courseId}
+            </if>
+            <if test="status != null">
+                AND cer.status = #{status}
+            </if>
+        </where>
+        ORDER BY cer.submit_time DESC
+    </select>
+
+    <select id="selectEnrollmentListByTeacher" resultMap="EnrollmentResult">
+        <include refid="selectEnrollmentVo"/>
+        WHERE cer.course_id IN (
+            SELECT id FROM course WHERE teacher_user_id = #{teacherUserId}
+        )
+        ORDER BY cer.submit_time DESC
+    </select>
+
+    <select id="selectEnrollmentById" parameterType="Long" resultMap="EnrollmentResult">
+        <include refid="selectEnrollmentVo"/>
+        WHERE cer.id = #{id}
+    </select>
+
+    <insert id="insertEnrollment" parameterType="CourseEnrollmentRequest" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO course_enrollment_request
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="studentUserId != null">student_user_id,</if>
+            <if test="courseId != null">course_id,</if>
+            <if test="status != null">status,</if>
+            <if test="reason != null">reason,</if>
+            <if test="reviewComment != null">review_comment,</if>
+            <if test="submitTime != null">submit_time,</if>
+            <if test="reviewTime != null">review_time,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="studentUserId != null">#{studentUserId},</if>
+            <if test="courseId != null">#{courseId},</if>
+            <if test="status != null">#{status},</if>
+            <if test="reason != null">#{reason},</if>
+            <if test="reviewComment != null">#{reviewComment},</if>
+            <if test="submitTime != null">#{submitTime},</if>
+            <if test="reviewTime != null">#{reviewTime},</if>
+        </trim>
+    </insert>
+
+    <update id="updateEnrollment" parameterType="CourseEnrollmentRequest">
+        UPDATE course_enrollment_request
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="status != null">status = #{status},</if>
+            <if test="reviewComment != null">review_comment = #{reviewComment},</if>
+            <if test="reviewTime != null">review_time = #{reviewTime},</if>
+        </trim>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteEnrollmentById" parameterType="Long">
+        DELETE FROM course_enrollment_request WHERE id = #{id}
+    </delete>
+
+    <delete id="deleteEnrollmentByIds" parameterType="Long">
+        DELETE FROM course_enrollment_request WHERE id IN
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <update id="batchApprove">
+        UPDATE course_enrollment_request
+        SET status = 1,
+            review_comment = #{reviewComment},
+            review_time = NOW()
+        WHERE id IN
+        <foreach item="id" collection="ids" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
+    <update id="batchReject">
+        UPDATE course_enrollment_request
+        SET status = 2,
+            review_comment = #{reviewComment},
+            review_time = NOW()
+        WHERE id IN
+        <foreach item="id" collection="ids" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
+</mapper>

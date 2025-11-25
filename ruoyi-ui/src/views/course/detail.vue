@@ -434,7 +434,7 @@
       :wrapperClosable="false"
       :before-close="handleSectionDrawerClose"
     >
-      <div v-if="selectedSection" class="section-detail-content">
+      <div v-if="selectedSection" :key="selectedSection.id || selectedSection.title || Math.random()" class="section-detail-content">
         <!-- 小节信息 -->
         <div class="section-info">
           <div class="info-header">
@@ -516,55 +516,123 @@
             <i class="el-icon-files"></i>
             <span>包含知识点资源（{{ getTotalResources(selectedSection) }}）</span>
           </div>
-          <div class="resource-stats">
-            <div class="stat-item">
+          
+          <!-- 资源统计列表 -->
+          <div v-if="!currentResourceType" class="resource-stats">
+            <div class="stat-item clickable" @click="viewResourceDetail('learningMaterials')">
               <i class="el-icon-reading stat-icon" style="color: #409EFF;"></i>
               <div class="stat-content">
-                <div class="stat-value">{{ selectedSection.learningMaterials || 0 }}</div>
-                <div class="stat-label">学习内容</div>
+                <div class="stat-value">
+                  <i v-if="loadingResourceStats" class="el-icon-loading"></i>
+                  <span v-else>{{ selectedSection.learningMaterials || 0 }}</span>
+                </div>
+                <div class="stat-label">题库</div>
               </div>
             </div>
-            <div class="stat-item">
+            <div class="stat-item clickable" @click="viewResourceDetail('materials')">
               <i class="el-icon-document stat-icon" style="color: #E6A23C;"></i>
               <div class="stat-content">
-                <div class="stat-value">{{ selectedSection.materials || 0 }}</div>
+                <div class="stat-value">
+                  <i v-if="loadingResourceStats" class="el-icon-loading"></i>
+                  <span v-else>{{ selectedSection.materials || 0 }}</span>
+                </div>
                 <div class="stat-label">资料</div>
               </div>
             </div>
-            <div class="stat-item">
+            <div class="stat-item clickable" @click="viewResourceDetail('activities')">
               <i class="el-icon-video-camera stat-icon" style="color: #67C23A;"></i>
               <div class="stat-content">
-                <div class="stat-value">{{ selectedSection.activities || 0 }}</div>
-                <div class="stat-label">活动</div>
+                <div class="stat-value">
+                  <i v-if="loadingResourceStats" class="el-icon-loading"></i>
+                  <span v-else>{{ selectedSection.activities || 0 }}</span>
+                </div>
+                <div class="stat-label">视频</div>
               </div>
             </div>
-            <div class="stat-item">
+            <div class="stat-item clickable" @click="viewResourceDetail('assignments')">
               <i class="el-icon-edit-outline stat-icon" style="color: #909399;"></i>
               <div class="stat-content">
-                <div class="stat-value">{{ selectedSection.assignments || 0 }}</div>
+                <div class="stat-value">
+                  <i v-if="loadingResourceStats" class="el-icon-loading"></i>
+                  <span v-else>{{ selectedSection.assignments || 0 }}</span>
+                </div>
                 <div class="stat-label">作业</div>
               </div>
             </div>
-            <div class="stat-item">
+            <div class="stat-item clickable" @click="viewResourceDetail('tests')">
               <i class="el-icon-medal stat-icon" style="color: #F56C6C;"></i>
               <div class="stat-content">
-                <div class="stat-value">{{ selectedSection.tests || 0 }}</div>
+                <div class="stat-value">
+                  <i v-if="loadingResourceStats" class="el-icon-loading"></i>
+                  <span v-else>{{ selectedSection.tests || 0 }}</span>
+                </div>
                 <div class="stat-label">测验</div>
               </div>
             </div>
-            <div class="stat-item">
+            <div class="stat-item clickable" @click="viewResourceDetail('exams')">
               <i class="el-icon-tickets stat-icon" style="color: #C71585;"></i>
               <div class="stat-content">
-                <div class="stat-value">{{ selectedSection.exams || 0 }}</div>
+                <div class="stat-value">
+                  <i v-if="loadingResourceStats" class="el-icon-loading"></i>
+                  <span v-else>{{ selectedSection.exams || 0 }}</span>
+                </div>
                 <div class="stat-label">考试</div>
               </div>
             </div>
           </div>
-        </div>
-
-        <!-- 操作按钮 -->
-        <div class="drawer-footer">
-          <el-button size="small" type="primary" icon="el-icon-edit" @click="editSection">课程内容编辑</el-button>
+          
+          <!-- 资源详情列表 -->
+          <div v-if="currentResourceType" class="resource-detail-view">
+            <div class="resource-detail-header">
+              <el-button type="text" icon="el-icon-back" @click="backToResourceStats" class="back-btn"></el-button>
+              <span class="resource-type-title">{{ getResourceTypeName(currentResourceType) }}</span>
+            </div>
+            <div class="resource-list" v-loading="loadingResources">
+              <div v-if="currentResourceList.length === 0 && !loadingResources" class="empty-resource">
+                <i class="el-icon-warning-outline"></i>
+                <p>暂无{{ getResourceTypeName(currentResourceType) }}</p>
+              </div>
+              <div v-else>
+                <div v-for="(item, index) in currentResourceList" :key="index" class="resource-item">
+                  <div class="resource-item-icon">
+                    <i :class="getResourceIcon(currentResourceType)"></i>
+                  </div>
+                  <div class="resource-item-content">
+                    <div class="resource-item-title">{{ item.title || '未命名资源' }}</div>
+                    <div class="resource-item-meta">
+                      <span v-if="item.createTime" class="meta-item">
+                        <i class="el-icon-time"></i> {{ item.createTime }}
+                      </span>
+                      <span v-if="item.status !== undefined" class="meta-item">
+                        <el-tag :type="item.status === 1 ? 'success' : 'info'" size="mini">
+                          {{ item.status === 1 ? '已发布' : '未发布' }}
+                        </el-tag>
+                      </span>
+                    </div>
+                  </div>
+                  <div class="resource-item-actions">
+                    <el-tooltip content="查看" placement="top">
+                      <el-button type="text" icon="el-icon-view" size="small" @click="handleViewResource(item)" />
+                    </el-tooltip>
+                    <el-tooltip content="修改" placement="top">
+                      <el-button type="text" icon="el-icon-edit" size="small" @click="handleEditResource(item)" />
+                    </el-tooltip>
+                    <el-tooltip :content="item.status === 1 ? '取消发布' : '发布'" placement="top">
+                      <el-button 
+                        type="text" 
+                        :icon="item.status === 1 ? 'el-icon-close' : 'el-icon-check'" 
+                        size="small" 
+                        :style="{ color: item.status === 1 ? '#F56C6C' : '#67C23A' }"
+                        @click="handlePublishResource(item)" />
+                    </el-tooltip>
+                    <el-tooltip content="删除" placement="top">
+                      <el-button type="text" icon="el-icon-delete" size="small" style="color: #F56C6C;" @click="handleDeleteResource(item)" />
+                    </el-tooltip>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </el-drawer>
@@ -906,6 +974,29 @@
         </el-button>
       </div>
     </el-dialog>
+
+    <!-- 作业编辑对话框 -->
+    <homework-dialog
+      :visible="homeworkDialogVisible"
+      :edit-data="editHomeworkData"
+      :hide-course-select="true"
+      :hide-knowledge-points="true"
+      :course-id="courseId"
+      :dialog-width="homeworkDialogWidth"
+      @close="homeworkDialogVisible = false"
+      @submit="handleHomeworkSubmit"
+    />
+
+    <!-- 考试编辑对话框 -->
+    <exam-dialog
+      :visible="examDialogVisible"
+      :edit-data="editExamData"
+      :hide-course-select="true"
+      :course-id="courseId"
+      :dialog-width="examDialogWidth"
+      @close="examDialogVisible = false"
+      @submit="handleExamSubmit"
+    />
   </div>
 </template>
 
@@ -916,8 +1007,11 @@ import { listSectionByChapter, addSection, updateSection, delSection } from "@/a
 import { listKnowledgePointBySection } from "@/api/course/knowledgePoint";
 import { uploadAndGenerate } from "@/api/course/generation";
 import { generateKnowledgeGraph, listKpRelationByCourse } from "@/api/course/kpRelation";
+import { getAssignmentsByKnowledgePoint, getAssignment, updateAssignment, delAssignment } from "@/api/system/assignment";
 import ExamManagement from "@/views/assignment/exam/index.vue";
 import HomeworkManagement from "@/views/assignment/homework/index.vue";
+import HomeworkDialog from "@/views/assignment/homework.vue";
+import ExamDialog from "@/views/assignment/exam.vue";
 import KnowledgePoint from "@/views/knowledgepoint/index.vue";
 import Discussion from "@/views/discussion/index.vue";
 import Sortable from 'sortablejs';
@@ -929,6 +1023,8 @@ export default {
   components: {
     ExamManagement,
     HomeworkManagement,
+    HomeworkDialog,
+    ExamDialog,
     KnowledgePoint,
     Discussion
   },
@@ -1016,6 +1112,7 @@ export default {
       renderingChapterIndex: 0, // 当前渲染的章节索引
       renderingSectionIndex: 0, // 当前渲染的小节索引
       knowledgeGraphChart: null, // 课程图谱实例
+      originalGraphData: null, // 保存原始图谱数据(用于高亮计算)
       isGraphFullscreen: false, // 知识图谱是否全屏
       isStructureFullscreen: false, // 课程结构是否全屏
       generatingGraph: false, // 知识点图谱生成状态
@@ -1052,6 +1149,18 @@ export default {
       graphSearchKeyword: '', // 2D图谱搜索关键词
       graph3DSearchKeyword: '', // 3D图谱搜索关键词
       graphSearchResults: [], // 搜索结果列表
+      // 资源详情查看
+      currentResourceType: null, // 当前查看的资源类型
+      currentResourceList: [], // 当前资源列表数据
+      loadingResources: false, // 资源加载状态
+      loadingResourceStats: false, // 资源统计加载状态
+      // 作业/考试编辑对话框
+      homeworkDialogVisible: false, // 作业编辑对话框显示状态
+      editHomeworkData: null, // 编辑的作业数据
+      homeworkDialogWidth: '40%', // 作业对话框宽度
+      examDialogVisible: false, // 考试编辑对话框显示状态
+      editExamData: null, // 编辑的考试数据
+      examDialogWidth: '40%', // 考试对话框宽度
     };
   },
   created() {
@@ -2677,6 +2786,40 @@ export default {
         }]
       };
       
+      // 保存原始图谱数据(深拷贝),并确保知识点节点在原始数据中是可见的
+      this.originalGraphData = {
+        nodes: JSON.parse(JSON.stringify(graphData.nodes)).map(node => {
+          // 如果是知识点节点,在原始数据中设置为可见状态
+          if (node.id && node.id.startsWith('kp-')) {
+            return {
+              ...node,
+              itemStyle: {
+                ...node.itemStyle,
+                opacity: 1 // 原始数据中知识点是可见的
+              },
+              label: {
+                ...node.label,
+                show: true // 原始数据中标签是显示的
+              }
+            };
+          }
+          return node;
+        }),
+        links: JSON.parse(JSON.stringify(graphData.links)).map(link => {
+          // 如果是知识点连线,在原始数据中设置为可见状态
+          if (link.target && link.target.startsWith('kp-')) {
+            return {
+              ...link,
+              lineStyle: {
+                ...link.lineStyle,
+                opacity: 0.8 // 原始数据中连线是可见的
+              }
+            };
+          }
+          return link;
+        })
+      };
+      
       this.knowledgeGraphChart.setOption(option);
       
       // 添加点击事件处理 - 使用时间间隔判断双击
@@ -2685,22 +2828,22 @@ export default {
           const nodeId = params.data.id;
           const now = Date.now();
           
-          // 检查是否是双击(400ms内点击同一节点)
-          if (this.last2DClickNode === nodeId && now - this.last2DClickTime < 400) {
+          // 如果是同一节点且在300ms内,判定为双击
+          if (this.last2DClickNode === nodeId && now - this.last2DClickTime < 300) {
             // 双击检测成功
             console.log('[知识图谱] 检测到双击节点:', nodeId);
             
-            // 清除单击定时器
+            // 清除单击定时器,防止单击操作执行
             if (this.clickTimeout) {
               clearTimeout(this.clickTimeout);
               this.clickTimeout = null;
             }
             
-            // 重置双击检测状态
+            // 重置双击检测状态(重要:立即重置,避免三击被误判)
             this.last2DClickNode = null;
             this.last2DClickTime = 0;
             
-            // 处理双击:小节节点跳转,其他节点恢复图谱
+            // 处理双击:小节节点跳转,知识点节点跳转,其他节点恢复图谱
             if (params.data.id && params.data.id.startsWith('section-')) {
               console.log('[知识图谱] 双击小节节点,跳转到小节详情页:', params.data);
               // 从节点数据中获取sectionData
@@ -2711,6 +2854,27 @@ export default {
                 console.error('[知识图谱] 节点数据中没有section信息:', params.data);
                 this.$message.error('无法获取小节信息');
               }
+            } else if (params.data.id && params.data.id.startsWith('kp-')) {
+              // 2D图谱: 双击知识点节点，跳转到知识点详情页
+              // 2D图谱中知识点节点格式: 'kp-{sectionId}-{index}'
+              // 从节点数据的kpData中获取知识点ID
+              if (params.data.kpData && params.data.kpData.id) {
+                const kpId = params.data.kpData.id;
+                console.log('[知识图谱] 双击知识点节点(2D),跳转到知识点详情页:', kpId);
+                this.$router.push({
+                  path: `/knowledgepoint/detail/${kpId}`
+                });
+              } else {
+                console.error('[知识图谱] 无法获取知识点ID:', params.data);
+                this.$message.error('无法获取知识点信息');
+              }
+            } else if (params.data.id && params.data.id.startsWith('kp_')) {
+              // 3D图谱: 双击知识点节点，跳转到知识点详情页
+              const kpId = params.data.id.replace('kp_', '');
+              console.log('[知识图谱] 双击知识点节点(3D),跳转到知识点详情页:', kpId);
+              this.$router.push({
+                path: `/knowledgepoint/detail/${kpId}`
+              });
             } else {
               console.log('[知识图谱] 双击非小节节点,恢复图谱');
               this.knowledgeGraphChart.setOption({
@@ -2723,20 +2887,34 @@ export default {
             return;
           }
           
+          // 清除之前的单击定时器(如果点击了不同节点)
+          if (this.clickTimeout) {
+            clearTimeout(this.clickTimeout);
+            this.clickTimeout = null;
+          }
+          
           // 记录本次点击
           this.last2DClickNode = nodeId;
           this.last2DClickTime = now;
           
-          // 延迟执行单击操作,给双击检测留时间
-          if (this.clickTimeout) {
-            clearTimeout(this.clickTimeout);
-          }
+          // 延迟执行单击操作,等待可能的第二次点击
           this.clickTimeout = setTimeout(() => {
+            // 执行单击操作
+            console.log('[知识图谱] 执行单击操作:', nodeId);
+            
             // 高亮当前节点及其相关节点
             this.highlightNodeAndRelated(nodeId, graphData);
             
             // 判断节点类型并打开相应抽屉
-            if (params.data.id && params.data.id.startsWith('section-')) {
+            if (params.data.id && params.data.id.startsWith('kp-')) {
+              // 知识点节点 - 使用和抽屉中点击知识点一样的处理方式
+              console.log('[知识图谱] 单击知识点节点:', params.data);
+              if (params.data.kpData) {
+                this.handleDrawerKnowledgeClick(params.data.kpData, true); // 传递true跳过图谱高亮
+              } else {
+                console.error('[知识图谱] 知识点节点缺少kpData:', params.data);
+              }
+            } else if (params.data.id && params.data.id.startsWith('section-')) {
               // 小节节点
               this.handleSectionNodeClick(params.data);
             } else if (params.data.id && params.data.id.startsWith('chapter-')) {
@@ -2748,7 +2926,7 @@ export default {
             }
             
             this.clickTimeout = null;
-          }, 250); // 250ms延迟,小于400ms双击检测窗口
+          }, 320); // 320ms延迟,略大于双击检测窗口(300ms)
         }
       });
       
@@ -2885,7 +3063,7 @@ export default {
                 const kpColor = colorScheme; // 使用章节主颜色，更鲜艳
                 
                 const kpNode = {
-                  id: 'kp-' + section.id + '-' + kpIndex,
+                  id: 'kp-' + kp.id, // 使用知识点的真实ID,而不是section.id + index
                   name: kp.name || kp.title,
                   symbolSize: 28, // 稍微增大一点
                   category: 3,
@@ -2947,19 +3125,34 @@ export default {
     highlightNodeAndRelated(nodeId, graphData) {
       if (!this.knowledgeGraphChart) return;
       
-      // 找到相邻的节点ID
+      // 找到相邻的节点ID（不包括知识点节点的自动扩展）
       const adjacentNodeIds = new Set([nodeId]);
+      const adjacentKnowledgePointIds = new Set(); // 单独存储相邻的知识点ID
+      
       graphData.links.forEach(link => {
         if (link.source === nodeId) {
-          adjacentNodeIds.add(link.target);
+          const targetId = link.target;
+          // 如果目标是知识点，单独处理
+          if (targetId.startsWith('kp-')) {
+            adjacentKnowledgePointIds.add(targetId);
+          } else {
+            adjacentNodeIds.add(targetId);
+          }
         }
         if (link.target === nodeId) {
-          adjacentNodeIds.add(link.source);
+          const sourceId = link.source;
+          // 如果来源是知识点，单独处理
+          if (sourceId.startsWith('kp-')) {
+            adjacentKnowledgePointIds.add(sourceId);
+          } else {
+            adjacentNodeIds.add(sourceId);
+          }
         }
       });
       
       // 检查点击的是否是小节节点
       const isClickedSectionNode = nodeId.startsWith('section-');
+      const isClickedKnowledgePoint = nodeId.startsWith('kp-');
       
       // 如果是小节节点，提取小节ID
       let clickedSectionId = null;
@@ -2974,25 +3167,43 @@ export default {
         
         // 如果是知识点节点
         if (isKnowledgePoint) {
-          // 检查该知识点是否属于被点击的小节
-          const belongsToClickedSection = isClickedSectionNode && 
-                                         node.sectionId && 
-                                         clickedSectionId && 
-                                         String(node.sectionId) === String(clickedSectionId);
+          let shouldShow = false;
+          let isSelectedNode = false; // 是否是被选中的节点
           
-          // 知识点应该显示：要么属于被点击的小节，要么在相邻节点集合中
-          const shouldShow = belongsToClickedSection || isAdjacent;
+          // 情况1：点击的是小节节点，只显示该小节的知识点
+          if (isClickedSectionNode) {
+            const belongsToClickedSection = node.sectionId && 
+                                           clickedSectionId && 
+                                           String(node.sectionId) === String(clickedSectionId);
+            shouldShow = belongsToClickedSection;
+          }
+          // 情况2：点击的是知识点节点本身，只显示这个知识点
+          else if (isClickedKnowledgePoint) {
+            shouldShow = node.id === nodeId;
+            isSelectedNode = node.id === nodeId; // 标记为选中节点
+          }
+          // 情况3：点击的是章节或课程节点，不显示任何知识点
+          else {
+            shouldShow = false;
+          }
           
           return {
             ...node,
             itemStyle: {
               ...node.itemStyle,
-              opacity: shouldShow ? 1 : 0 // 完全显示或完全隐藏
+              opacity: shouldShow ? 1 : 0,
+              borderWidth: isSelectedNode ? 4 : (node.itemStyle?.borderWidth || 2), // 选中节点加粗边框
+              borderColor: isSelectedNode ? '#FFD700' : (node.itemStyle?.borderColor || '#fff'), // 选中节点金色边框
+              shadowBlur: isSelectedNode ? 20 : 0, // 选中节点添加光晕效果
+              shadowColor: isSelectedNode ? '#FFD700' : 'transparent'
             },
+            symbolSize: isSelectedNode ? (node.symbolSize || 40) * 1.3 : (node.symbolSize || 40), // 选中节点放大30%
             label: {
               ...node.label,
-              show: shouldShow, // 显示或隐藏标签
-              opacity: shouldShow ? 1 : 0 // 标签完全不透明
+              show: shouldShow,
+              opacity: shouldShow ? 1 : 0,
+              fontWeight: isSelectedNode ? 'bold' : 'normal', // 选中节点文字加粗
+              fontSize: isSelectedNode ? 14 : 12 // 选中节点文字放大
             }
           };
         }
@@ -3013,15 +3224,35 @@ export default {
       
       // 更新连线样式
       const updatedLinks = graphData.links.map(link => {
-        const isConnected = link.source === nodeId || link.target === nodeId;
-        const isKnowledgePointLink = link.target && link.target.startsWith('kp-');
+        const sourceId = link.source;
+        const targetId = link.target;
+        
+        // 判断这条连线是否应该显示
+        let shouldShowLink = false;
+        
+        // 判断是否是知识点连线
+        const isKnowledgePointLink = targetId.startsWith('kp-');
+        
+        if (isKnowledgePointLink) {
+          // 知识点连线：只有当该知识点应该显示时才显示连线
+          if (isClickedSectionNode) {
+            // 点击的是小节节点，只显示该小节到其知识点的连线
+            shouldShowLink = sourceId === nodeId;
+          } else if (isClickedKnowledgePoint) {
+            // 点击的是知识点节点，只显示该知识点相关的连线
+            shouldShowLink = targetId === nodeId || sourceId === nodeId;
+          }
+          // 其他情况（点击章节或课程），不显示知识点连线
+        } else {
+          // 非知识点连线：正常的章节、小节连线
+          shouldShowLink = sourceId === nodeId || targetId === nodeId;
+        }
         
         return {
           ...link,
           lineStyle: {
             ...link.lineStyle,
-            // 知识点连线使用更高的不透明度，确保可见
-            opacity: isConnected ? (isKnowledgePointLink ? 0.8 : 0.8) : 0.1
+            opacity: shouldShowLink ? 0.8 : 0.05 // 显示或几乎完全隐藏
           }
         };
       });
@@ -3185,6 +3416,30 @@ export default {
       
       this.knowledgePointsCurrentPage = 1; // 重置分页
       this.sectionDrawerVisible = true;
+      
+      // 预加载章节的资源统计
+      this.preloadChapterResourceStats(this.selectedSection);
+      
+      // 同步到3D图谱 - 高亮对应的章节节点
+      if (this.graph3DInstance) {
+        const graphData = this.graph3DInstance.graphData();
+        const targetNode = graphData.nodes.find(n => 
+          n.type === 'chapter' && n.data && n.data.id === chapterId
+        );
+        
+        if (targetNode) {
+          // 高亮节点及其关系
+          this.highlight3DNode(targetNode);
+          
+          // 相机聚焦到节点
+          const distance = 200;
+          this.graph3DInstance.cameraPosition(
+            { x: targetNode.x, y: targetNode.y, z: targetNode.z + distance },
+            { x: targetNode.x, y: targetNode.y, z: targetNode.z },
+            1000
+          );
+        }
+      }
     },
     /** 处理小节节点点击 */
     handleSectionNodeClick(nodeData) {
@@ -3227,8 +3482,33 @@ export default {
         
         this.knowledgePointsCurrentPage = 1; // 重置分页
         this.sectionDrawerVisible = true;
+        
+        // 预加载小节的资源统计
+        this.preloadSectionResourceStats(foundSection);
+        
+        // 同步到3D图谱 - 高亮对应的小节节点
+        if (this.graph3DInstance) {
+          const graphData = this.graph3DInstance.graphData();
+          const targetNode = graphData.nodes.find(n => 
+            n.type === 'section' && n.data && n.data.id === sectionId
+          );
+          
+          if (targetNode) {
+            // 高亮节点及其关系
+            this.highlight3DNode(targetNode);
+            
+            // 相机聚焦到节点
+            const distance = 200;
+            this.graph3DInstance.cameraPosition(
+              { x: targetNode.x, y: targetNode.y, z: targetNode.z + distance },
+              { x: targetNode.x, y: targetNode.y, z: targetNode.z },
+              1000
+            );
+          }
+        }
       }
     },
+    
     /** 切换知识点显示/隐藏 */
     toggleKnowledgePointsVisibility(sectionId) {
       if (!this.knowledgeGraphChart) return;
@@ -3294,7 +3574,558 @@ export default {
       this.selectedSection = null;
       // 重置分页
       this.knowledgePointsCurrentPage = 1;
+      // 重置资源类型查看
+      this.currentResourceType = null;
+      this.currentResourceList = [];
     },
+    
+    /** 查看资源详情 */
+    async viewResourceDetail(resourceType) {
+      console.log('[抽屉] 查看资源详情:', resourceType, 'selectedSection:', this.selectedSection);
+      this.currentResourceType = resourceType;
+      this.currentResourceList = [];
+      
+      // 1. 知识点类型
+      if (this.selectedSection && this.selectedSection.isKnowledgePoint && this.selectedSection.kpData) {
+        const kpId = this.selectedSection.kpData.id;
+        console.log('[抽屉] 知识点类型 - 根据知识点ID加载资源:', kpId);
+        
+        // 对于作业、考试、测验，从后端API获取
+        if (['assignments', 'tests', 'exams'].includes(resourceType)) {
+          await this.loadAssignmentsByKnowledgePoint(kpId, resourceType);
+        } else {
+          // 其他资源类型使用模拟数据
+          this.loadMockResourceData(resourceType);
+        }
+      }
+      // 2. 章节汇总类型
+      else if (this.selectedSection && this.selectedSection.isAggregate && this.selectedSection.aggregateType === 'chapter') {
+        console.log('[抽屉] 章节汇总类型 - 加载章节下所有小节的资源');
+        
+        if (['assignments', 'tests', 'exams'].includes(resourceType)) {
+          await this.loadAssignmentsByChapter(this.selectedSection, resourceType);
+        } else {
+          this.loadMockResourceData(resourceType);
+        }
+      }
+      // 3. 小节类型
+      else if (this.selectedSection && this.selectedSection.id && !this.selectedSection.isAggregate) {
+        console.log('[抽屉] 小节类型 - 加载小节下所有知识点的资源');
+        
+        if (['assignments', 'tests', 'exams'].includes(resourceType)) {
+          await this.loadAssignmentsBySection(this.selectedSection, resourceType);
+        } else {
+          this.loadMockResourceData(resourceType);
+        }
+      }
+      // 4. 其他类型，使用模拟数据
+      else {
+        console.log('[抽屉] 其他类型 - 使用模拟数据');
+        this.loadMockResourceData(resourceType);
+      }
+    },
+    
+    /** 根据知识点ID加载作业/考试/测验 */
+    async loadAssignmentsByKnowledgePoint(kpId, resourceType) {
+      this.loadingResources = true;
+      try {
+        const response = await getAssignmentsByKnowledgePoint(kpId);
+        console.log('[抽屉] API返回数据:', response);
+        
+        if (response && response.data) {
+          const assignments = response.data;
+          
+          // 根据资源类型过滤
+          if (resourceType === 'exams') {
+            // 考试：type为exam
+            this.currentResourceList = assignments.filter(item => item.type === 'exam');
+          } else if (resourceType === 'assignments') {
+            // 作业：type为homework
+            this.currentResourceList = assignments.filter(item => item.type === 'homework');
+          } else if (resourceType === 'tests') {
+            // 测验：type为homework且mode为question
+            this.currentResourceList = assignments.filter(
+              item => item.type === 'homework' && item.mode === 'question'
+            );
+          }
+          
+          console.log(`[抽屉] 过滤后的${this.getResourceTypeName(resourceType)}列表:`, this.currentResourceList);
+        } else {
+          this.currentResourceList = [];
+        }
+      } catch (error) {
+        console.error('[抽屉] 加载资源失败:', error);
+        this.$message.error('加载资源失败：' + (error.message || '未知错误'));
+        this.currentResourceList = [];
+      } finally {
+        this.loadingResources = false;
+      }
+    },
+    
+    /** 根据小节加载作业/考试/测验(汇总该小节下所有知识点的资源) */
+    async loadAssignmentsBySection(section, resourceType) {
+      this.loadingResources = true;
+      try {
+        console.log('[抽屉] 小节资源加载 - 小节:', section.title, '资源类型:', resourceType);
+        
+        // 收集该小节下所有知识点的ID
+        const knowledgePoints = section.knowledgePoints || [];
+        if (knowledgePoints.length === 0) {
+          console.log('[抽屉] 该小节没有知识点');
+          this.currentResourceList = [];
+          return;
+        }
+        
+        console.log('[抽屉] 小节包含', knowledgePoints.length, '个知识点');
+        
+        // 收集所有资源(不按类型过滤,用于统计)
+        const allResourceMap = new Map();
+        
+        // 遍历每个知识点,获取其资源
+        for (const kp of knowledgePoints) {
+          const kpId = kp.id || kp.pointId || kp.kpId;
+          if (!kpId) {
+            console.warn('[抽屉] 知识点缺少ID:', kp);
+            continue;
+          }
+          
+          try {
+            const response = await getAssignmentsByKnowledgePoint(kpId);
+            if (response && response.data) {
+              const assignments = response.data;
+              
+              // 添加到总资源集合(去重)
+              assignments.forEach(item => {
+                if (!allResourceMap.has(item.id)) {
+                  allResourceMap.set(item.id, item);
+                }
+              });
+            }
+          } catch (error) {
+            console.error(`[抽屉] 加载知识点${kpId}的资源失败:`, error);
+          }
+        }
+        
+        // 统计各类型资源数量
+        const allResources = Array.from(allResourceMap.values());
+        const exams = allResources.filter(item => item.type === 'exam');
+        const assignments = allResources.filter(item => item.type === 'homework' && item.mode !== 'question');
+        const tests = allResources.filter(item => item.type === 'homework' && item.mode === 'question');
+        
+        // 更新selectedSection的资源统计
+        this.selectedSection = {
+          ...this.selectedSection,
+          assignments: assignments.length,
+          tests: tests.length,
+          exams: exams.length
+        };
+        
+        // 根据当前查看的资源类型过滤列表
+        if (resourceType === 'exams') {
+          this.currentResourceList = exams;
+        } else if (resourceType === 'assignments') {
+          this.currentResourceList = assignments;
+        } else if (resourceType === 'tests') {
+          this.currentResourceList = tests;
+        }
+        
+        console.log(`[抽屉] 小节资源汇总完成 - 作业:${assignments.length} 测验:${tests.length} 考试:${exams.length}`);
+        
+      } catch (error) {
+        console.error('[抽屉] 小节资源加载失败:', error);
+        this.$message.error('加载资源失败：' + (error.message || '未知错误'));
+        this.currentResourceList = [];
+      } finally {
+        this.loadingResources = false;
+      }
+    },
+    
+    /** 根据章节加载作业/考试/测验(汇总该章节下所有小节的资源) */
+    async loadAssignmentsByChapter(chapterSection, resourceType) {
+      this.loadingResources = true;
+      try {
+        console.log('[抽屉] 章节资源加载 - 章节:', chapterSection.title, '资源类型:', resourceType);
+        
+        // 提取章节ID
+        const chapterId = typeof chapterSection.id === 'string' 
+          ? parseInt(chapterSection.id.replace('chapter-', ''))
+          : chapterSection.id;
+        
+        // 找到对应的章节对象
+        const chapter = this.chapterList.find(c => c.id === chapterId);
+        if (!chapter || !chapter.sections || chapter.sections.length === 0) {
+          console.log('[抽屉] 章节没有小节');
+          this.currentResourceList = [];
+          return;
+        }
+        
+        console.log('[抽屉] 章节包含', chapter.sections.length, '个小节');
+        
+        // 收集所有资源(不按类型过滤,用于统计)
+        const allResourceMap = new Map();
+        
+        // 遍历每个小节下的每个知识点
+        for (const section of chapter.sections) {
+          const knowledgePoints = section.knowledgePoints || [];
+          
+          for (const kp of knowledgePoints) {
+            const kpId = kp.id || kp.pointId || kp.kpId;
+            if (!kpId) continue;
+            
+            try {
+              const response = await getAssignmentsByKnowledgePoint(kpId);
+              if (response && response.data) {
+                const assignments = response.data;
+                
+                // 添加到总资源集合(去重)
+                assignments.forEach(item => {
+                  if (!allResourceMap.has(item.id)) {
+                    allResourceMap.set(item.id, item);
+                  }
+                });
+              }
+            } catch (error) {
+              console.error(`[抽屉] 加载知识点${kpId}的资源失败:`, error);
+            }
+          }
+        }
+        
+        // 统计各类型资源数量
+        const allResources = Array.from(allResourceMap.values());
+        const exams = allResources.filter(item => item.type === 'exam');
+        const assignments = allResources.filter(item => item.type === 'homework' && item.mode !== 'question');
+        const tests = allResources.filter(item => item.type === 'homework' && item.mode === 'question');
+        
+        // 更新selectedSection的资源统计
+        this.selectedSection = {
+          ...this.selectedSection,
+          assignments: assignments.length,
+          tests: tests.length,
+          exams: exams.length
+        };
+        
+        // 根据当前查看的资源类型过滤列表
+        if (resourceType === 'exams') {
+          this.currentResourceList = exams;
+        } else if (resourceType === 'assignments') {
+          this.currentResourceList = assignments;
+        } else if (resourceType === 'tests') {
+          this.currentResourceList = tests;
+        }
+        
+        console.log(`[抽屉] 章节资源汇总完成 - 作业:${assignments.length} 测验:${tests.length} 考试:${exams.length}`);
+        
+      } catch (error) {
+        console.error('[抽屉] 章节资源加载失败:', error);
+        this.$message.error('加载资源失败：' + (error.message || '未知错误'));
+        this.currentResourceList = [];
+      } finally {
+        this.loadingResources = false;
+      }
+    },
+    
+    /** 预加载小节的资源统计(在打开抽屉时调用) */
+    async preloadSectionResourceStats(section) {
+      this.loadingResourceStats = true; // 开始加载
+      try {
+        console.log('[抽屉] 预加载小节资源统计:', section.title);
+        
+        const knowledgePoints = section.knowledgePoints || [];
+        if (knowledgePoints.length === 0) {
+          console.log('[抽屉] 小节没有知识点,资源统计为0');
+          this.loadingResourceStats = false;
+          return;
+        }
+        
+        // 收集所有资源
+        const allResourceMap = new Map();
+        
+        for (const kp of knowledgePoints) {
+          const kpId = kp.id || kp.pointId || kp.kpId;
+          if (!kpId) continue;
+          
+          try {
+            const response = await getAssignmentsByKnowledgePoint(kpId);
+            if (response && response.data) {
+              response.data.forEach(item => {
+                if (!allResourceMap.has(item.id)) {
+                  allResourceMap.set(item.id, item);
+                }
+              });
+            }
+          } catch (error) {
+            console.error(`[抽屉] 预加载知识点${kpId}资源失败:`, error);
+          }
+        }
+        
+        // 统计各类型资源
+        const allResources = Array.from(allResourceMap.values());
+        const exams = allResources.filter(item => item.type === 'exam');
+        const assignments = allResources.filter(item => item.type === 'homework' && item.mode !== 'question');
+        const tests = allResources.filter(item => item.type === 'homework' && item.mode === 'question');
+        
+        // 更新统计
+        this.selectedSection = {
+          ...this.selectedSection,
+          assignments: assignments.length,
+          tests: tests.length,
+          exams: exams.length
+        };
+        
+        console.log(`[抽屉] 小节资源统计完成 - 作业:${assignments.length} 测验:${tests.length} 考试:${exams.length}`);
+        
+      } catch (error) {
+        console.error('[抽屉] 预加载小节资源统计失败:', error);
+      } finally {
+        this.loadingResourceStats = false; // 加载完成
+      }
+    },
+    
+    /** 预加载章节的资源统计(在打开抽屉时调用) */
+    async preloadChapterResourceStats(chapterSection) {
+      this.loadingResourceStats = true; // 开始加载
+      try {
+        console.log('[抽屉] 预加载章节资源统计:', chapterSection.title);
+        
+        // 提取章节ID
+        const chapterId = typeof chapterSection.id === 'string' 
+          ? parseInt(chapterSection.id.replace('chapter-', ''))
+          : chapterSection.id;
+        
+        const chapter = this.chapterList.find(c => c.id === chapterId);
+        if (!chapter || !chapter.sections || chapter.sections.length === 0) {
+          console.log('[抽屉] 章节没有小节,资源统计为0');
+          this.loadingResourceStats = false;
+          return;
+        }
+        
+        // 收集所有资源
+        const allResourceMap = new Map();
+        
+        for (const section of chapter.sections) {
+          const knowledgePoints = section.knowledgePoints || [];
+          
+          for (const kp of knowledgePoints) {
+            const kpId = kp.id || kp.pointId || kp.kpId;
+            if (!kpId) continue;
+            
+            try {
+              const response = await getAssignmentsByKnowledgePoint(kpId);
+              if (response && response.data) {
+                response.data.forEach(item => {
+                  if (!allResourceMap.has(item.id)) {
+                    allResourceMap.set(item.id, item);
+                  }
+                });
+              }
+            } catch (error) {
+              console.error(`[抽屉] 预加载知识点${kpId}资源失败:`, error);
+            }
+          }
+        }
+        
+        // 统计各类型资源
+        const allResources = Array.from(allResourceMap.values());
+        const exams = allResources.filter(item => item.type === 'exam');
+        const assignments = allResources.filter(item => item.type === 'homework' && item.mode !== 'question');
+        const tests = allResources.filter(item => item.type === 'homework' && item.mode === 'question');
+        
+        // 更新统计
+        this.selectedSection = {
+          ...this.selectedSection,
+          assignments: assignments.length,
+          tests: tests.length,
+          exams: exams.length
+        };
+        
+        console.log(`[抽屉] 章节资源统计完成 - 作业:${assignments.length} 测验:${tests.length} 考试:${exams.length}`);
+        
+      } catch (error) {
+        console.error('[抽屉] 预加载章节资源统计失败:', error);
+      } finally {
+        this.loadingResourceStats = false; // 加载完成
+      }
+    },
+    
+    /** 加载模拟资源数据 */
+    loadMockResourceData(resourceType) {
+      const mockData = {
+        learningMaterials: [
+          { id: 1, title: '单选题练习', createTime: '2024-01-15', status: 1 },
+          { id: 2, title: '多选题练习', createTime: '2024-01-16', status: 1 }
+        ],
+        materials: [
+          { id: 1, title: 'PPT课件', createTime: '2024-01-10', status: 1 },
+          { id: 2, title: 'PDF教材', createTime: '2024-01-11', status: 1 }
+        ],
+        activities: [
+          { id: 1, title: '教学视频1', createTime: '2024-01-12', status: 1 },
+          { id: 2, title: '教学视频2', createTime: '2024-01-13', status: 1 }
+        ]
+      };
+      
+      this.currentResourceList = mockData[resourceType] || [];
+    },
+    
+    /** 返回资源统计 */
+    backToResourceStats() {
+      this.currentResourceType = null;
+      this.currentResourceList = [];
+    },
+    
+    /** 获取资源类型名称 */
+    getResourceTypeName(resourceType) {
+      const typeNames = {
+        learningMaterials: '题库',
+        materials: '资料',
+        activities: '视频',
+        assignments: '作业',
+        tests: '测验',
+        exams: '考试'
+      };
+      return typeNames[resourceType] || '资源';
+    },
+    
+    /** 获取资源图标 */
+    getResourceIcon(resourceType) {
+      const icons = {
+        learningMaterials: 'el-icon-reading',
+        materials: 'el-icon-document',
+        activities: 'el-icon-video-camera',
+        assignments: 'el-icon-edit-outline',
+        tests: 'el-icon-medal',
+        exams: 'el-icon-tickets'
+      };
+      return icons[resourceType] || 'el-icon-document';
+    },
+    
+    /** 查看资源项 */
+    viewResourceItem(item) {
+      console.log('[抽屉] 查看资源项:', item);
+      this.$message.info('查看资源：' + item.title);
+      // 这里可以添加跳转到资源详情页的逻辑
+    },
+    
+    /** 查看资源 */
+    handleViewResource(item) {
+      console.log('[资源] 查看资源:', item);
+      // 切换到任务管理标签页
+      this.activeTab = 'tasks';
+      // 等待DOM更新后，滚动到对应的任务
+      this.$nextTick(() => {
+        // 设置任务类型筛选
+        if (this.$refs.homeworkManagement || this.$refs.examManagement) {
+          if (item.type === 'exam') {
+            // 切换到考试标签
+            if (this.$refs.examManagement) {
+              this.$refs.examManagement.currentTaskType = 'exam';
+            }
+          } else if (item.type === 'homework') {
+            // 切换到作业标签
+            if (this.$refs.homeworkManagement) {
+              this.$refs.homeworkManagement.currentTaskType = 'homework';
+            }
+          }
+        }
+      });
+    },
+    
+    /** 修改资源 */
+    handleEditResource(item) {
+      console.log('[资源] 修改资源:', item);
+      // 获取资源详情并打开编辑对话框
+      getAssignment(item.id).then(response => {
+        console.log('[资源] API响应:', response);
+        const assignmentData = response.data || response;
+        console.log('[资源] 任务数据:', assignmentData);
+        
+        if (item.type === 'exam') {
+          // 考试 - 在图谱抽屉中使用较窄宽度
+          this.examDialogWidth = '40%';
+          this.editExamData = assignmentData;
+          console.log('[资源] 打开考试对话框，数据:', this.editExamData);
+          this.examDialogVisible = true;
+        } else if (item.type === 'homework') {
+          // 作业 - 在图谱抽屉中使用较窄宽度
+          this.homeworkDialogWidth = '40%';
+          this.editHomeworkData = assignmentData;
+          console.log('[资源] 打开作业对话框，数据:', this.editHomeworkData);
+          this.homeworkDialogVisible = true;
+        }
+      }).catch(error => {
+        console.error('[资源] 获取资源详情失败:', error);
+        this.$message.error('获取资源详情失败：' + (error.msg || error.message));
+      });
+    },
+    
+    /** 作业提交处理 */
+    handleHomeworkSubmit(data, selectedKpIds) {
+      console.log('[资源] 作业提交:', data);
+      // 调用作业管理组件的提交方法
+      if (this.$refs.homeworkManagement) {
+        this.$refs.homeworkManagement.handleAssignmentSubmit(data, selectedKpIds);
+      }
+      // 关闭对话框
+      this.homeworkDialogVisible = false;
+      // 重新加载资源列表
+      if (this.currentResourceType) {
+        this.viewResourceDetail(this.currentResourceType);
+      }
+    },
+    
+    /** 考试提交处理 */
+    handleExamSubmit(data, selectedKpIds) {
+      console.log('[资源] 考试提交:', data);
+      // 调用考试管理组件的提交方法
+      if (this.$refs.examManagement) {
+        this.$refs.examManagement.handleAssignmentSubmit(data, selectedKpIds);
+      }
+      // 关闭对话框
+      this.examDialogVisible = false;
+      // 重新加载资源列表
+      if (this.currentResourceType) {
+        this.viewResourceDetail(this.currentResourceType);
+      }
+    },
+    
+    /** 发布资源 */
+    handlePublishResource(item) {
+      console.log('[资源] 发布资源:', item);
+      const newStatus = item.status === 1 ? 0 : 1;
+      const statusText = newStatus === 1 ? '发布' : '取消发布';
+      
+      this.$confirm(`确认${statusText}该资源"${item.title}"吗？`, '提示', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }).then(() => {
+        const data = { ...item, status: newStatus };
+        return updateAssignment(data);
+      }).then(() => {
+        this.$message.success(`${statusText}成功`);
+        // 更新本地状态
+        item.status = newStatus;
+        // 重新加载资源列表
+        this.viewResourceDetail(this.currentResourceType);
+      }).catch(() => {});
+    },
+    
+    /** 删除资源 */
+    handleDeleteResource(item) {
+      console.log('[资源] 删除资源:', item);
+      this.$confirm(`是否确认删除资源"${item.title}"？删除后无法恢复！`, '警告', {
+        confirmButtonText: '确定删除',
+        cancelButtonText: '取消',
+        type: 'error'
+      }).then(() => {
+        return delAssignment(item.id);
+      }).then(() => {
+        this.$message.success('删除成功');
+        // 重新加载资源列表
+        this.viewResourceDetail(this.currentResourceType);
+      }).catch(() => {});
+    },
+    
     /** 知识点分页切换 */
     handleKnowledgePageChange(page) {
       this.knowledgePointsCurrentPage = page;
@@ -3309,6 +4140,11 @@ export default {
     /** 获取抽屉标题 */
     getDrawerTitle() {
       if (!this.selectedSection) return '详情';
+      
+      // 如果是知识点
+      if (this.selectedSection.isKnowledgePoint) {
+        return '🔖 ' + (this.selectedSection.name || this.selectedSection.title || '知识点详情');
+      }
       
       if (this.selectedSection.isAggregate) {
         if (this.selectedSection.aggregateType === 'course') {
@@ -3332,7 +4168,22 @@ export default {
     },
     /** 获取知识点数量 */
     getKnowledgePointsCount(section) {
-      if (!section || !section.knowledgePoints) return 0;
+      if (!section) return 0;
+      
+      // 如果是知识点视图，计算关联知识点的总数
+      if (section.isKnowledgePointView && section.relatedKnowledgePoints) {
+        let count = 0;
+        const related = section.relatedKnowledgePoints;
+        if (related.prerequisite_of) count += related.prerequisite_of.length;
+        if (related.similar_to) count += related.similar_to.length;
+        if (related.extension_of) count += related.extension_of.length;
+        if (related.derived_from) count += related.derived_from.length;
+        if (related.counterexample_of) count += related.counterexample_of.length;
+        return count;
+      }
+      
+      // 小节视图：计算知识点列表长度
+      if (!section.knowledgePoints) return 0;
       if (Array.isArray(section.knowledgePoints)) {
         return section.knowledgePoints.length;
       }
@@ -3348,8 +4199,11 @@ export default {
           }
           if (typeof point === 'object') {
             return {
+              ...point, // 先展开完整的知识点对象
+              id: point.id || point.pointId || point.kpId, // 确保ID字段存在
               name: point.name || point.title || JSON.stringify(point),
-              level: point.level ? this.getLevelChinese(point.level) : null
+              level: point.level ? this.getLevelChinese(point.level) : null, // 最后设置转换后的中文level,覆盖原始英文
+              description: point.description
             };
           }
           return { name: JSON.stringify(point), level: null };
@@ -3983,8 +4837,14 @@ export default {
     handle3DNodeDoubleClick(node) {
       console.log('[3D图谱] 节点双击:', node);
       
+      // 如果是知识点节点,跳转到知识点详情页
+      if (node.id && node.id.startsWith('kp_')) {
+        console.log('[3D图谱] 双击知识点节点,跳转到知识点详情页:', node);
+        const kpId = node.id.replace('kp_', '');
+        this.$router.push({ path: `/knowledgepoint/detail/${kpId}` });
+      }
       // 如果是小节节点,跳转到小节详情页
-      if (node.type === 'section') {
+      else if (node.type === 'section') {
         console.log('[3D图谱] 双击小节节点,跳转到小节详情页:', node.data);
         if (node.data) {
           this.goToSectionDetail(node.data);
@@ -4126,6 +4986,16 @@ export default {
       
       this.knowledgePointsCurrentPage = 1;
       this.sectionDrawerVisible = true;
+      
+      // 预加载章节的资源统计
+      this.preloadChapterResourceStats(this.selectedSection);
+      
+      // 同步到2D图谱 - 高亮对应的章节节点
+      if (this.knowledgeGraphChart && this.originalGraphData) {
+        const nodeId = 'chapter-' + chapter.id;
+        // 高亮章节节点
+        this.highlightNodeAndRelated(nodeId, this.originalGraphData);
+      }
     },
 
     /** 显示3D图谱小节详情抽屉 */
@@ -4162,10 +5032,20 @@ export default {
       
       this.knowledgePointsCurrentPage = 1;
       this.sectionDrawerVisible = true;
+      
+      // 预加载小节的资源统计
+      this.preloadSectionResourceStats(section);
+      
+      // 同步到2D图谱 - 高亮对应的小节节点并显示知识点
+      if (this.knowledgeGraphChart && this.originalGraphData) {
+        const nodeId = 'section-' + section.id;
+        // 高亮小节节点及其知识点
+        this.highlightNodeAndRelated(nodeId, this.originalGraphData);
+      }
     },
 
     /** 显示3D图谱知识点详情抽屉 */
-    show3DKnowledgeDrawer(node) {
+    async show3DKnowledgeDrawer(node, from2DGraph = false) {
       console.log('[3D图谱] 显示知识点抽屉:', node);
       
       // 节点的data字段包含了完整的知识点数据
@@ -4253,6 +5133,8 @@ export default {
         knowledgePoints: [kp],
         relatedKnowledgePoints: relatedKnowledgePoints,
         isKnowledgePointView: true, // 标记这是知识点视图
+        isKnowledgePoint: true, // 标记为知识点类型
+        kpData: kp, // 保存知识点数据
         learningMaterials: 0,
         materials: 0,
         activities: 0,
@@ -4262,6 +5144,16 @@ export default {
       };
       
       this.knowledgePointsCurrentPage = 1;
+      
+      // 加载该知识点的作业/考试/测验资源
+      await this.loadKnowledgePointResources(kp.id);
+      
+      // 同步到2D图谱 - 只在不是从2D图谱点击来的时候执行
+      if (!from2DGraph && this.knowledgeGraphChart && this.originalGraphData) {
+        const nodeId = 'kp-' + kp.id;
+        this.highlightNodeAndRelated(nodeId, this.originalGraphData);
+      }
+      
       this.sectionDrawerVisible = true;
     },
     
@@ -4336,25 +5228,103 @@ export default {
     },
 
     /** 处理抽屉中知识点点击 */
-    handleDrawerKnowledgeClick(kp) {
-      console.log('[抽屉] 点击知识点对象:', kp);
+    async handleDrawerKnowledgeClick(kp, from2DGraph = false) {
+      console.log('[抽屉] 知识点点击:', kp, 'from2DGraph:', from2DGraph);
       
-      const kpName = kp.name || kp.title || kp.pointName;
-      console.log('[抽屉] 查找知识点名称:', kpName);
+      // 重置当前资源类型，确保显示资源统计列表
+      this.currentResourceType = null;
+      this.currentResourceList = [];
       
-      // 尝试在2D图谱中查找和高亮
-      if (this.knowledgeGraphChart) {
-        this.highlight2DKnowledgePoint(kp);
+      // 提取知识点ID(兼容多种ID字段名)
+      const kpId = kp.id || kp.pointId || kp.kpId;
+      if (!kpId) {
+        console.error('[抽屉] 知识点缺少ID:', kp);
+        this.$message.warning('知识点数据异常');
+        return;
       }
       
-      // 尝试在3D图谱中查找和高亮
+      // 1. 更新抽屉内容(传递来源信息)
+      const node = {
+        type: 'knowledge',
+        data: kp
+      };
+      await this.show3DKnowledgeDrawer(node, from2DGraph);
+      
+      // 2. 同步更新图谱显示
+      // 2.1 处理3D图谱 - 总是执行
       if (this.graph3DInstance) {
-        this.highlight3DKnowledgePoint(kp);
+        // 在3D图谱中找到对应节点
+        const graphData = this.graph3DInstance.graphData();
+        const targetNode = graphData.nodes.find(n => 
+          n.type === 'knowledge' && n.data && (n.data.id === kpId || n.data.pointId === kpId || n.data.kpId === kpId)
+        );
+        
+        if (targetNode) {
+          console.log('[抽屉] 找到3D节点:', targetNode);
+          // 高亮节点及其关系
+          this.highlight3DNode(targetNode);
+          
+          // 相机聚焦到节点
+          const distance = 200;
+          this.graph3DInstance.cameraPosition(
+            { x: targetNode.x, y: targetNode.y, z: targetNode.z + distance },
+            { x: targetNode.x, y: targetNode.y, z: targetNode.z },
+            1000
+          );
+        } else {
+          console.warn('[抽屉] 未找到3D节点,kpId:', kpId);
+        }
       }
       
-      // 如果两个图谱都未初始化
-      if (!this.knowledgeGraphChart && !this.graph3DInstance) {
-        this.$message.warning('图谱未初始化');
+      // 2.2 处理2D图谱 - 只在不是从2D图谱点击来的时候执行
+      if (!from2DGraph && this.knowledgeGraphChart) {
+        // 需要保存原始图谱数据
+        if (!this.originalGraphData) {
+          console.warn('[2D图谱] 缺少原始图谱数据');
+          return;
+        }
+        
+        const nodeId = 'kp-' + kpId;
+        console.log('[抽屉] 尝试在2D图谱中高亮节点:', nodeId);
+        // 使用保存的原始数据
+        this.highlightNodeAndRelated(nodeId, this.originalGraphData);
+      }
+    },
+    
+    /** 加载知识点关联的资源并更新计数 */
+    async loadKnowledgePointResources(kpId) {
+      try {
+        if (!kpId) {
+          return;
+        }
+        
+        // 调用API获取该知识点关联的作业/考试/测验
+        const response = await getAssignmentsByKnowledgePoint(kpId);
+        
+        if (response && response.data) {
+          const assignments = response.data;
+          
+          // 按类型分类统计
+          const exams = assignments.filter(item => item.type === 'exam');
+          const homeworks = assignments.filter(item => item.type === 'homework' && item.mode !== 'question');
+          const tests = assignments.filter(item => item.type === 'homework' && item.mode === 'question');
+          
+          // 保留原有的selectedSection所有字段，只更新资源计数
+          this.selectedSection = {
+            ...this.selectedSection,  // 保留所有现有字段
+            learningMaterials: 0,
+            materials: 0,
+            activities: 0,
+            assignments: homeworks.length,
+            tests: tests.length,
+            exams: exams.length
+          };
+          
+          // 强制更新视图
+          this.$forceUpdate();
+        }
+      } catch (error) {
+        this.$message.error('加载资源失败: ' + error.message);
       }
     },
     
@@ -4438,14 +5408,23 @@ export default {
       const nodes = graphData.data;
       const links = graphData.links;
       
-      // 找到相邻的节点ID
+      // 判断是否是知识点节点
+      const isKnowledgePointNode = nodeId.startsWith('kp-');
+      
+      // 找到相邻的节点ID（但不包括其他知识点）
       const adjacentNodeIds = new Set([nodeId]);
       links.forEach(link => {
         if (link.source === nodeId) {
-          adjacentNodeIds.add(link.target);
+          // 如果当前是知识点节点，不包括其他知识点
+          if (!isKnowledgePointNode || !link.target.startsWith('kp-')) {
+            adjacentNodeIds.add(link.target);
+          }
         }
         if (link.target === nodeId) {
-          adjacentNodeIds.add(link.source);
+          // 如果当前是知识点节点，不包括其他知识点
+          if (!isKnowledgePointNode || !link.source.startsWith('kp-')) {
+            adjacentNodeIds.add(link.source);
+          }
         }
       });
       
@@ -4453,7 +5432,30 @@ export default {
       const updatedNodes = nodes.map(node => {
         const isAdjacent = adjacentNodeIds.has(node.id);
         const isTarget = node.id === nodeId;
+        const isNodeKnowledgePoint = node.id.startsWith('kp-');
         
+        // 如果当前遍历的是知识点节点
+        if (isNodeKnowledgePoint) {
+          // 只有当前被选中的知识点才显示，其他知识点都隐藏
+          const shouldShow = node.id === nodeId;
+          return {
+            ...node,
+            itemStyle: {
+              ...node.itemStyle,
+              opacity: shouldShow ? 1 : 0,
+              borderWidth: shouldShow ? 3 : 0,
+              borderColor: shouldShow ? '#ff0000' : undefined
+            },
+            label: {
+              ...node.label,
+              show: shouldShow,
+              opacity: shouldShow ? 1 : 0,
+              fontWeight: shouldShow ? 'bold' : 'normal'
+            }
+          };
+        }
+        
+        // 普通节点（课程、章节、小节）
         return {
           ...node,
           itemStyle: {
@@ -4473,6 +5475,23 @@ export default {
       // 更新连线样式
       const updatedLinks = links.map(link => {
         const isConnected = link.source === nodeId || link.target === nodeId;
+        const isKnowledgePointLink = link.target.startsWith('kp-');
+        
+        // 如果是知识点连线
+        if (isKnowledgePointLink) {
+          // 只有当目标是被选中的知识点时才显示连线
+          const shouldShow = link.target === nodeId;
+          return {
+            ...link,
+            lineStyle: {
+              ...link.lineStyle,
+              opacity: shouldShow ? 0.8 : 0,
+              width: shouldShow ? (link.lineStyle.width || 2) : 2
+            }
+          };
+        }
+        
+        // 普通连线
         return {
           ...link,
           lineStyle: {
@@ -4682,7 +5701,12 @@ export default {
       this.highlightNodeAndRelated(item.id, graphData);
       
       // 模拟节点点击，打开相应抽屉
-      if (item.id && item.id.startsWith('section-')) {
+      if (item.id && item.id.startsWith('kp-')) {
+        // 知识点节点 - 从nodeData中提取知识点对象
+        if (item.nodeData && item.nodeData.kpData) {
+          this.handleDrawerKnowledgeClick(item.nodeData.kpData, true); // 传true跳过2D图谱重复高亮
+        }
+      } else if (item.id && item.id.startsWith('section-')) {
         this.handleSectionNodeClick(item.nodeData);
       } else if (item.id && item.id.startsWith('chapter-')) {
         this.handleChapterNodeClick(item.nodeData);
@@ -5539,6 +6563,10 @@ body > .el-drawer__wrapper {
       font-size: 13px;
       color: #606266;
       line-height: 1.5;
+      max-height: 4.5em; // 3行的高度（1.5 * 3）
+      overflow-y: auto;
+      word-wrap: break-word;
+      word-break: break-all;
     }
   }
 
@@ -5728,10 +6756,12 @@ body > .el-drawer__wrapper {
       border: 1px solid #e4e7ed;
       border-radius: 6px;
       transition: all 0.3s;
+      cursor: pointer;
 
       &:hover {
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         transform: translateY(-2px);
+        border-color: #409EFF;
       }
 
       .stat-icon {
@@ -5753,6 +6783,133 @@ body > .el-drawer__wrapper {
         .stat-label {
           font-size: 11px;
           color: #909399;
+        }
+      }
+    }
+  }
+  
+  // 资源详情视图
+  .resource-detail-view {
+    .resource-detail-header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid #e4e7ed;
+      
+      .back-btn {
+        padding: 0;
+        font-size: 14px;
+        margin-right: 12px;
+        
+        &:hover {
+          color: #409EFF;
+        }
+      }
+      
+      .resource-type-title {
+        font-size: 14px;
+        font-weight: bold;
+        color: #303133;
+      }
+    }
+    
+    .resource-list {
+      .empty-resource {
+        text-align: center;
+        padding: 40px 0;
+        color: #909399;
+        
+        i {
+          font-size: 48px;
+          margin-bottom: 12px;
+          display: block;
+        }
+        
+        p {
+          margin: 0;
+          font-size: 14px;
+        }
+      }
+      
+      .resource-item {
+        display: flex;
+        align-items: center;
+        padding: 12px;
+        background: #fff;
+        border: 1px solid #e4e7ed;
+        border-radius: 6px;
+        margin-bottom: 10px;
+        transition: all 0.3s;
+        
+        &:hover {
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+          border-color: #c0c4cc;
+        }
+        
+        .resource-item-icon {
+          width: 40px;
+          height: 40px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: #f5f7fa;
+          border-radius: 6px;
+          margin-right: 12px;
+          
+          i {
+            font-size: 20px;
+            color: #606266;
+          }
+        }
+        
+        .resource-item-content {
+          flex: 1;
+          min-width: 0;
+          
+          .resource-item-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: #303133;
+            margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+          
+          .resource-item-meta {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 12px;
+            color: #909399;
+            
+            .meta-item {
+              display: flex;
+              align-items: center;
+              gap: 4px;
+              
+              i {
+                font-size: 12px;
+              }
+            }
+          }
+        }
+        
+        .resource-item-actions {
+          margin-left: 12px;
+          display: flex;
+          gap: 4px;
+          flex-shrink: 0;
+          
+          .el-button {
+            padding: 5px 8px;
+            font-size: 12px;
+            
+            &:hover {
+              background-color: #f5f7fa;
+            }
+          }
         }
       }
     }
