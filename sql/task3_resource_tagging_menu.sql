@@ -47,6 +47,17 @@ INSERT INTO sys_role_menu (role_id, menu_id)
 SELECT 1, menu_id FROM sys_menu 
 WHERE parent_id = @resource_tagging_menu_id AND menu_type = 'F';
 
+-- 为角色101（教师）授权
+INSERT INTO sys_role_menu (role_id, menu_id)
+VALUES (101, @parent_menu_id);
+
+INSERT INTO sys_role_menu (role_id, menu_id)
+VALUES (101, @resource_tagging_menu_id);
+
+INSERT INTO sys_role_menu (role_id, menu_id)
+SELECT 101, menu_id FROM sys_menu 
+WHERE parent_id = @resource_tagging_menu_id AND menu_type = 'F';
+
 
 SELECT m.menu_id, m.menu_name, m.perms, m.menu_type, m.parent_id
 FROM sys_menu m
