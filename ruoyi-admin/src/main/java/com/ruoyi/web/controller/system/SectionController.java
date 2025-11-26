@@ -68,6 +68,22 @@ public class SectionController extends BaseController
     }
 
     /**
+     * 根据视频URL查找对应的小节
+     */
+    @GetMapping("/findByVideoUrl")
+    public AjaxResult findByVideoUrl(String videoUrl)
+    {
+        if (videoUrl == null || videoUrl.isEmpty()) {
+            return error("视频URL不能为空");
+        }
+        Section section = sectionService.selectSectionByVideoUrl(videoUrl);
+        if (section != null) {
+            return success(section);
+        }
+        return error("未找到对应的小节");
+    }
+
+    /**
      * 新增小节
      */
     @Log(title = "课程小节", businessType = BusinessType.INSERT)

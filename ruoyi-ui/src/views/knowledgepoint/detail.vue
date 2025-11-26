@@ -426,31 +426,46 @@
                           <i :class="getResourceIcon(currentResourceType)"></i>
                         </div>
                         <div class="resource-item-content">
-                          <div class="resource-item-title">{{ item.title || item.name }}</div>
+                          <div class="resource-item-title">{{ item.name || item.title || '未命名资源' }}</div>
                           <div class="resource-item-meta">
                             <span v-if="item.createTime">{{ parseTime(item.createTime) }}</span>
+                            <span v-if="item.fileType" class="file-type-tag">
+                              <el-tag size="mini">{{ item.fileType }}</el-tag>
+                            </span>
                             <span v-if="item.status === 1" class="status-tag success">已发布</span>
                             <span v-else-if="item.status === 0" class="status-tag draft">草稿</span>
                           </div>
                         </div>
                         <div class="resource-item-actions">
-                          <el-tooltip content="查看" placement="top">
-                            <el-button type="text" icon="el-icon-view" size="small" @click="handleViewResource(item)" />
-                          </el-tooltip>
-                          <el-tooltip content="修改" placement="top">
-                            <el-button type="text" icon="el-icon-edit" size="small" @click="handleEditResource(item)" />
-                          </el-tooltip>
-                          <el-tooltip :content="item.status === 1 ? '取消发布' : '发布'" placement="top">
-                            <el-button 
-                              type="text" 
-                              :icon="item.status === 1 ? 'el-icon-close' : 'el-icon-check'" 
-                              size="small" 
-                              :style="{ color: item.status === 1 ? '#F56C6C' : '#67C23A' }"
-                              @click="handlePublishResource(item)" />
-                          </el-tooltip>
-                          <el-tooltip content="删除" placement="top">
-                            <el-button type="text" icon="el-icon-delete" size="small" style="color: #F56C6C;" @click="handleDeleteResource(item)" />
-                          </el-tooltip>
+                          <!-- 作业/考试/测验：显示所有操作 -->
+                          <template v-if="['assignments', 'tests', 'exams'].includes(currentResourceType)">
+                            <el-tooltip content="查看" placement="top">
+                              <el-button type="text" icon="el-icon-view" size="small" @click="handleViewResource(item)" />
+                            </el-tooltip>
+                            <el-tooltip content="修改" placement="top">
+                              <el-button type="text" icon="el-icon-edit" size="small" @click="handleEditResource(item)" />
+                            </el-tooltip>
+                            <el-tooltip :content="item.status === 1 ? '取消发布' : '发布'" placement="top">
+                              <el-button 
+                                type="text" 
+                                :icon="item.status === 1 ? 'el-icon-close' : 'el-icon-check'" 
+                                size="small" 
+                                :style="{ color: item.status === 1 ? '#F56C6C' : '#67C23A' }"
+                                @click="handlePublishResource(item)" />
+                            </el-tooltip>
+                            <el-tooltip content="删除" placement="top">
+                              <el-button type="text" icon="el-icon-delete" size="small" style="color: #F56C6C;" @click="handleDeleteResource(item)" />
+                            </el-tooltip>
+                          </template>
+                          <!-- 视频/资料：只显示查看和删除 -->
+                          <template v-else-if="['activities', 'materials'].includes(currentResourceType)">
+                            <el-tooltip content="查看" placement="top">
+                              <el-button type="text" icon="el-icon-view" size="small" @click="handleViewResource(item)" />
+                            </el-tooltip>
+                            <el-tooltip content="删除" placement="top">
+                              <el-button type="text" icon="el-icon-delete" size="small" style="color: #F56C6C;" @click="handleDeleteResource(item)" />
+                            </el-tooltip>
+                          </template>
                         </div>
                       </div>
                     </div>
@@ -685,8 +700,9 @@
 import { getKnowledgePoint, delKnowledgePoint, updateKnowledgePoint, generateKpDescription } from "@/api/course/knowledgePoint";
 import { listSectionKpByKp } from "@/api/course/sectionKp";
 import { listKpRelation } from "@/api/course/kpRelation";
-import { getSection } from "@/api/course/section";
+import { getSection, findSectionByVideoUrl } from "@/api/course/section";
 import { getAssignmentsByKnowledgePoint, getAssignment, addAssignment, updateAssignment, delAssignment } from "@/api/system/assignment";
+import { getCourseResourcesByKnowledgePoint, delCourseResource } from "@/api/course/courseResource";
 import HomeworkDialog from "@/views/assignment/homework.vue";
 import ExamDialog from "@/views/assignment/exam.vue";
 import * as echarts from 'echarts';
@@ -2275,9 +2291,10 @@ export default {
     async loadKpResourceStats() {
       this.loadingResourceStats = true;
       try {
-        const response = await getAssignmentsByKnowledgePoint(this.kpId);
-        if (response && response.data) {
-          const assignments = response.data;
+        // 1. 加载作业/考试/测验
+        const assignmentResponse = await getAssignmentsByKnowledgePoint(this.kpId);
+        if (assignmentResponse && assignmentResponse.data) {
+          const assignments = assignmentResponse.data;
           
           // 统计各类型资源
           this.kpResourceStats.exams = assignments.filter(item => item.type === 'exam').length;
@@ -2287,12 +2304,30 @@ export default {
           this.kpResourceStats.tests = assignments.filter(
             item => item.type === 'homework' && item.mode === 'question'
           ).length;
-          
-          // 其他资源类型暂时为0
-          this.kpResourceStats.learningMaterials = 0;
-          this.kpResourceStats.materials = 0;
-          this.kpResourceStats.activities = 0;
         }
+        
+        // 2. 加载视频和资料
+        const resourceResponse = await getCourseResourcesByKnowledgePoint(this.kpId);
+        if (resourceResponse && resourceResponse.data) {
+          const resources = resourceResponse.data;
+          
+          // 视频类型
+          const videoTypes = ['video', 'mp4', 'avi', 'mov', 'wmv', 'flv', 'mkv', 'webm'];
+          const videos = resources.filter(item =>
+            videoTypes.some(type => item.fileType && item.fileType.toLowerCase().includes(type))
+          );
+          
+          // 资料类型
+          const materials = resources.filter(item =>
+            !videoTypes.some(type => item.fileType && item.fileType.toLowerCase().includes(type))
+          );
+          
+          this.kpResourceStats.activities = videos.length;
+          this.kpResourceStats.materials = materials.length;
+        }
+        
+        // 题库暂时为0
+        this.kpResourceStats.learningMaterials = 0;
       } catch (error) {
         console.error('加载资源统计失败:', error);
       } finally {
@@ -2308,8 +2343,13 @@ export default {
       // 对于作业、考试、测验，从后端API获取
       if (['assignments', 'tests', 'exams'].includes(resourceType)) {
         await this.loadResourcesByType(resourceType);
-      } else {
-        // 其他资源类型暂时显示空列表
+      }
+      // 对于视频和资料，从课程资源API获取
+      else if (['activities', 'materials'].includes(resourceType)) {
+        await this.loadCourseResourcesByType(resourceType);
+      }
+      // 其他资源类型暂时显示空列表
+      else {
         this.currentResourceList = [];
       }
     },
@@ -2340,6 +2380,41 @@ export default {
       } catch (error) {
         console.error('加载资源失败:', error);
         this.$message.error('加载资源失败：' + (error.message || '未知错误'));
+        this.currentResourceList = [];
+      } finally {
+        this.loadingResources = false;
+      }
+    },
+    
+    /** 根据类型加载课程资源（视频和资料） */
+    async loadCourseResourcesByType(resourceType) {
+      this.loadingResources = true;
+      try {
+        const response = await getCourseResourcesByKnowledgePoint(this.kpId);
+        if (response && response.data) {
+          const resources = response.data;
+          
+          // 视频类型定义
+          const videoTypes = ['video', 'mp4', 'avi', 'mov', 'wmv', 'flv', 'mkv', 'webm'];
+          
+          // 根据资源类型过滤
+          if (resourceType === 'activities') {
+            // 视频
+            this.currentResourceList = resources.filter(item =>
+              videoTypes.some(type => item.fileType && item.fileType.toLowerCase().includes(type))
+            );
+          } else if (resourceType === 'materials') {
+            // 资料
+            this.currentResourceList = resources.filter(item =>
+              !videoTypes.some(type => item.fileType && item.fileType.toLowerCase().includes(type))
+            );
+          }
+        } else {
+          this.currentResourceList = [];
+        }
+      } catch (error) {
+        console.error('加载课程资源失败:', error);
+        this.$message.error('加载课程资源失败：' + (error.message || '未知错误'));
         this.currentResourceList = [];
       } finally {
         this.loadingResources = false;
@@ -2379,9 +2454,44 @@ export default {
     },
     
     /** 查看资源 */
-    handleViewResource(item) {
+    async handleViewResource(item) {
       console.log('[资源] 查看资源:', item);
-      // 跳转到课程详情页的任务管理标签
+      
+      // 视频：跳转到对应的小节详情页面
+      if (this.currentResourceType === 'activities') {
+        try {
+          // 通过fileUrl查找对应的小节
+          const response = await findSectionByVideoUrl(item.fileUrl);
+          if (response && response.data) {
+            const section = response.data;
+            // 跳转到小节详情页面
+            this.$router.push({
+              path: `/section/${section.courseId}/${section.id}`
+            });
+          } else {
+            this.$message.warning('未找到对应的小节');
+          }
+        } catch (error) {
+          console.error('[资源] 查找小节失败:', error);
+          this.$message.error('查找小节失败');
+        }
+        return;
+      }
+      
+      // 资料：跳转到资料管理页面
+      if (this.currentResourceType === 'materials') {
+        if (this.kpData.courseId) {
+          this.$router.push({
+            path: `/detail/${this.kpData.courseId}`,
+            query: { tab: 'resources' }
+          });
+        } else {
+          this.$message.warning('无法获取课程信息');
+        }
+        return;
+      }
+      
+      // 作业/考试/测验：跳转到课程详情页的任务管理标签
       if (this.kpData.courseId && item.id) {
         this.$router.push({
           path: `/detail/${this.kpData.courseId}`,
@@ -2447,12 +2557,21 @@ export default {
     /** 删除资源 */
     handleDeleteResource(item) {
       console.log('[资源] 删除资源:', item);
-      this.$confirm(`是否确认删除资源"${item.title}"？删除后无法恢复！`, '警告', {
+      const resourceName = item.name || item.title || '该资源';
+      
+      this.$confirm(`是否确认删除资源"${resourceName}"？删除后无法恢复！`, '警告', {
         confirmButtonText: '确定删除',
         cancelButtonText: '取消',
         type: 'error'
       }).then(() => {
-        return delAssignment(item.id);
+        // 视频和资料：调用CourseResource删除API
+        if (this.currentResourceType === 'activities' || this.currentResourceType === 'materials') {
+          return delCourseResource(item.id);
+        }
+        // 作业/考试/测验：调用Assignment删除API
+        else {
+          return delAssignment(item.id);
+        }
       }).then(() => {
         this.$message.success('删除成功');
         // 重新加载资源列表

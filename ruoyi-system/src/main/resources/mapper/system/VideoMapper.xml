@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.VideoMapper">
+
+    <resultMap type="Video" id="VideoResult">
+        <result property="id"                 column="id"                  />
+        <result property="courseId"           column="course_id"           />
+        <result property="title"              column="title"               />
+        <result property="description"        column="description"         />
+        <result property="filePath"           column="file_path"           />
+        <result property="fileSize"           column="file_size"           />
+        <result property="duration"           column="duration"            />
+        <result property="coverImage"         column="cover_image"         />
+        <result property="resolution"         column="resolution"          />
+        <result property="knowledgePointIds"  column="knowledge_point_ids" />
+        <result property="status"             column="status"              />
+        <result property="viewCount"          column="view_count"          />
+        <result property="uploadedBy"         column="uploaded_by"         />
+        <result property="createdAt"          column="created_at"          />
+        <result property="updatedAt"          column="updated_at"          />
+    </resultMap>
+
+    <sql id="selectVideoVo">
+        select id, course_id, title, description, file_path, file_size, duration,
+               cover_image, resolution, knowledge_point_ids, status, view_count,
+               uploaded_by, created_at, updated_at
+        from video
+    </sql>
+
+    <select id="selectVideoById" parameterType="Long" resultMap="VideoResult">
+        <include refid="selectVideoVo"/>
+        where id = #{id}
+    </select>
+
+    <select id="selectVideoList" parameterType="Video" resultMap="VideoResult">
+        <include refid="selectVideoVo"/>
+        <where>
+            <if test="courseId != null">
+                AND course_id = #{courseId}
+            </if>
+            <if test="title != null and title != ''">
+                AND title like concat('%', #{title}, '%')
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+            <if test="uploadedBy != null">
+                AND uploaded_by = #{uploadedBy}
+            </if>
+        </where>
+        order by created_at desc
+    </select>
+
+    <insert id="insertVideo" parameterType="Video" useGeneratedKeys="true" keyProperty="id">
+        insert into video (
+            <if test="courseId != null">course_id, </if>
+            <if test="title != null and title != ''">title, </if>
+            <if test="description != null">description, </if>
+            <if test="filePath != null and filePath != ''">file_path, </if>
+            <if test="fileSize != null">file_size, </if>
+            <if test="duration != null">duration, </if>
+            <if test="coverImage != null and coverImage != ''">cover_image, </if>
+            <if test="resolution != null and resolution != ''">resolution, </if>
+            <if test="knowledgePointIds != null">knowledge_point_ids, </if>
+            <if test="status != null and status != ''">status, </if>
+            <if test="viewCount != null">view_count, </if>
+            <if test="uploadedBy != null">uploaded_by, </if>
+            created_at
+        )values(
+            <if test="courseId != null">#{courseId}, </if>
+            <if test="title != null and title != ''">#{title}, </if>
+            <if test="description != null">#{description}, </if>
+            <if test="filePath != null and filePath != ''">#{filePath}, </if>
+            <if test="fileSize != null">#{fileSize}, </if>
+            <if test="duration != null">#{duration}, </if>
+            <if test="coverImage != null and coverImage != ''">#{coverImage}, </if>
+            <if test="resolution != null and resolution != ''">#{resolution}, </if>
+            <if test="knowledgePointIds != null">#{knowledgePointIds}, </if>
+            <if test="status != null and status != ''">#{status}, </if>
+            <if test="viewCount != null">#{viewCount}, </if>
+            <if test="uploadedBy != null">#{uploadedBy}, </if>
+            sysdate()
+        )
+    </insert>
+
+    <update id="updateVideo" parameterType="Video">
+        update video
+        <set>
+            <if test="title != null and title != ''">title = #{title}, </if>
+            <if test="description != null">description = #{description}, </if>
+            <if test="filePath != null and filePath != ''">file_path = #{filePath}, </if>
+            <if test="fileSize != null">file_size = #{fileSize}, </if>
+            <if test="duration != null">duration = #{duration}, </if>
+            <if test="coverImage != null and coverImage != ''">cover_image = #{coverImage}, </if>
+            <if test="resolution != null and resolution != ''">resolution = #{resolution}, </if>
+            <if test="knowledgePointIds != null">knowledge_point_ids = #{knowledgePointIds}, </if>
+            <if test="status != null and status != ''">status = #{status}, </if>
+            <if test="viewCount != null">view_count = #{viewCount}, </if>
+            updated_at = sysdate()
+        </set>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteVideoById" parameterType="Long">
+        delete from video where id = #{id}
+    </delete>
+
+    <delete id="deleteVideoByIds" parameterType="Long">
+        delete from video where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+</mapper>

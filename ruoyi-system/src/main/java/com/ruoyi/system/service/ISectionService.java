@@ -65,4 +65,12 @@ public interface ISectionService
      * @return 结果
      */
     public int deleteSectionByIds(Long[] ids);
+
+    /**
+     * 根据视频URL查询小节
+     *
+     * @param videoUrl 视频URL
+     * @return 小节信息
+     */
+    public Section selectSectionByVideoUrl(String videoUrl);
 }

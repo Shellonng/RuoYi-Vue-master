@@ -64,6 +64,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         order by sort_order asc, create_time desc
     </select>
 
+    <select id="selectSectionByVideoUrl" parameterType="String" resultMap="SectionWithChapterResult">
+        <include refid="selectSectionWithChapterVo"/>
+        where s.video_url = #{videoUrl} and s.is_deleted = 0
+        limit 1
+    </select>
+
     <insert id="insertSection" parameterType="Section" useGeneratedKeys="true" keyProperty="id">
         insert into section (
             <if test="chapterId != null">chapter_id, </if>

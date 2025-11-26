@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.CourseResourceMapper">
+
+    <resultMap type="CourseResource" id="CourseResourceResult">
+        <result property="id"             column="id"              />
+        <result property="courseId"       column="course_id"       />
+        <result property="name"           column="name"            />
+        <result property="fileType"       column="file_type"       />
+        <result property="fileSize"       column="file_size"       />
+        <result property="fileUrl"        column="file_url"        />
+        <result property="description"    column="description"     />
+        <result property="downloadCount"  column="download_count"  />
+        <result property="uploadUserId"   column="upload_user_id"  />
+        <result property="createTime"     column="create_time"     />
+        <result property="updateTime"     column="update_time"     />
+    </resultMap>
+
+    <sql id="selectCourseResourceVo">
+        select id, course_id, name, file_type, file_size, file_url, description,
+               download_count, upload_user_id, create_time, update_time
+        from course_resource
+    </sql>
+
+    <select id="selectCourseResourceById" parameterType="Long" resultMap="CourseResourceResult">
+        <include refid="selectCourseResourceVo"/>
+        where id = #{id}
+    </select>
+
+    <select id="selectCourseResourceList" parameterType="CourseResource" resultMap="CourseResourceResult">
+        <include refid="selectCourseResourceVo"/>
+        <where>
+            <if test="courseId != null">
+                AND course_id = #{courseId}
+            </if>
+            <if test="name != null and name != ''">
+                AND name like concat('%', #{name}, '%')
+            </if>
+            <if test="fileType != null and fileType != ''">
+                AND file_type = #{fileType}
+            </if>
+            <if test="uploadUserId != null">
+                AND upload_user_id = #{uploadUserId}
+            </if>
+        </where>
+        order by create_time desc
+    </select>
+
+    <!-- 根据知识点ID查询关联的课程资源 -->
+    <select id="selectCourseResourcesByKpId" parameterType="Long" resultMap="CourseResourceResult">
+        SELECT DISTINCT cr.id, cr.course_id, cr.name, cr.file_type, cr.file_size, cr.file_url,
+               cr.description, cr.download_count, cr.upload_user_id, cr.create_time, cr.update_time
+        FROM course_resource cr
+        INNER JOIN course_resource_kp crkp ON cr.id = crkp.resource_id
+        WHERE crkp.kp_id = #{kpId}
+        ORDER BY cr.create_time DESC
+    </select>
+
+    <insert id="insertCourseResource" parameterType="CourseResource" useGeneratedKeys="true" keyProperty="id">
+        insert into course_resource (
+            <if test="courseId != null">course_id, </if>
+            <if test="name != null and name != ''">name, </if>
+            <if test="fileType != null and fileType != ''">file_type, </if>
+            <if test="fileSize != null">file_size, </if>
+            <if test="fileUrl != null and fileUrl != ''">file_url, </if>
+            <if test="description != null">description, </if>
+            <if test="downloadCount != null">download_count, </if>
+            <if test="uploadUserId != null">upload_user_id, </if>
+            create_time
+        )values(
+            <if test="courseId != null">#{courseId}, </if>
+            <if test="name != null and name != ''">#{name}, </if>
+            <if test="fileType != null and fileType != ''">#{fileType}, </if>
+            <if test="fileSize != null">#{fileSize}, </if>
+            <if test="fileUrl != null and fileUrl != ''">#{fileUrl}, </if>
+            <if test="description != null">#{description}, </if>
+            <if test="downloadCount != null">#{downloadCount}, </if>
+            <if test="uploadUserId != null">#{uploadUserId}, </if>
+            sysdate()
+        )
+    </insert>
+
+    <update id="updateCourseResource" parameterType="CourseResource">
+        update course_resource
+        <set>
+            <if test="name != null and name != ''">name = #{name}, </if>
+            <if test="fileType != null and fileType != ''">file_type = #{fileType}, </if>
+            <if test="fileSize != null">file_size = #{fileSize}, </if>
+            <if test="fileUrl != null and fileUrl != ''">file_url = #{fileUrl}, </if>
+            <if test="description != null">description = #{description}, </if>
+            <if test="downloadCount != null">download_count = #{downloadCount}, </if>
+            update_time = sysdate()
+        </set>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteCourseResourceById" parameterType="Long">
+        delete from course_resource where id = #{id}
+    </delete>
+
+    <delete id="deleteCourseResourceByIds" parameterType="Long">
+        delete from course_resource where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+</mapper>

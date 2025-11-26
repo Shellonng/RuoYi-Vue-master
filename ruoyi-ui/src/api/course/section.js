@@ -67,3 +67,12 @@ export function setSectionKnowledgePoints(data) {
     data: data
   })
 }
+
+// 根据视频URL查找对应的小节
+export function findSectionByVideoUrl(videoUrl) {
+  return request({
+    url: '/section/findByVideoUrl',
+    method: 'get',
+    params: { videoUrl }
+  })
+}
