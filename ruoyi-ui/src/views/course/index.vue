@@ -31,6 +31,41 @@
       <el-col :span="12">
         <div class="stat-card chart-card">
           <div id="courseChart" style="width: 100%; height: 200px;"></div>
+          <!-- 下沿触发区域 -->
+          <div class="timeline-trigger" @mouseenter="showTimeline = true"></div>
+          <transition name="timeline-fade">
+            <div v-show="showTimeline" class="timeline-container" @mouseleave="showTimeline = false">
+              <div class="timeline-controls">
+                <el-button
+                  :icon="isPlaying ? 'el-icon-video-pause' : 'el-icon-video-play'"
+                  circle
+                  size="mini"
+                  @click="togglePlayPause"
+                ></el-button>
+              </div>
+              <div class="timeline-axis">
+                <div class="timeline-progress" @click="handleTimelineClick" @mousedown="handleDragStart">
+                  <div class="timeline-bar" :style="{ width: timelineProgress + '%' }"></div>
+                  <div class="timeline-handle" :style="{ left: timelineProgress + '%' }"></div>
+                </div>
+                <div class="timeline-ticks">
+                  <div
+                    v-for="(day, index) in studentCountHistory"
+                    :key="index"
+                    class="timeline-tick"
+                    :style="{ left: (index / (studentCountHistory.length - 1) * 100) + '%' }"
+                  >
+                    <div class="tick-line"></div>
+                    <div class="tick-label" v-if="index % Math.max(1, Math.ceil(studentCountHistory.length / 8)) === 0">{{ day.date }}</div>
+                  </div>
+                </div>
+              </div>
+              <div class="timeline-info">
+                <span class="current-date">{{ currentDate }}</span>
+                <span class="current-count">{{ currentStudentCount }}人</span>
+              </div>
+            </div>
+          </transition>
         </div>
       </el-col>
       <el-col :span="6">
@@ -289,6 +324,16 @@ export default {
       // ECharts 实例
       chartInstance: null,
       chartTimer: null,
+      // 时间轴相关
+      showTimeline: false,
+      timelineProgress: 0,
+      currentDate: '',
+      currentStudentCount: 0,
+      studentCountHistory: [], // 学生数量历史记录
+      isPlaying: true, // 是否正在播放
+      isDragging: false, // 是否正在拖动
+      currentDayIndex: 0, // 当前天数索引
+      wasPlayingBeforeDrag: false, // 拖动前是否正在播放
       // 上传配置
       uploadAction: process.env.VUE_APP_BASE_API + "/common/upload",
       uploadHeaders: { Authorization: "Bearer " + getToken() },
@@ -382,16 +427,64 @@ export default {
       listCourse(this.queryParams).then(response => {
         this.courseList = response.rows || [];
         this.total = response.total || 0;
+        // 计算总学生数
+        this.calculateTotalStudents();
         this.loading = false;
       }).catch(() => {
         this.loading = false;
       });
+    },
+    /** 计算所有课程的总学生数 */
+    async calculateTotalStudents() {
+      const totalStudents = this.courseList.reduce((sum, course) => {
+        return sum + (course.studentCount || 0);
+      }, 0);
+      console.log('总学生数:', totalStudents);
+      
+      // 获取所有已通过的学生报名记录（包含 submit_time）
+      await this.fetchEnrollmentData();
+      
+      // 跳转到最后一天（今天）
+      if (this.chartInstance && this.studentCountHistory.length > 0) {
+        this.updateChartToDay(this.studentCountHistory.length - 1);
+      }
     },
     /** 查询统计信息 */
     getStats() {
       getCourseStats().then(response => {
         this.stats = response.data || {};
       });
+    },
+    /** 获取所有已通过的学生报名数据 */
+    async fetchEnrollmentData() {
+      try {
+        // 获取当前教师的所有课程 ID
+        const courseIds = this.courseList.map(c => c.id);
+        if (courseIds.length === 0) {
+          this.generateStudentHistory([]);
+          return;
+        }
+        
+        // 查询所有课程的已通过学生（status=1）
+        const { listEnrollment } = require('@/api/system/enrollment');
+        const response = await listEnrollment({ 
+          pageNum: 1, 
+          pageSize: 10000,
+          status: 1 // 只查已通过的
+        });
+        
+        if (response.code === 200 && response.rows) {
+          // 过滤出当前教师的课程学生
+          const enrollments = response.rows.filter(e => courseIds.includes(e.courseId));
+          console.log('获取到', enrollments.length, '条已通过的报名记录');
+          this.generateStudentHistory(enrollments);
+        } else {
+          this.generateStudentHistory([]);
+        }
+      } catch (error) {
+        console.error('获取学生报名数据失败:', error);
+        this.generateStudentHistory([]);
+      }
     },
     /** 搜索按钮操作 */
     handleQuery() {
@@ -567,6 +660,8 @@ export default {
       if (percentage < 70) return '#e6a23c';
       return '#67c23a';
     },
+    /** 生成学生历史数据（模拟从课程开始到现在的增长）*/
+
     /** 初始化图表 */
     initChart() {
       const chartDom = document.getElementById('courseChart');
@@ -575,8 +670,6 @@ export default {
       this.chartInstance = echarts.init(chartDom);
       
       const treeDataURI = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABwAAAA2CAYAAADUOvnEAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAA5tJREFUeNrcWE1oE0EUnp0kbWyUpCiNYEpCFSpIMdpLRTD15s2ePHixnj00N4/GoyfTg2fbiwdvvagHC1UQ66GQUIQKKgn1UAqSSFua38b3prPJZDs7s5ufKn0w7CaZ2W/fe9/73kyMRqNB3Nrj1zdn4RJ6du9T2u1a2iHYSxjP4d41oOHGQwAIwSUHIyh8/RA8XeiXh0kLGFoaXiTecw/hoTG4ZCSAaFkY0+BpsZceLtiAoV2FkepZSDk5EpppczBvpuuQCqx0YnkYcVVoqQYMyeCG+lFdaGkXeVOFNu4aEBalOBk6sbQrQF7gSdK5JXjuHXuYVIVyr0TZ0FjKDeCs6km7JYMUdrWAUVmZUBtmRnVPK+x6nIR2xomH06R35ggwJPeofWphr/W5UjPIxq8B2bKgE8C4HVHWvg+2gZjXj19PkdFztY7bk9TDCH/g6oafDPpaoMvZIRI5WyMB/0Hv++HkpTKE0kM+A+h20cPAfN4GuRyp9G+LMTW+z8rCLI8b46XO9zRcYZTde/j0AZm8WGb3Y2F9KLlE2nqYkjFLJAsDOl/lea0q55mqxXcL7YBc++bsCPMe8mUyU2ZIpnCoblca6TZA/ga2Co8PGg7UGUlEDd0ueptglbrRZLLE7poti6pCaWUo2pu1oaYI1CF9b9cCZPO3F8ikJQ/rPpQT5YETht26ss+uCIL2Y8vHwJGpA96GI5mjOlaKhowUy6BcNcgIhDviTGWCGFaqEuufWz4pgcbCh+w0gEOyOjTlTtYYlIWPYWKEsLDzOs+nhzaO1KEpd+MXpOoTUgKiNyhdy5aSMPNVqxtSsJFgza5EWA4zKtCJ2OGbLn0JSLu8+SL4G86p1Fpr7ABXdGFF/UTD4rfmFYFw4G9VAJ9SM3aF8l3yok4/J6IV9sDVb36ynmtJ2M5+CwxTYBdKNMBaocKGV2nYgkz6r+cHBP30MzAfi4Sy+BebSoPIOi8PW1PpCCvr/KOD4k9Zu0WSH0Y0+SxJ2awp/nlwKtcGyHOJ8vNHtRJzhPlsHr8MogtlVtwUU0tSM1x58upSKbfJnSKUR07GVMKkDNfXpzpv0RTHy3nZMVx5IOWdZIaPabGFvfpwpjnvfmJHXLaEvZUTseu/TeLc+xgAPhEAb/PbjO6PBaOTf6LQRh/dERde23zxLtOXbaKNhfq2L/1fAOPHDUhOpIf5485h7l+GNHHiSYPKE3Myz9sFxoJuAyazvwIMAItferha5LTqAAAAAElFTkSuQmCC';
-      const beginYear = 2016;
-      const endYear = 2050;
       const lineCount = 6;
       
       const option = {
@@ -586,12 +679,12 @@ export default {
           axisLabel: { show: false },
           axisTick: { show: false },
           splitLine: { show: false },
-          name: beginYear + '',
+          name: '今日',
           nameLocation: 'middle',
           nameGap: 40,
           nameTextStyle: {
             color: 'green',
-            fontSize: 30,
+            fontSize: 20,
             fontFamily: 'Arial'
           },
           min: -2800,
@@ -603,7 +696,7 @@ export default {
         },
         grid: {
           top: 'center',
-          height: 180
+          height: 200
         },
         series: [
           {
@@ -612,7 +705,7 @@ export default {
             symbol: 'image://' + treeDataURI,
             symbolSize: [20, 40],
             symbolRepeat: true,
-            data: this.makeSeriesData(beginYear, lineCount),
+            data: this.makeSeriesDataByCount(0, lineCount),
             animationEasing: 'elasticOut'
           },
           {
@@ -621,7 +714,7 @@ export default {
             symbol: 'image://' + treeDataURI,
             symbolSize: [20, 40],
             symbolRepeat: true,
-            data: this.makeSeriesData(beginYear, lineCount, true),
+            data: this.makeSeriesDataByCount(0, lineCount, true),
             animationEasing: 'elasticOut'
           }
         ]
@@ -629,27 +722,290 @@ export default {
       
       this.chartInstance.setOption(option);
       
-      // 动态更新
-      let currentYear = beginYear;
+      // 动态更新 - 使用学生历史数据
+      let currentIndex = 0;
       this.chartTimer = setInterval(() => {
-        currentYear++;
-        if (currentYear > endYear) {
-          currentYear = beginYear;
-        }
+        if (this.studentCountHistory.length === 0) return;
+        
+        currentIndex = (currentIndex + 1) % this.studentCountHistory.length;
+        const historyData = this.studentCountHistory[currentIndex];
+        const studentCount = historyData.count;
+        
+        // 更新时间轴数据
+        this.currentDate = historyData.date;
+        this.currentStudentCount = studentCount;
+        this.timelineProgress = (currentIndex / (this.studentCountHistory.length - 1)) * 100;
+        
+        // 因为图表有正负两个系列（左右对称），所以树的数量要分配给两个系列
+        const treeCountSeries1 = Math.ceil(studentCount / 2);
+        const treeCountSeries2 = Math.floor(studentCount / 2);
+        
         this.chartInstance.setOption({
           xAxis: {
-            name: currentYear
+            name: historyData.date
           },
           series: [
             {
-              data: this.makeSeriesData(currentYear, lineCount)
+              data: this.makeSeriesDataByCount(treeCountSeries1, lineCount)
             },
             {
-              data: this.makeSeriesData(currentYear, lineCount, true)
+              data: this.makeSeriesDataByCount(treeCountSeries2, lineCount, true)
             }
           ]
         });
+      }, 1000);
+    },
+    /** 更新图表到指定天数 */
+    updateChartToDay(dayIndex) {
+      if (this.studentCountHistory.length === 0) return;
+      
+      this.currentDayIndex = dayIndex;
+      const lineCount = 6;
+      const historyData = this.studentCountHistory[dayIndex];
+      const studentCount = historyData.count;
+      // 因为图表有正负两个系列（左右对称），所以树的数量要分配给两个系列
+      // 如果是奇数，第一个系列多1棵
+      const treeCountSeries1 = Math.ceil(studentCount / 2);
+      const treeCountSeries2 = Math.floor(studentCount / 2);
+      
+      console.log('Day', dayIndex, ':', historyData.date, '学生数:', studentCount, '系列1树数:', treeCountSeries1, '系列2树数:', treeCountSeries2, '总树数:', treeCountSeries1 + treeCountSeries2);
+      
+      // 更新时间轴数据
+      this.currentDate = historyData.date;
+      this.currentStudentCount = studentCount;
+      this.timelineProgress = (dayIndex / (this.studentCountHistory.length - 1)) * 100;
+      
+      // 更新图表
+      if (this.chartInstance) {
+        this.chartInstance.setOption({
+          xAxis: {
+            name: historyData.date
+          },
+          series: [
+            {
+              data: this.makeSeriesDataByCount(treeCountSeries1, lineCount)
+            },
+            {
+              data: this.makeSeriesDataByCount(treeCountSeries2, lineCount, true)
+            }
+          ]
+        });
+      }
+    },
+    /** 切换播放/暂停 */
+    togglePlayPause() {
+      this.isPlaying = !this.isPlaying;
+      if (this.isPlaying) {
+        this.startAnimation(this.currentDayIndex);
+      } else {
+        if (this.chartTimer) {
+          clearInterval(this.chartTimer);
+          this.chartTimer = null;
+        }
+      }
+    },
+    /** 处理时间轴点击事件 */
+    handleTimelineClick(event) {
+      if (this.studentCountHistory.length === 0 || this.isDragging) return;
+      
+      // 获取点击位置的百分比
+      const rect = event.currentTarget.getBoundingClientRect();
+      const clickX = event.clientX - rect.left;
+      const percentage = (clickX / rect.width) * 100;
+      
+      // 计算对应的天数索引
+      const dayIndex = Math.round((percentage / 100) * (this.studentCountHistory.length - 1));
+      
+      // 跳转到指定天数
+      this.updateChartToDay(dayIndex);
+      
+      // 如果正在播放，重新启动动画
+      if (this.isPlaying) {
+        this.startAnimation(dayIndex);
+      }
+    },
+    /** 开始拖动 */
+    handleDragStart(event) {
+      this.isDragging = true;
+      // 暂停播放
+      const wasPlaying = this.isPlaying;
+      if (this.isPlaying) {
+        this.isPlaying = false;
+        if (this.chartTimer) {
+          clearInterval(this.chartTimer);
+          this.chartTimer = null;
+        }
+      }
+      this.wasPlayingBeforeDrag = wasPlaying;
+      document.addEventListener('mousemove', this.handleDrag);
+      document.addEventListener('mouseup', this.handleDragEnd);
+    },
+    /** 拖动中 */
+    handleDrag(event) {
+      if (!this.isDragging || this.studentCountHistory.length === 0) return;
+      
+      const progressBar = document.querySelector('.timeline-progress');
+      if (!progressBar) return;
+      
+      const rect = progressBar.getBoundingClientRect();
+      let clickX = event.clientX - rect.left;
+      // 限制在进度条范围内
+      clickX = Math.max(0, Math.min(clickX, rect.width));
+      const percentage = (clickX / rect.width) * 100;
+      
+      // 计算对应的天数索引
+      const dayIndex = Math.round((percentage / 100) * (this.studentCountHistory.length - 1));
+      
+      // 更新到指定天数
+      this.updateChartToDay(dayIndex);
+    },
+    /** 结束拖动 */
+    handleDragEnd() {
+      this.isDragging = false;
+      document.removeEventListener('mousemove', this.handleDrag);
+      document.removeEventListener('mouseup', this.handleDragEnd);
+      
+      // 恢复播放状态
+      if (this.wasPlayingBeforeDrag) {
+        this.isPlaying = true;
+        this.startAnimation(this.currentDayIndex);
+      }
+    },
+    /** 启动动画（从指定索引开始）*/
+    startAnimation(startIndex = 0) {
+      if (this.chartTimer) {
+        clearInterval(this.chartTimer);
+      }
+      
+      if (!this.isPlaying) return;
+      
+      let currentIndex = startIndex;
+      
+      this.chartTimer = setInterval(() => {
+        if (this.studentCountHistory.length === 0 || !this.isPlaying) return;
+        
+        currentIndex = (currentIndex + 1) % this.studentCountHistory.length;
+        this.updateChartToDay(currentIndex);
       }, 800);
+    },
+    /** 根据树的数量生成系列数据 */
+    makeSeriesDataByCount(treeCount, lineCount, negative) {
+      const seriesData = [];
+      
+      // 从中央向两边扩展树木
+      // 创建一个从中央开始的排列顺序：[2,3,1,4,0,5] (对于6行)
+      const centerIndex = Math.floor(lineCount / 2);
+      const orderFromCenter = [];
+      for (let offset = 0; offset < lineCount; offset++) {
+        if (offset % 2 === 0) {
+          // 偶数offset：向上
+          const index = centerIndex - Math.floor(offset / 2);
+          if (index >= 0) orderFromCenter.push(index);
+        } else {
+          // 奇数offset：向下
+          const index = centerIndex + Math.ceil(offset / 2);
+          if (index < lineCount) orderFromCenter.push(index);
+        }
+      }
+      
+      // 初始化所有行为0
+      const treesPerRow = new Array(lineCount).fill(0);
+      
+      // 按照从中央向外的顺序分配树木
+      for (let i = 0; i < treeCount && i < orderFromCenter.length * 50; i++) {
+        const rowIndex = orderFromCenter[i % orderFromCenter.length];
+        treesPerRow[rowIndex]++;
+      }
+      
+      // 生成系列数据
+      for (let i = 0; i < lineCount; i++) {
+        let sign = negative ? -1 : 1;
+        seriesData.push({
+          value: sign * treesPerRow[i],
+          symbolOffset: i % 2 ? ['50%', 0] : undefined
+        });
+      }
+      
+      return seriesData;
+    },
+    /** 切换播放/暂停 */
+    togglePlayPause() {
+      this.isPlaying = !this.isPlaying;
+      if (this.isPlaying) {
+        this.startAnimation(this.currentDayIndex);
+      } else {
+        if (this.chartTimer) {
+          clearInterval(this.chartTimer);
+          this.chartTimer = null;
+        }
+      }
+    },
+    /** 处理时间轴点击事件 */
+    handleTimelineClick(event) {
+      if (this.studentCountHistory.length === 0 || this.isDragging) return;
+      
+      // 获取点击位置的百分比
+      const rect = event.currentTarget.getBoundingClientRect();
+      const clickX = event.clientX - rect.left;
+      const percentage = (clickX / rect.width) * 100;
+      
+      // 计算对应的天数索引
+      const dayIndex = Math.round((percentage / 100) * (this.studentCountHistory.length - 1));
+      
+      // 跳转到指定天数
+      this.updateChartToDay(dayIndex);
+      
+      // 如果正在播放，重新启动动画
+      if (this.isPlaying) {
+        this.startAnimation(dayIndex);
+      }
+    },
+    /** 开始拖动 */
+    handleDragStart(event) {
+      this.isDragging = true;
+      // 暂停播放
+      const wasPlaying = this.isPlaying;
+      if (this.isPlaying) {
+        this.isPlaying = false;
+        if (this.chartTimer) {
+          clearInterval(this.chartTimer);
+          this.chartTimer = null;
+        }
+      }
+      this.wasPlayingBeforeDrag = wasPlaying;
+      document.addEventListener('mousemove', this.handleDrag);
+      document.addEventListener('mouseup', this.handleDragEnd);
+    },
+    /** 拖动中 */
+    handleDrag(event) {
+      if (!this.isDragging || this.studentCountHistory.length === 0) return;
+      
+      const progressBar = document.querySelector('.timeline-progress');
+      if (!progressBar) return;
+      
+      const rect = progressBar.getBoundingClientRect();
+      let clickX = event.clientX - rect.left;
+      // 限制在进度条范围内
+      clickX = Math.max(0, Math.min(clickX, rect.width));
+      const percentage = (clickX / rect.width) * 100;
+      
+      // 计算对应的天数索引
+      const dayIndex = Math.round((percentage / 100) * (this.studentCountHistory.length - 1));
+      
+      // 更新到指定天数
+      this.updateChartToDay(dayIndex);
+    },
+    /** 结束拖动 */
+    handleDragEnd() {
+      this.isDragging = false;
+      document.removeEventListener('mousemove', this.handleDrag);
+      document.removeEventListener('mouseup', this.handleDragEnd);
+      
+      // 恢复播放状态
+      if (this.wasPlayingBeforeDrag) {
+        this.isPlaying = true;
+        this.startAnimation(this.currentDayIndex);
+      }
     },
     /** 生成分类数据 */
     makeCategoryData(lineCount) {
@@ -658,6 +1014,79 @@ export default {
         categoryData.push(i + 'a');
       }
       return categoryData;
+    },
+    /** 生成学生历史数据（模拟从课程开始到现在的增长）*/
+    generateStudentHistory(enrollments) {
+      this.studentCountHistory = [];
+      
+      if (!enrollments || enrollments.length === 0) {
+        // 如果没有学生，显示从11/24到今天的空数据
+        const startDate = new Date(2025, 10, 24);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const days = Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
+        
+        for (let i = 0; i <= days; i++) {
+          const date = new Date(startDate);
+          date.setDate(date.getDate() + i);
+          this.studentCountHistory.push({
+            date: date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }),
+            count: 0
+          });
+        }
+        return;
+      }
+      
+      // 按 submit_time 排序并统计每天的学生数
+      const sortedEnrollments = enrollments
+        .filter(e => e.submitTime) // 过滤掉没有 submitTime 的
+        .sort((a, b) => new Date(a.submitTime) - new Date(b.submitTime));
+      
+      if (sortedEnrollments.length === 0) {
+        this.studentCountHistory.push({
+          date: new Date().toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }),
+          count: 0
+        });
+        return;
+      }
+      
+      // 获取第一个学生的提交日期
+      const firstSubmitDate = new Date(sortedEnrollments[0].submitTime);
+      firstSubmitDate.setHours(0, 0, 0, 0);
+      
+      // 起始日期 = 第一个学生提交前2天
+      const startDate = new Date(firstSubmitDate);
+      startDate.setDate(startDate.getDate() - 2);
+      
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      // 生成从起始日期到今天的每一天
+      const dayCount = Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
+      
+      console.log('生成历史数据:', '第一个学生:', firstSubmitDate.toLocaleDateString('zh-CN'), '起始日期:', startDate.toLocaleDateString('zh-CN'), '今天:', today.toLocaleDateString('zh-CN'), '总天数:', dayCount + 1);
+      
+      for (let i = 0; i <= dayCount; i++) {
+        const currentDate = new Date(startDate);
+        currentDate.setDate(currentDate.getDate() + i);
+        currentDate.setHours(0, 0, 0, 0);
+        
+        // 统计到这一天为止，有多少学生已经提交了报名
+        const nextDate = new Date(currentDate);
+        nextDate.setDate(nextDate.getDate() + 1);
+        
+        const count = sortedEnrollments.filter(e => {
+          const submitDate = new Date(e.submitTime);
+          return submitDate < nextDate; // 小于第二天零点，即当天或之前
+        }).length;
+        
+        this.studentCountHistory.push({
+          date: currentDate.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }),
+          count: count
+        });
+      }
+      
+      console.log('生成了', this.studentCountHistory.length, '天的数据，最后一天学生数:', this.studentCountHistory[this.studentCountHistory.length - 1].count);
     },
     /** 生成系列数据 */
     makeSeriesData(year, lineCount, negative) {
@@ -807,7 +1236,147 @@ export default {
   &.chart-card {
     padding: 12px;
     display: block;
+    position: relative;
+    overflow: visible;
   }
+}
+
+/* 时间轴触发区域 */
+.timeline-trigger {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 20px;
+  z-index: 9;
+  cursor: pointer;
+}
+
+/* 时间轴样式 */
+.timeline-container {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 8px 15px;
+  border-top: 1px solid #e0e0e0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  z-index: 10;
+
+  .timeline-controls {
+    flex-shrink: 0;
+  }
+
+  .timeline-axis {
+    flex: 1;
+    position: relative;
+    height: 35px;
+  }
+
+  .timeline-progress {
+    position: absolute;
+    top: 12px;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: #e0e0e0;
+    border-radius: 2px;
+    cursor: pointer;
+    z-index: 2;
+    user-select: none;
+
+    &:active {
+      cursor: grabbing;
+    }
+
+    .timeline-bar {
+      height: 100%;
+      background: linear-gradient(to right, #67c23a, #409eff);
+      border-radius: 2px;
+      transition: width 0.3s ease;
+    }
+
+    .timeline-handle {
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 11px;
+      height: 11px;
+      background: #409eff;
+      border: 2px solid white;
+      border-radius: 50%;
+      cursor: grab;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+
+      &:active {
+        cursor: grabbing;
+      }
+    }
+  }
+
+  .timeline-ticks {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 100%;
+    pointer-events: none;
+
+    .timeline-tick {
+      position: absolute;
+      bottom: 0;
+      transform: translateX(-50%);
+
+      .tick-line {
+        width: 1px;
+        height: 5px;
+        background: #999;
+        margin: 0 auto;
+      }
+
+      .tick-label {
+        font-size: 10px;
+        color: #666;
+        margin-top: 1px;
+        white-space: nowrap;
+        transform: translateX(-50%);
+        margin-left: 50%;
+      }
+    }
+  }
+
+  .timeline-info {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 12px;
+
+    .current-date {
+      font-weight: 600;
+      color: #409eff;
+    }
+
+    .current-count {
+      color: #67c23a;
+      font-weight: 600;
+    }
+  }
+}
+
+/* 时间轴淡入淡出动画 */
+.timeline-fade-enter-active,
+.timeline-fade-leave-active {
+  transition: all 0.3s ease;
+}
+
+.timeline-fade-enter,
+.timeline-fade-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
 }
 
 /* 筛选栏 */

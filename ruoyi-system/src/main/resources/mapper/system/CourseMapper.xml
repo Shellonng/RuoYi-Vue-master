@@ -27,7 +27,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <sql id="selectCourseVo">
         select c.id, c.title, c.description, c.cover_image, c.credit, c.course_type, c.start_time, c.end_time,
-               c.teacher_user_id, c.status, c.term, c.student_count, c.average_score,
+               c.teacher_user_id, c.status, c.term, 
+               (select count(*) from course_enrollment_request where course_id = c.id and status = 1 and is_deleted = 0) as student_count,
+               c.average_score,
                c.create_time, c.update_time, c.is_deleted, c.delete_time,
                u.real_name as teacher_name
         from course c
@@ -151,8 +153,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         select
             count(*) as totalCourses,
             sum(case when term = (select term from course where teacher_user_id = #{teacherUserId} order by create_time desc limit 1) then 1 else 0 end) as currentSemesterCourses,
-            coalesce(sum(student_count), 0) as totalStudents,
-            coalesce(avg(student_count), 0) as avgStudentsPerCourse,
+            coalesce(sum((select count(*) from course_enrollment_request where course_id = course.id and status = 1 and is_deleted = 0)), 0) as totalStudents,
+            coalesce(avg((select count(*) from course_enrollment_request where course_id = course.id and status = 1 and is_deleted = 0)), 0) as avgStudentsPerCourse,
             coalesce(avg(case when status = '已结束' then
                 datediff(end_time, start_time) / nullif(datediff(end_time, start_time), 0) * 100
                 else 0 end), 0) as avgProgress,
