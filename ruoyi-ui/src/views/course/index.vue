@@ -477,6 +477,12 @@ export default {
           // 过滤出当前教师的课程学生
           const enrollments = response.rows.filter(e => courseIds.includes(e.courseId));
           console.log('获取到', enrollments.length, '条已通过的报名记录');
+          console.log('前5个学生的详细GPA:', enrollments.slice(0, 5).map(e => ({
+            name: e.studentName,
+            userId: e.studentUserId,
+            gpa: e.studentGpa,
+            submitTime: e.submitTime
+          })));
           this.generateStudentHistory(enrollments);
         } else {
           this.generateStudentHistory([]);
@@ -675,47 +681,83 @@ export default {
       const option = {
         color: ['#e54035'],
         xAxis: {
+          type: 'value',
           axisLine: { show: false },
           axisLabel: { show: false },
           axisTick: { show: false },
           splitLine: { show: false },
-          name: '今日',
-          nameLocation: 'middle',
-          nameGap: 40,
-          nameTextStyle: {
-            color: 'green',
-            fontSize: 20,
-            fontFamily: 'Arial'
-          },
-          min: -2800,
-          max: 2800
+          min: -150,
+          max: 150
         },
         yAxis: {
-          data: this.makeCategoryData(lineCount),
-          show: false
+          type: 'value',
+          axisLine: { show: false },
+          axisLabel: { show: false },
+          axisTick: { show: false },
+          splitLine: { show: false },
+          min: -150,
+          max: 150
         },
         grid: {
-          top: 'center',
-          height: 200
+          top: '10%',
+          bottom: '10%',
+          left: '10%',
+          right: '10%',
+          containLabel: false
         },
         series: [
           {
-            name: 'all',
-            type: 'pictorialBar',
+            name: 'trees',
+            type: 'scatter',
             symbol: 'image://' + treeDataURI,
-            symbolSize: [20, 40],
-            symbolRepeat: true,
-            data: this.makeSeriesDataByCount(0, lineCount),
-            animationEasing: 'elasticOut'
-          },
-          {
-            name: 'all',
-            type: 'pictorialBar',
-            symbol: 'image://' + treeDataURI,
-            symbolSize: [20, 40],
-            symbolRepeat: true,
-            data: this.makeSeriesDataByCount(0, lineCount, true),
-            animationEasing: 'elasticOut'
+            symbolSize: function(value, params) {
+              const baseWidth = 25;
+              const baseHeight = 50;
+              const joinDays = params.data.joinDays || 0;
+              const sizeCoef = Math.min(1.5, 0.5 + joinDays * 0.05);
+              return [baseWidth * sizeCoef, baseHeight * sizeCoef];
+            },
+            symbolOffset: [0, '-50%'],
+            itemStyle: {
+              // 使用color为图片添加颜色叠加效果（类似CSS的mix-blend-mode）
+              color: function(params) {
+                const gpa = params.data.gpa || 0;
+                
+                // 调试：每10棵树打印一次GPA
+                if (params.dataIndex % 10 === 0) {
+                  console.log(`树 ${params.dataIndex}: GPA=${gpa}`);
+                }
+                
+                if (gpa === 0) {
+                  // 如果没有GPA数据，返回淡黄色
+                  return 'rgba(255, 220, 80, 0.7)';
+                }
+                
+                // GPA范围: 0.00-5.00
+                const ratio = Math.min(1, Math.max(0, gpa / 5.0));
+                
+                // 使用HSL色彩空间实现黄到绿的过渡
+                // 从深黄色(40度)到浅绿色(100度)，范围更窄让黄色更突出
+                const hue = 40 + ratio * 60; // 40度(深黄)到100度(黄绿)
+                const saturation = 100; // 最大饱和度
+                const lightness = 65; // 更高的亮度让黄色更明显
+                
+                // 大幅提高透明度让叠加效果非常明显
+                return `hsla(${hue}, ${saturation}%, ${lightness}%, 0.85)`;
+              },
+              // 添加边框以增强视觉效果
+              borderWidth: 0
+            },
+            data: this.makeTreeGridData(0),
+            animationDuration: 800,
+            animationEasing: 'elasticOut',
+            // 添加emphasis效果
+            emphasis: {
+              itemStyle: {
+                shadowBlur: 10,
+                shadowColor: 'rgba(0, 0, 0, 0.3)'
+              }
+            }
           }
         ]
       };
@@ -730,26 +772,19 @@ export default {
         currentIndex = (currentIndex + 1) % this.studentCountHistory.length;
         const historyData = this.studentCountHistory[currentIndex];
         const studentCount = historyData.count;
+        const studentJoinDays = historyData.studentJoinDays || [];
+        const studentGpas = historyData.studentGpas || [];
         
         // 更新时间轴数据
         this.currentDate = historyData.date;
         this.currentStudentCount = studentCount;
         this.timelineProgress = (currentIndex / (this.studentCountHistory.length - 1)) * 100;
         
-        // 因为图表有正负两个系列（左右对称），所以树的数量要分配给两个系列
-        const treeCountSeries1 = Math.ceil(studentCount / 2);
-        const treeCountSeries2 = Math.floor(studentCount / 2);
-        
+        // 更新树的网格数据
         this.chartInstance.setOption({
-          xAxis: {
-            name: historyData.date
-          },
           series: [
             {
-              data: this.makeSeriesDataByCount(treeCountSeries1, lineCount)
-            },
-            {
-              data: this.makeSeriesDataByCount(treeCountSeries2, lineCount, true)
+              data: this.makeTreeGridData(studentCount, studentJoinDays, studentGpas)
             }
           ]
         });
@@ -763,12 +798,9 @@ export default {
       const lineCount = 6;
       const historyData = this.studentCountHistory[dayIndex];
       const studentCount = historyData.count;
-      // 因为图表有正负两个系列（左右对称），所以树的数量要分配给两个系列
-      // 如果是奇数，第一个系列多1棵
-      const treeCountSeries1 = Math.ceil(studentCount / 2);
-      const treeCountSeries2 = Math.floor(studentCount / 2);
+      const studentGpas = historyData.studentGpas || [];
       
-      console.log('Day', dayIndex, ':', historyData.date, '学生数:', studentCount, '系列1树数:', treeCountSeries1, '系列2树数:', treeCountSeries2, '总树数:', treeCountSeries1 + treeCountSeries2);
+      console.log('Day', dayIndex, ':', historyData.date, '学生数:', studentCount);
       
       // 更新时间轴数据
       this.currentDate = historyData.date;
@@ -777,16 +809,12 @@ export default {
       
       // 更新图表
       if (this.chartInstance) {
+        const studentJoinDays = historyData.studentJoinDays || [];
+        
         this.chartInstance.setOption({
-          xAxis: {
-            name: historyData.date
-          },
           series: [
             {
-              data: this.makeSeriesDataByCount(treeCountSeries1, lineCount)
-            },
-            {
-              data: this.makeSeriesDataByCount(treeCountSeries2, lineCount, true)
+              data: this.makeTreeGridData(studentCount, studentJoinDays, studentGpas)
             }
           ]
         });
@@ -888,41 +916,46 @@ export default {
         this.updateChartToDay(currentIndex);
       }, 800);
     },
-    /** 根据树的数量生成系列数据 */
-    makeSeriesDataByCount(treeCount, lineCount, negative) {
+    /** 生成网格坐标,从中心向周边扩散 */
+    makeTreeGridData(treeCount, studentJoinDays = [], studentGpas = []) {
       const seriesData = [];
+      const gridSize = 40; // 网格间距
       
-      // 从中央向两边扩展树木
-      // 创建一个从中央开始的排列顺序：[2,3,1,4,0,5] (对于6行)
-      const centerIndex = Math.floor(lineCount / 2);
-      const orderFromCenter = [];
-      for (let offset = 0; offset < lineCount; offset++) {
-        if (offset % 2 === 0) {
-          // 偶数offset：向上
-          const index = centerIndex - Math.floor(offset / 2);
-          if (index >= 0) orderFromCenter.push(index);
-        } else {
-          // 奇数offset：向下
-          const index = centerIndex + Math.ceil(offset / 2);
-          if (index < lineCount) orderFromCenter.push(index);
-        }
-      }
+      // 定义从中心向外螺旋扩散的坐标顺序
+      const positions = [
+        [0, 0],    // 中心
+        [1, 0], [-1, 0], [0, 1], [0, -1],  // 上下左右
+        [1, 1], [-1, 1], [1, -1], [-1, -1], // 四个对角
+        [2, 0], [-2, 0], [0, 2], [0, -2],   // 再向外
+        [2, 1], [-2, 1], [2, -1], [-2, -1],
+        [1, 2], [-1, 2], [1, -2], [-1, -2],
+        [2, 2], [-2, 2], [2, -2], [-2, -2],
+        [3, 0], [-3, 0], [0, 3], [0, -3],
+        [3, 1], [-3, 1], [3, -1], [-3, -1],
+        [1, 3], [-1, 3], [1, -3], [-1, -3],
+        [3, 2], [-3, 2], [3, -2], [-3, -2],
+        [2, 3], [-2, 3], [2, -3], [-2, -3],
+        [3, 3], [-3, 3], [3, -3], [-3, -3],
+        [4, 0], [-4, 0], [0, 4], [0, -4],
+        [4, 1], [-4, 1], [4, -1], [-4, -1],
+        [1, 4], [-1, 4], [1, -4], [-1, -4],
+        [4, 2], [-4, 2], [4, -2], [-4, -2],
+        [2, 4], [-2, 4], [2, -4], [-2, -4]
+      ];
       
-      // 初始化所有行为0
-      const treesPerRow = new Array(lineCount).fill(0);
-      
-      // 按照从中央向外的顺序分配树木
-      for (let i = 0; i < treeCount && i < orderFromCenter.length * 50; i++) {
-        const rowIndex = orderFromCenter[i % orderFromCenter.length];
-        treesPerRow[rowIndex]++;
-      }
-      
-      // 生成系列数据
-      for (let i = 0; i < lineCount; i++) {
-        let sign = negative ? -1 : 1;
+      // 为每棵树分配一个网格坐标,偶数行错开半个网格
+      for (let i = 0; i < treeCount && i < positions.length; i++) {
+        const [gridX, gridY] = positions[i];
+        const joinDays = studentJoinDays[i] || 0;
+        const gpa = studentGpas[i] || 0;
+        
+        // Y轴偶数行时,X轴偏移半个网格,形成交错效果
+        const xOffset = (gridY % 2 === 0) ? 0 : gridSize * 0.5;
+        
         seriesData.push({
-          value: sign * treesPerRow[i],
-          symbolOffset: i % 2 ? ['50%', 0] : undefined
+          value: [gridX * gridSize + xOffset, gridY * gridSize],
+          joinDays: joinDays,
+          gpa: gpa
         });
       }
       
@@ -1031,7 +1064,8 @@ export default {
           date.setDate(date.getDate() + i);
           this.studentCountHistory.push({
             date: date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }),
-            count: 0
+            count: 0,
+            studentJoinDays: []
           });
         }
         return;
@@ -1045,7 +1079,8 @@ export default {
       if (sortedEnrollments.length === 0) {
         this.studentCountHistory.push({
           date: new Date().toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }),
-          count: 0
+          count: 0,
+          studentJoinDays: []
         });
         return;
       }
@@ -1075,14 +1110,30 @@ export default {
         const nextDate = new Date(currentDate);
         nextDate.setDate(nextDate.getDate() + 1);
         
-        const count = sortedEnrollments.filter(e => {
+        const studentsUntilNow = sortedEnrollments.filter(e => {
           const submitDate = new Date(e.submitTime);
           return submitDate < nextDate; // 小于第二天零点，即当天或之前
-        }).length;
+        });
+        
+        // 保存每个学生的加入日期和GPA（用于计算树的大小和颜色）
+        const studentJoinDays = studentsUntilNow.map(e => {
+          const joinDate = new Date(e.submitTime);
+          joinDate.setHours(0, 0, 0, 0);
+          return Math.floor((currentDate - joinDate) / (1000 * 60 * 60 * 24));
+        });
+        
+        const studentGpas = studentsUntilNow.map(e => e.studentGpa || 0);
+        
+        // 调试：打印前3天的GPA数据
+        if (i < 3 || i === dayCount) {
+          console.log(`第${i}天 (${currentDate.toLocaleDateString('zh-CN')}): 学生数=${studentsUntilNow.length}, 实际GPA值:`, studentGpas);
+        }
         
         this.studentCountHistory.push({
           date: currentDate.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }),
-          count: count
+          count: studentsUntilNow.length,
+          studentJoinDays: studentJoinDays, // 每个学生加入的天数
+          studentGpas: studentGpas // 每个学生的GPA
         });
       }
       

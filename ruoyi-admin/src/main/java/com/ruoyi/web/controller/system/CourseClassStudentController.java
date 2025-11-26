@@ -43,7 +43,7 @@ public class CourseClassStudentController extends BaseController {
     }
 
     /**
-     * 移除学生（删除选课记录）
+     * 移除学生(删除选课记录)
      */
     @PreAuthorize("@ss.hasPermi('system:class:remove')")
     @Log(title = "班级学生管理", businessType = BusinessType.DELETE)
@@ -53,6 +53,31 @@ public class CourseClassStudentController extends BaseController {
         int result = 0;
         for (Long id : ids) {
             result += enrollmentService.deleteEnrollmentById(id);
+        }
+        return toAjax(result);
+    }
+
+    /**
+     * 移除学生(将状态置为2-拒绝)
+     */
+    @PreAuthorize("@ss.hasPermi('system:class:remove')")
+    @Log(title = "班级学生管理", businessType = BusinessType.UPDATE)
+    @PutMapping("/remove")
+    public AjaxResult removeByUpdateStatus(@RequestBody CourseEnrollmentRequest request) {
+        // 将选中的学生状态更新为2(已拒绝)
+        Long[] ids = request.getIds();
+        if (ids == null || ids.length == 0) {
+            return error("请选择要移除的学生");
+        }
+        
+        int result = 0;
+        for (Long id : ids) {
+            CourseEnrollmentRequest enrollment = new CourseEnrollmentRequest();
+            enrollment.setId(id);
+            enrollment.setStatus(2); // 状态改为拒绝
+            enrollment.setReviewComment("已从班级移除");
+            enrollment.setReviewTime(new java.util.Date());
+            result += enrollmentService.updateEnrollment(enrollment);
         }
         return toAjax(result);
     }

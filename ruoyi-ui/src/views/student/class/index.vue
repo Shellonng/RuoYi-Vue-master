@@ -493,7 +493,7 @@ export default {
     /** 移除学生 */
     handleRemoveStudent(row) {
       const ids = row.id ? [row.id] : this.studentIds;
-      this.$confirm('是否确认移除选中的学生?', "警告", {
+      this.$confirm('移除后学生状态将变为"已拒绝"，是否继续？', "警告", {
         confirmButtonText: "确定",
         cancelButtonText: "取消",
         type: "warning"
@@ -502,7 +502,7 @@ export default {
       }).then(() => {
         this.getStudentList();
         this.getList(); // 刷新班级列表以更新人数
-        this.$message.success("移除成功");
+        this.$message.success("移除成功，状态已更新为已拒绝");
       }).catch(() => {});
     },
     /** 查看学生详情 */

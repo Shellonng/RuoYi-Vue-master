@@ -35,10 +35,11 @@ export function listClassStudent(courseId, query) {
   })
 }
 
-// 移除班级学生
+// 移除班级学生（将状态置为2-拒绝）
 export function removeClassStudent(ids) {
   return request({
-    url: '/system/class/student/' + ids,
-    method: 'delete'
+    url: '/system/class/student/remove',
+    method: 'put',
+    data: { ids }
   })
 }

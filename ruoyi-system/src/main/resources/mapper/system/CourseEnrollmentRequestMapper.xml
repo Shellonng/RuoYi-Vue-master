@@ -15,6 +15,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="reviewComment" column="review_comment"/>
         <result property="submitTime" column="submit_time"/>
         <result property="reviewTime" column="review_time"/>
+        <result property="studentGpa" column="student_gpa"/>
     </resultMap>
 
     <sql id="selectEnrollmentVo">
@@ -28,10 +29,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             cer.reason,
             cer.review_comment,
             cer.submit_time,
-            cer.review_time
+            cer.review_time,
+            s.gpa AS student_gpa
         FROM course_enrollment_request cer
         LEFT JOIN user u ON cer.student_user_id = u.id
         LEFT JOIN course c ON cer.course_id = c.id
+        LEFT JOIN student s ON cer.student_user_id = s.user_id
     </sql>
 
     <select id="selectEnrollmentList" parameterType="CourseEnrollmentRequest" resultMap="EnrollmentResult">

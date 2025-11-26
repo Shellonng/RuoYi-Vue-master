@@ -55,6 +55,12 @@ public class CourseEnrollmentRequest extends BaseEntity {
     @Excel(name = "审核时间", width = 30, dateFormat = "yyyy-MM-dd HH:mm:ss")
     private Date reviewTime;
 
+    /** 批量操作的ID数组(用于接收前端批量操作) */
+    private Long[] ids;
+
+    /** 学生GPA(从student表关联查询) */
+    private Double studentGpa;
+
     public Long getId() {
         return id;
     }
@@ -133,6 +139,22 @@ public class CourseEnrollmentRequest extends BaseEntity {
 
     public void setReviewTime(Date reviewTime) {
         this.reviewTime = reviewTime;
+    }
+
+    public Long[] getIds() {
+        return ids;
+    }
+
+    public void setIds(Long[] ids) {
+        this.ids = ids;
+    }
+
+    public Double getStudentGpa() {
+        return studentGpa;
+    }
+
+    public void setStudentGpa(Double studentGpa) {
+        this.studentGpa = studentGpa;
     }
 
     @Override
