@@ -58,3 +58,12 @@ export function delSections(ids) {
     method: 'delete'
   })
 }
+
+// 为小节关联知识点
+export function setSectionKnowledgePoints(data) {
+  return request({
+    url: '/section/setKnowledgePoints',
+    method: 'post',
+    data: data
+  })
+}

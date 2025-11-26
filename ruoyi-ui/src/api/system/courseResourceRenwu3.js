@@ -65,6 +65,34 @@ export function uploadAndAnalyzeRenwu3(data) {
 }
 
 /**
+ * 仅分析文件，不保存资源到数据库
+ * 用于智能分析阶段
+ */
+export function analyzeFileOnlyRenwu3(data) {
+  return request({
+    url: '/system/resource/renwu3/analyzeOnly',
+    method: 'post',
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    },
+    timeout: 600000,
+    data: data
+  })
+}
+
+/**
+ * 保存资源到数据库
+ * 用于用户点击保存按钮时
+ */
+export function saveResourceRenwu3(data) {
+  return request({
+    url: '/system/resource/renwu3/saveResource',
+    method: 'post',
+    data: data
+  })
+}
+
+/**
  * 确认资源关联的知识点
  * 教师确认AI推荐后保存关联
  */
@@ -72,7 +100,7 @@ export function confirmKnowledgePointsRenwu3(data) {
   return request({
     url: '/system/resource/renwu3/confirmKnowledgePoints',
     method: 'post',
-    params: data
+    data: data
   })
 }
 
@@ -97,3 +125,26 @@ export function chatWithAIRenwu3(data) {
     timeout: 60000 // AI对话可能需要较长时间，设置60秒超时
   })
 }
+
+/**
+ * 创建单个知识点并关联到资源
+ */
+export function createKnowledgePointRenwu3(data) {
+  return request({
+    url: '/system/resource/renwu3/createKnowledgePoint',
+    method: 'post',
+    data: data
+  })
+}
+
+/**
+ * 批量创建知识点并关联到资源
+ */
+export function batchCreateKnowledgePointsRenwu3(data) {
+  return request({
+    url: '/system/resource/renwu3/batchCreateKnowledgePoints',
+    method: 'post',
+    data: data
+  })
+}
+

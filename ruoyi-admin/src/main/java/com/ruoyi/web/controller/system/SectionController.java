@@ -1,6 +1,7 @@
 package com.ruoyi.web.controller.system;
 
 import java.util.List;
+import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -19,6 +20,7 @@ import com.ruoyi.common.core.page.TableDataInfo;
 import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.system.domain.Section;
 import com.ruoyi.system.service.ISectionService;
+import com.ruoyi.system.service.ISectionKpService;
 
 /**
  * 课程小节 信息操作处理
@@ -31,6 +33,9 @@ public class SectionController extends BaseController
 {
     @Autowired
     private ISectionService sectionService;
+    
+    @Autowired
+    private ISectionKpService sectionKpService;
 
     /**
      * 获取小节列表
@@ -94,5 +99,25 @@ public class SectionController extends BaseController
     public AjaxResult remove(@PathVariable Long[] ids)
     {
         return toAjax(sectionService.deleteSectionByIds(ids));
+    }
+    
+    /**
+     * 为小节关联知识点
+     * 用于资源打标功能，将匹配的知识点关联到指定小节
+     */
+    @Log(title = "小节关联知识点", businessType = BusinessType.UPDATE)
+    @PostMapping("/setKnowledgePoints")
+    public AjaxResult setKnowledgePoints(@RequestBody Map<String, Object> params)
+    {
+        Long sectionId = Long.valueOf(params.get("sectionId").toString());
+        @SuppressWarnings("unchecked")
+        List<Integer> kpIdsInt = (List<Integer>) params.get("kpIds");
+        Long[] kpIds = kpIdsInt.stream().map(Long::valueOf).toArray(Long[]::new);
+        
+        int result = sectionKpService.setSectionKnowledgePoints(sectionId, kpIds);
+        if (result > 0) {
+            return success("成功关联 " + kpIds.length + " 个知识点到小节");
+        }
+        return error("关联知识点失败");
     }
 }

@@ -150,7 +150,10 @@
       <!-- 资源管理标签页 -->
       <el-tab-pane label="资源管理" name="resources">
         <div class="tab-content">
-          <el-empty description="资源管理建设中..."></el-empty>
+          <CourseResourceManagement 
+            v-if="courseId" 
+            :courseId="courseId"
+          />
         </div>
       </el-tab-pane>
 
@@ -220,7 +223,10 @@
       <!-- 学生管理标签页 -->
       <el-tab-pane label="学生管理" name="students">
         <div class="tab-content">
-          <el-empty description="学生管理建设中..."></el-empty>
+          <CourseStudentManagement 
+            v-if="courseId" 
+            :courseId="courseId"
+          />
         </div>
       </el-tab-pane>
 
@@ -1014,6 +1020,9 @@ import HomeworkDialog from "@/views/assignment/homework.vue";
 import ExamDialog from "@/views/assignment/exam.vue";
 import KnowledgePoint from "@/views/knowledgepoint/index.vue";
 import Discussion from "@/views/discussion/index.vue";
+import CourseResourceManagement from "@/views/course/components/CourseResourceManagement.vue";
+import CourseResourceUpload from "@/views/course/components/CourseResourceUpload.vue";
+import CourseStudentManagement from "@/views/course/components/CourseStudentManagement.vue";
 import Sortable from 'sortablejs';
 import * as echarts from 'echarts';
 // ForceGraph3D从全局window对象获取(通过index.html引入)
@@ -1026,7 +1035,10 @@ export default {
     HomeworkDialog,
     ExamDialog,
     KnowledgePoint,
-    Discussion
+    Discussion,
+    CourseResourceManagement,
+    CourseResourceUpload,
+    CourseStudentManagement
   },
   data() {
     return {
@@ -1146,6 +1158,9 @@ export default {
       // 任务管理相关
       activeTaskType: 'exam', // 当前激活的任务类型标签
       // 图谱搜索
+      graphSearchKeyword: '', // 图谱搜索关键词
+      // 2D图谱更新防抖
+      render2DGraphTimer: null, // 2D图谱渲染防抖定时器
       graphSearchKeyword: '', // 2D图谱搜索关键词
       graph3DSearchKeyword: '', // 3D图谱搜索关键词
       graphSearchResults: [], // 搜索结果列表
@@ -1164,7 +1179,7 @@ export default {
     };
   },
   created() {
-    this.courseId = this.$route.params.id;
+    this.courseId = parseInt(this.$route.params.id);
     this.getCourseInfo();
     this.getChapterList();
     
@@ -1186,14 +1201,28 @@ export default {
     // 监听activeTab变化，切换到课程图谱时渲染
     this.$watch('activeTab', (newVal) => {
       if (newVal === 'knowledge') {
-        this.$nextTick(() => {
-          // 渲染2D图谱
-          this.renderKnowledgeGraph();
-          // 渲染3D图谱
-          if (!this.graph3DInstance) {
-            this.render3DKnowledgeGraph();
-          }
-        });
+        console.log('[标签切换] 切换到知识图谱标签');
+        
+        // 如果章节数据为空，先加载章节数据（不等待知识点）
+        if (this.chapterList.length === 0) {
+          console.log('[标签切换] 章节数据为空，加载章节数据...');
+          this.getChapterList(false, false).then(() => {
+            this.$nextTick(() => {
+              this.renderKnowledgeGraph();
+              if (!this.graph3DInstance) {
+                this.render3DKnowledgeGraph();
+              }
+            });
+          });
+        } else {
+          // 直接渲染图谱（知识点异步加载，加载完成后会自动更新）
+          this.$nextTick(() => {
+            this.renderKnowledgeGraph();
+            if (!this.graph3DInstance) {
+              this.render3DKnowledgeGraph();
+            }
+          });
+        }
       } else if (newVal === 'tasks') {
         // 切换到任务管理标签页时，刷新当前激活的子标签
         this.$nextTick(() => {
@@ -1220,6 +1249,11 @@ export default {
     }
     // 停止旋转
     this.stopGraph3DRotation();
+    // 清理2D图谱渲染定时器
+    if (this.render2DGraphTimer) {
+      clearTimeout(this.render2DGraphTimer);
+      this.render2DGraphTimer = null;
+    }
   },
   computed: {
     /** 计算课程进度（根据开始、结束时间和当前时间） */
@@ -1278,7 +1312,7 @@ export default {
       console.log('[刷新数据] 开始刷新课程数据...');
       
       try {
-        // 重新加载章节和小节数据（不等待知识点，快速返回）
+        // 重新加载章节和小节数据（不等待知识点，异步加载更快）
         await this.getChapterList(false, false);
         
         console.log('[刷新数据] 数据加载完成，当前标签页:', this.activeTab);
@@ -1393,9 +1427,25 @@ export default {
         const knowledgePoints = sectionKps.map(sk => sk.knowledgePoint).filter(kp => kp);
         this.$set(section, 'knowledgePoints', knowledgePoints);
         console.log('[加载知识点] 小节:', section.title, '加载到', knowledgePoints.length, '个知识点');
+        
         // 重新渲染思维导图（初次加载时跳过，避免覆盖渐进式渲染）
         if (!skipRender) {
           this.renderMindmap();
+          
+          // 如果当前在图谱标签页，且知识点加载完成，延迟更新2D图谱（防抖）
+          if (this.activeTab === 'knowledge' && knowledgePoints.length > 0) {
+            // 清除之前的定时器
+            if (this.render2DGraphTimer) {
+              clearTimeout(this.render2DGraphTimer);
+            }
+            // 设置新的定时器，300ms后渲染（等待其他小节知识点也加载完）
+            this.render2DGraphTimer = setTimeout(() => {
+              this.$nextTick(() => {
+                console.log('[加载知识点] 防抖触发，更新2D图谱');
+                this.renderKnowledgeGraph();
+              });
+            }, 300);
+          }
         }
         return knowledgePoints;
       }).catch(error => {
@@ -2702,8 +2752,14 @@ export default {
     renderKnowledgeGraph() {
       const container = document.getElementById('knowledge-graph');
       if (!container) {
-        console.warn('课程图谱容器未找到');
+        console.warn('[知识图谱] 容器未找到，等待DOM渲染...');
         return;
+      }
+      
+      // 检查章节数据是否已加载
+      if (!this.chapterList || this.chapterList.length === 0) {
+        console.log('[知识图谱] 章节数据为空，等待数据加载...');
+        return; // 静默返回，不显示警告
       }
       
       // 如果图表实例已存在，先销毁
@@ -2715,12 +2771,9 @@ export default {
       const echarts = require('echarts');
       this.knowledgeGraphChart = echarts.init(container);
       
-      // 准备图谱数据
+      // 准备图谱数据（即使知识点未完全加载也可以渲染章节结构）
       const graphData = this.prepareGraphData();
-      console.log('图谱数据:', graphData);
-      console.log('节点数量:', graphData.nodes.length);
-      console.log('连线数量:', graphData.links.length);
-      console.log('章节列表:', this.chapterList);
+      console.log('[知识图谱] 渲染 - 节点数:', graphData.nodes.length, '连线数:', graphData.links.length);
       
       // 配置选项
       const option = {
@@ -2961,6 +3014,9 @@ export default {
         { name: '知识点' }
       ];
       
+      // 使用Map去重知识点节点（key为知识点ID，value为节点对象）
+      const kpNodeMap = new Map();
+      
       // 定义颜色方案
       const chapterColors = [
         '#5470c6', // 蓝色系
@@ -3059,43 +3115,55 @@ export default {
               console.log(`[准备图谱] 小节 "${section.title}" 有 ${section.knowledgePoints.length} 个知识点`);
               
               section.knowledgePoints.forEach((kp, kpIndex) => {
-                // 知识点使用更鲜艳的颜色，不变浅，保持原章节颜色
-                const kpColor = colorScheme; // 使用章节主颜色，更鲜艳
+                const kpId = 'kp-' + kp.id;
                 
-                const kpNode = {
-                  id: 'kp-' + kp.id, // 使用知识点的真实ID,而不是section.id + index
-                  name: kp.name || kp.title,
-                  symbolSize: 28, // 稍微增大一点
-                  category: 3,
-                  itemStyle: {
-                    color: kpColor,
-                    opacity: 0, // 默认隐藏，但显示时会设置为1
-                    borderColor: '#fff',
-                    borderWidth: 2
-                  },
-                  label: {
-                    fontSize: 11,
-                    show: false, // 默认不显示标签
-                    fontWeight: 'bold'
-                  },
-                  visible: false, // 自定义属性标记是否可见
-                  sectionId: section.id, // 记录所属小节
-                  kpData: kp // 保存知识点对象引用
-                };
-                
-                nodes.push(kpNode);
-                console.log(`[准备图谱] 添加知识点节点: ${kpNode.id} - ${kpNode.name}, sectionId: ${kpNode.sectionId}`);
+                // 检查该知识点是否已经添加过
+                if (!kpNodeMap.has(kpId)) {
+                  // 知识点使用更鲜艳的颜色，不变浅，保持原章节颜色
+                  const kpColor = colorScheme; // 使用章节主颜色，更鲜艳
+                  
+                  const kpNode = {
+                    id: kpId,
+                    name: kp.name || kp.title,
+                    symbolSize: 28,
+                    category: 3,
+                    itemStyle: {
+                      color: kpColor,
+                      opacity: 0, // 默认隐藏
+                      borderColor: '#fff',
+                      borderWidth: 2
+                    },
+                    label: {
+                      fontSize: 11,
+                      show: false, // 默认不显示标签
+                      fontWeight: 'bold'
+                    },
+                    visible: false,
+                    sectionIds: [section.id], // 改为数组，记录所有关联的小节ID
+                    kpData: kp
+                  };
+                  
+                  kpNodeMap.set(kpId, kpNode);
+                  console.log(`[准备图谱] 新增知识点节点: ${kpId} - ${kpNode.name}, 首次出现于小节: ${section.id}`);
+                } else {
+                  // 知识点已存在，添加到关联小节列表
+                  const existingNode = kpNodeMap.get(kpId);
+                  if (!existingNode.sectionIds.includes(section.id)) {
+                    existingNode.sectionIds.push(section.id);
+                    console.log(`[准备图谱] 知识点节点已存在: ${kpId}, 新增关联小节: ${section.id}, 总关联小节数: ${existingNode.sectionIds.length}`);
+                  }
+                }
                 
                 // 添加小节到知识点的连线(默认隐藏)
                 links.push({
                   source: sectionNode.id,
-                  target: kpNode.id,
+                  target: kpId,
                   lineStyle: {
-                    color: kpColor,
+                    color: colorScheme,
                     width: 2.5,
-                    opacity: 0 // 默认隐藏，但显示时会设置为更高的值
+                    opacity: 0 // 默认隐藏
                   },
-                  visible: false // 自定义属性标记是否可见
+                  visible: false
                 });
               });
             }
@@ -3103,9 +3171,15 @@ export default {
         }
       });
       
+      // 将去重后的知识点节点添加到nodes数组
+      kpNodeMap.forEach(kpNode => {
+        nodes.push(kpNode);
+      });
+      
       // 统计知识点节点数量
       const kpNodeCount = nodes.filter(n => n.id && n.id.startsWith('kp-')).length;
-      console.log(`[准备图谱] 图谱数据准备完成: 总节点=${nodes.length}, 知识点节点=${kpNodeCount}, 连线=${links.length}`);
+      const totalKpReferences = links.filter(l => l.target && l.target.startsWith('kp-')).length;
+      console.log(`[准备图谱] 图谱数据准备完成: 总节点=${nodes.length}, 知识点节点=${kpNodeCount}, 知识点引用=${totalKpReferences}, 连线=${links.length}`);
       
       return { nodes, links, categories };
     },
@@ -3172,9 +3246,10 @@ export default {
           
           // 情况1：点击的是小节节点，只显示该小节的知识点
           if (isClickedSectionNode) {
-            const belongsToClickedSection = node.sectionId && 
+            // 支持知识点属于多个小节的情况
+            const belongsToClickedSection = node.sectionIds && 
                                            clickedSectionId && 
-                                           String(node.sectionId) === String(clickedSectionId);
+                                           node.sectionIds.some(sid => String(sid) === String(clickedSectionId));
             shouldShow = belongsToClickedSection;
           }
           // 情况2：点击的是知识点节点本身，只显示这个知识点
@@ -3518,14 +3593,14 @@ export default {
       const links = graphData.links;
       
       // 检查该小节的知识点当前是否可见
-      const kpNodes = nodes.filter(n => n.sectionId === sectionId && n.category === 3);
+      const kpNodes = nodes.filter(n => n.sectionIds && n.sectionIds.includes(sectionId) && n.category === 3);
       if (kpNodes.length === 0) return;
       
       const isCurrentlyVisible = kpNodes[0].visible;
       
       // 更新知识点节点的可见性
       const updatedNodes = nodes.map(node => {
-        if (node.sectionId === sectionId && node.category === 3) {
+        if (node.sectionIds && node.sectionIds.includes(sectionId) && node.category === 3) {
           return {
             ...node,
             visible: !isCurrentlyVisible,
@@ -5384,10 +5459,10 @@ export default {
       
       // 确保知识点节点可见(如果它所属的小节未展开,先展开)
       if (!targetNode.visible || targetNode.itemStyle.opacity === 0) {
-        console.log('[2D图谱] 知识点当前隐藏，准备展开小节:', targetNode.sectionId);
-        // 提取小节ID并展开
-        if (targetNode.sectionId) {
-          this.toggleKnowledgePointsVisibility(targetNode.sectionId);
+        console.log('[2D图谱] 知识点当前隐藏，准备展开小节:', targetNode.sectionIds);
+        // 提取第一个关联小节ID并展开
+        if (targetNode.sectionIds && targetNode.sectionIds.length > 0) {
+          this.toggleKnowledgePointsVisibility(targetNode.sectionIds[0]);
           // 等待展开动画完成后再高亮
           setTimeout(() => {
             this.highlightNodeInEcharts(targetNode.id);

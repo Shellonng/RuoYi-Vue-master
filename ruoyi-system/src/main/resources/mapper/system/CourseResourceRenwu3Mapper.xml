@@ -16,26 +16,51 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="uploadUserId"    column="upload_user_id"    />
         <result property="createTime"    column="create_time"    />
         <result property="updateTime"    column="update_time"    />
+        <result property="courseName"    column="course_name"    />
+        <result property="fileName"    column="file_name"    />
     </resultMap>
 
     <sql id="selectCourseResourceVo">
-        select id, course_id, name, file_type, file_size, file_url, description, download_count, upload_user_id, create_time, update_time from course_resource
+        select 
+            cr.id, 
+            cr.course_id, 
+            cr.name, 
+            cr.file_type, 
+            cr.file_size, 
+            cr.file_url, 
+            cr.description, 
+            cr.download_count, 
+            cr.upload_user_id, 
+            cr.create_time, 
+            cr.update_time,
+            c.title as course_name,
+            cr.name as file_name
+        from course_resource cr
+        left join course c on cr.course_id = c.id
     </sql>
 
     <select id="selectCourseResourceList" parameterType="com.ruoyi.system.domain.CourseResourceRenwu3" resultMap="CourseResourceResult">
         <include refid="selectCourseResourceVo"/>
         <where>  
-            <if test="courseId != null "> and course_id = #{courseId}</if>
-            <if test="name != null  and name != ''"> and name like concat('%', #{name}, '%')</if>
-            <if test="fileType != null  and fileType != ''"> and file_type = #{fileType}</if>
-            <if test="uploadUserId != null "> and upload_user_id = #{uploadUserId}</if>
+            <if test="courseId != null "> and cr.course_id = #{courseId}</if>
+            <if test="name != null  and name != ''"> and cr.name like concat('%', #{name}, '%')</if>
+            <if test="fileType != null  and fileType != ''"> and cr.file_type = #{fileType}</if>
+            <if test="uploadUserId != null "> and cr.upload_user_id = #{uploadUserId}</if>
+            <if test="knowledgePointName != null and knowledgePointName != ''">
+                and exists (
+                    select 1 from course_resource_kp crkp2
+                    inner join knowledge_point kp2 on crkp2.kp_id = kp2.id
+                    where crkp2.resource_id = cr.id
+                    and kp2.name like concat('%', #{knowledgePointName}, '%')
+                )
+            </if>
         </where>
-        order by create_time desc
+        order by cr.create_time desc
     </select>
     
     <select id="selectCourseResourceById" parameterType="Long" resultMap="CourseResourceResult">
         <include refid="selectCourseResourceVo"/>
-        where id = #{id}
+        where cr.id = #{id}
     </select>
         
     <insert id="insertCourseResource" parameterType="com.ruoyi.system.domain.CourseResourceRenwu3" useGeneratedKeys="true" keyProperty="id">

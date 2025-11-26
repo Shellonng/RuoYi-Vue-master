@@ -7,6 +7,7 @@ import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.apache.commons.lang3.builder.ToStringStyle;
 
 import java.util.Date;
+import java.util.List;
 
 
 public class CourseResourceRenwu3 extends BaseEntity
@@ -55,6 +56,18 @@ public class CourseResourceRenwu3 extends BaseEntity
     /** 更新时间 */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private Date updateTime;
+
+    /** 课程名称（关联查询，不在数据库中） */
+    private String courseName;
+
+    /** 文件名称（从course_resource.name或文件路径提取） */
+    private String fileName;
+
+    /** 关联的知识点列表 */
+    private List<KnowledgePoint> knowledgePointList;
+
+    /** 知识点名称（用于搜索，不在数据库中） */
+    private String knowledgePointName;
 
     public void setId(Long id) 
     {
@@ -160,6 +173,46 @@ public class CourseResourceRenwu3 extends BaseEntity
     public void setUpdateTime(Date updateTime) 
     {
         this.updateTime = updateTime;
+    }
+
+    public String getCourseName() 
+    {
+        return courseName;
+    }
+
+    public void setCourseName(String courseName) 
+    {
+        this.courseName = courseName;
+    }
+
+    public String getFileName() 
+    {
+        return fileName;
+    }
+
+    public void setFileName(String fileName) 
+    {
+        this.fileName = fileName;
+    }
+
+    public List<KnowledgePoint> getKnowledgePointList()
+    {
+        return knowledgePointList;
+    }
+
+    public void setKnowledgePointList(List<KnowledgePoint> knowledgePointList)
+    {
+        this.knowledgePointList = knowledgePointList;
+    }
+
+    public String getKnowledgePointName()
+    {
+        return knowledgePointName;
+    }
+
+    public void setKnowledgePointName(String knowledgePointName)
+    {
+        this.knowledgePointName = knowledgePointName;
     }
 
     @Override

@@ -1,16 +1,12 @@
 <template>
-  <div class="app-container">
+  <div class="app-container" style="padding: 10px 20px;">
     <!-- 左右分栏布局 -->
     <el-row :gutter="20">
       <!-- 左侧：文件上传表单 -->
       <el-col :span="12">
         <el-card class="upload-card" style="height: 660px;">
-          <div slot="header">
-            <span>上传课程资源</span>
-          </div>
-          
           <el-form ref="uploadForm" :model="uploadForm" label-width="80px">
-            <el-form-item label="选择课程" required>
+            <el-form-item label="选择课程" required v-if="!hideCourseSelect">
               <el-select 
                 v-model="uploadForm.courseId" 
                 placeholder="请选择课程" 
@@ -21,10 +17,23 @@
                 <el-option
                   v-for="course in courseOptions"
                   :key="course.id"
-                  :label="course.courseName"
+                  :label="course.title"
                   :value="course.id"
                 />
               </el-select>
+            </el-form-item>
+
+            <el-form-item label="选择小节" required>
+              <el-cascader
+                v-model="uploadForm.sectionPath"
+                :options="chapterSectionOptions"
+                :props="cascaderProps"
+                placeholder="请选择章节和小节"
+                style="width: 100%;"
+                filterable
+                clearable
+                @change="handleSectionChange"
+              />
             </el-form-item>
         
             <el-form-item label="资源描述">
@@ -65,7 +74,7 @@
                     size="mini"
                     @click="handleAnalyze"
                     :loading="uploading"
-                    :disabled="!selectedFile || !uploadForm.courseId"
+                    :disabled="!selectedFile || !uploadForm.courseId || !uploadForm.sectionId"
                     style="width: 100%;"
                   >
                     智能分析
@@ -76,7 +85,7 @@
                     type="success"
                     size="mini"
                     @click="handleSave"
-                    :disabled="!currentResourceId"
+                    :disabled="saveButtonDisabled"
                     style="width: 100%;"
                   >
                     保存
@@ -308,6 +317,8 @@
       width="800px"
       :close-on-click-modal="false"
       top="5vh"
+      append-to-body
+      :modal="true"
     >
       <div class="chat-container">
         <!-- 对话消息区域 -->
@@ -375,6 +386,8 @@
       width="70%"
       :close-on-click-modal="false"
       :close-on-press-escape="false"
+      append-to-body
+      :modal="true"
     >
       <div class="ai-dialog-content">
         <!-- 分析步骤时间线 -->
@@ -476,12 +489,24 @@
 </template>
 
 <script>
-import { uploadAndAnalyzeRenwu3, confirmKnowledgePointsRenwu3, chatWithAIRenwu3 } from '@/api/system/courseResourceRenwu3'
+import { analyzeFileOnlyRenwu3, saveResourceRenwu3, confirmKnowledgePointsRenwu3, chatWithAIRenwu3, delResourceRenwu3 } from '@/api/system/courseResourceRenwu3'
 import { listCourse } from '@/api/course/course'
-import { listKnowledgePointByCourse } from '@/api/course/knowledgePoint'
+import { listKnowledgePointByCourse, addKnowledgePoint, batchAddKnowledgePoints } from '@/api/course/knowledgePoint'
+import { listChapterByCourse } from '@/api/course/chapter'
+import { listSectionByChapter, setSectionKnowledgePoints } from '@/api/course/section'
 
 export default {
   name: 'ResourceTaggingRenwu3',
+  props: {
+    courseId: {
+      type: Number,
+      default: null
+    },
+    hideCourseSelect: {
+      type: Boolean,
+      default: false
+    }
+  },
   data() {
     return {
       // 课程选项
@@ -490,11 +515,24 @@ export default {
       // 课程所有知识点列表
       allCourseKnowledgePoints: [],
       
+      // 章节小节选项
+      chapterSectionOptions: [],
+      
+      // 级联选择器配置
+      cascaderProps: {
+        value: 'id',
+        label: 'title',
+        children: 'sections',
+        emitPath: true // 返回完整路径[chapterId, sectionId]
+      },
+      
       // 上传表单
       uploadForm: {
         courseId: '',
         courseTitle: '',
-        description: ''
+        description: '',
+        sectionPath: [], // [chapterId, sectionId]
+        sectionId: null
       },
       
       // 文件相关
@@ -506,6 +544,7 @@ export default {
       recommendations: [],
       uploadResult: null,
       currentResourceId: null,
+      tempResourceInfo: null, // 临时资源信息（未保存到数据库）
 
       // AI对话框相关
       aiDialogVisible: false,
@@ -528,6 +567,12 @@ export default {
   
   created() {
     this.loadCourses()
+    // 如果传入了courseId，自动设置并加载数据
+    if (this.courseId) {
+      console.log('ResourceTagging created - courseId:', this.courseId, 'type:', typeof this.courseId)
+      this.uploadForm.courseId = this.courseId
+      this.handleCourseChange(this.courseId)
+    }
   },
   
   computed: {
@@ -581,10 +626,35 @@ export default {
     // 总选中数量
     totalSelectedCount() {
       return this.selectedKpIds.length + this.selectedNewKps.length + this.selectedAvailableKps.length
+    },
+    
+    // 保存按钮禁用条件
+    saveButtonDisabled() {
+      // 如果没有选择小节，禁用
+      if (!this.uploadForm.sectionId) {
+        return true
+      }
+      
+      // 如果既没有临时资源信息，也没有资源ID，并且没有选中任何知识点，禁用
+      if (!this.tempResourceInfo && !this.currentResourceId && this.totalSelectedCount === 0) {
+        return true
+      }
+      
+      // 如果有临时资源信息或资源ID，但没有选中任何知识点，禁用
+      if ((this.tempResourceInfo || this.currentResourceId) && this.totalSelectedCount === 0) {
+        return true
+      }
+      
+      return false
     }
   },
   
   methods: {
+    // 返回按钮
+    handleBack() {
+      this.$emit('back')
+    },
+    
     // 加载教师教授的课程列表
     async loadCourses() {
       try {
@@ -600,21 +670,79 @@ export default {
     },
     
     // 课程选择变化
-    handleCourseChange(courseId) {
-      const selectedCourse = this.courseOptions.find(c => c.id === courseId)
-      if (selectedCourse) {
-        this.uploadForm.courseTitle = selectedCourse.courseName
-        // 加载课程的所有知识点
-        this.loadCourseKnowledgePoints(courseId)
+    async handleCourseChange(courseId) {
+      console.log('handleCourseChange called, courseId:', courseId)
+      
+      // 如果是通过props传入的courseId（课程详情页使用），不需要从courseOptions查找
+      if (this.hideCourseSelect && courseId) {
+        console.log('直接加载课程数据（hideCourseSelect=true）')
+        // 直接加载课程的所有知识点
+        await this.loadCourseKnowledgePoints(courseId)
+        // 加载课程的章节和小节
+        await this.loadChapterSections(courseId)
+      } else {
+        // 正常流程：从课程选择器选择
+        const selectedCourse = this.courseOptions.find(c => c.id === courseId)
+        if (selectedCourse) {
+          this.uploadForm.courseTitle = selectedCourse.title
+          // 加载课程的所有知识点
+          await this.loadCourseKnowledgePoints(courseId)
+          // 加载课程的章节和小节
+          await this.loadChapterSections(courseId)
+        }
+      }
+      // 清空小节选择
+      this.uploadForm.sectionPath = []
+      this.uploadForm.sectionId = null
+    },
+    
+    // 加载课程的章节和小节（用于级联选择器）
+    async loadChapterSections(courseId) {
+      try {
+        // 获取所有章节
+        const chapterResponse = await listChapterByCourse(courseId)
+        if (chapterResponse.code === 200) {
+          const chapters = chapterResponse.data || []
+          
+          // 为每个章节加载小节
+          const chapterSectionPromises = chapters.map(async (chapter) => {
+            const sectionResponse = await listSectionByChapter(chapter.id)
+            return {
+              id: chapter.id,
+              title: chapter.title,
+              sections: (sectionResponse.data || []).map(section => ({
+                id: section.id,
+                title: section.title
+              }))
+            }
+          })
+          
+          this.chapterSectionOptions = await Promise.all(chapterSectionPromises)
+        }
+      } catch (error) {
+        console.error('加载章节小节失败:', error)
+        this.$message.error('加载章节小节失败')
+      }
+    },
+    
+    // 小节选择变化
+    handleSectionChange(value) {
+      if (value && value.length === 2) {
+        this.uploadForm.sectionId = value[1] // sectionId是路径的第二个值
+      } else {
+        this.uploadForm.sectionId = null
       }
     },
     
     // 加载课程的所有知识点
     async loadCourseKnowledgePoints(courseId) {
       try {
+        console.log('开始加载课程知识点, courseId:', courseId)
         const response = await listKnowledgePointByCourse(courseId)
+        console.log('知识点加载响应:', response)
         if (response.code === 200) {
           this.allCourseKnowledgePoints = response.data || []
+          console.log('已加载知识点数量:', this.allCourseKnowledgePoints.length)
         }
       } catch (error) {
         console.error('加载课程知识点失败:', error)
@@ -671,64 +799,175 @@ export default {
       }).catch(() => {})
     },
     
-    // 批量创建新知识点
-    handleBatchCreateNew() {
+    // 批量创建新知识点（只创建知识点，不关联资源）
+    async handleBatchCreateNew() {
       if (this.newSelection.length === 0) {
         this.$message.warning('请先选择要创建的知识点')
         return
       }
       
-      const titles = this.newSelection.map(item => item.extractedTitle).join('、')
-      this.$message.info(`待创建 ${this.newSelection.length} 个新知识点：${titles}`)
-      // TODO: 调用后端批量创建接口
-      this.newSelection = []
+      if (!this.uploadForm.courseId) {
+        this.$message.error('请先选择课程')
+        return
+      }
+      
+      try {
+        const kpTitles = this.newSelection.map(item => item.extractedTitle)
+        
+        // 构建知识点对象数组
+        const knowledgePoints = kpTitles.map(title => ({
+          courseId: this.uploadForm.courseId,
+          title: title,
+          level: 1 // 默认级别
+        }))
+        
+        // 调用标准API批量创建知识点，不关联资源
+        const response = await batchAddKnowledgePoints(knowledgePoints)
+        
+        console.log('批量创建知识点响应:', response) // 调试日志
+        
+        if (response.code === 200) {
+          // 后端返回的是创建的知识点数组
+          const createdKps = response.data || []
+          
+          this.$message.success(`成功创建 ${createdKps.length} 个知识点`)
+          
+          // 将创建的知识点移到匹配区域
+          createdKps.forEach(kp => {
+            if (kp && kp.id) {
+              this.recommendations.push({
+                extractedTitle: kp.title,
+                kpId: kp.id,
+                matched: true,
+                similarity: 1.0 // 新创建的设置为100%
+              })
+            }
+          })
+          
+          // 从新知识点列表中移除
+          const createdTitles = new Set(kpTitles)
+          this.recommendations = this.recommendations.filter(item => 
+            !(item.matched === false && createdTitles.has(item.extractedTitle))
+          )
+          
+          this.newSelection = []
+          
+          // 重新加载课程知识点
+          await this.loadCourseKnowledgePoints(this.uploadForm.courseId)
+        }
+      } catch (error) {
+        console.error('批量创建失败:', error)
+        this.$message.error('批量创建失败')
+      }
     },
     
-    // 单个创建新知识点
-    handleCreateSingleNew(row) {
-      this.$message.info(`待创建新知识点：${row.extractedTitle}`)
-      // TODO: 调用后端创建接口
+    // 单个创建新知识点（只创建知识点，不关联资源）
+    async handleCreateSingleNew(row) {
+      if (!this.uploadForm.courseId) {
+        this.$message.error('请先选择课程')
+        return
+      }
+      
+      try {
+        // 调用标准API只创建知识点，不关联资源
+        const response = await addKnowledgePoint({
+          courseId: this.uploadForm.courseId,
+          title: row.extractedTitle,
+          level: 1 // 默认级别
+        })
+        
+        console.log('创建知识点响应:', response) // 调试日志
+        
+        if (response.code === 200) {
+          // 后端返回的是完整的知识点对象
+          const createdKp = response.data
+          
+          if (!createdKp || !createdKp.id) {
+            console.error('无法获取创建的知识点:', response)
+            this.$message.error('创建成功但获取ID失败')
+            return
+          }
+          
+          this.$message.success(`成功创建知识点：${row.extractedTitle}`)
+          
+          // 将创建的知识点移到匹配区域（不关联资源）
+          this.recommendations.push({
+            extractedTitle: createdKp.title,
+            kpId: createdKp.id,
+            matched: true,
+            similarity: 1.0 // 新创建的设置为100%
+          })
+          
+          // 从新增列表中移除该项
+          this.recommendations = this.recommendations.filter(item => 
+            !(item.extractedTitle === row.extractedTitle && item.matched === false)
+          )
+          
+          // 重新加载课程知识点
+          await this.loadCourseKnowledgePoints(this.uploadForm.courseId)
+        }
+      } catch (error) {
+        console.error('创建失败:', error)
+        this.$message.error('创建失败')
+      }
     },
     
-    // 批量添加已有知识点
-    async handleBatchAddAvailable() {
+    // 批量添加已有知识点（仅在前端移动，不调用API）
+    handleBatchAddAvailable() {
       if (this.availableSelection.length === 0) {
         this.$message.warning('请先选择要添加的知识点')
         return
       }
       
-      try {
-        const kpIds = this.availableSelection.map(item => item.id)
-        const response = await confirmKnowledgePointsRenwu3({
-          resourceId: this.currentResourceId,
-          kpIds: kpIds
-        })
-        
-        if (response.code === 200) {
-          this.$message.success(`成功添加 ${kpIds.length} 个知识点`)
-          this.availableSelection = []
-        }
-      } catch (error) {
-        console.error('批量添加失败:', error)
-        this.$message.error('批量添加失败')
+      // 获取已匹配知识点的ID列表，避免重复添加
+      const existingKpIds = this.matchedKnowledgePoints.map(item => item.kpId)
+      
+      // 过滤掉已经存在的知识点
+      const toAdd = this.availableSelection.filter(kp => !existingKpIds.includes(kp.id))
+      
+      if (toAdd.length === 0) {
+        this.$message.warning('选中的知识点已经在匹配区域中')
+        return
       }
+      
+      // 将选中的知识点移到已匹配区域，设置100%匹配度
+      toAdd.forEach(kp => {
+        this.recommendations.push({
+          extractedTitle: kp.title,
+          kpId: kp.id,
+          matched: true,
+          similarity: 1.0 // 人工选择的设置为100%
+        })
+      })
+      
+      const skipped = this.availableSelection.length - toAdd.length
+      if (skipped > 0) {
+        this.$message.success(`已添加 ${toAdd.length} 个知识点，跳过 ${skipped} 个已存在的`)
+      } else {
+        this.$message.success(`已添加 ${toAdd.length} 个知识点到匹配区域`)
+      }
+      
+      this.availableSelection = []
     },
     
-    // 单个添加已有知识点
-    async handleAddSingleAvailable(row) {
-      try {
-        const response = await confirmKnowledgePointsRenwu3({
-          resourceId: this.currentResourceId,
-          kpIds: [row.id]
-        })
-        
-        if (response.code === 200) {
-          this.$message.success(`成功添加知识点：${row.title}`)
-        }
-      } catch (error) {
-        console.error('添加失败:', error)
-        this.$message.error('添加失败')
+    // 单个添加已有知识点（仅在前端移动，不调用API）
+    handleAddSingleAvailable(row) {
+      // 检查是否已经存在
+      const exists = this.matchedKnowledgePoints.some(item => item.kpId === row.id)
+      if (exists) {
+        this.$message.warning(`知识点「${row.title}」已经在匹配区域中`)
+        return
       }
+      
+      // 将知识点移到已匹配区域，设置100%匹配度
+      this.recommendations.push({
+        extractedTitle: row.title,
+        kpId: row.id,
+        matched: true,
+        similarity: 1.0 // 人工选择的设置为100%
+      })
+      
+      this.$message.success(`已添加知识点：${row.title}`)
     },
     
     // 文件选择变化
@@ -742,7 +981,7 @@ export default {
       this.$message.warning('只能上传一个文件')
     },
     
-    // 执行上传和智能分析
+    // 执行上传和智能分析（仅分析，不保存到数据库）
     async handleUpload() {
       // 验证表单
       if (!this.uploadForm.courseId) {
@@ -766,15 +1005,16 @@ export default {
         formData.append('description', this.uploadForm.description)
       }
       
-      // 上传并分析
+      // 上传并分析（不保存到数据库）
       this.uploading = true
       try {
-        // 步骤1: 上传文件
-        this.updateAiStep('upload', 'success', '文件上传成功', '文件已上传到服务器,开始解析...')
+        // 步骤1: 上传文件用于分析
+        this.updateAiStep('upload', 'success', '文件上传成功', '文件已上传，开始解析...')
         
-        const response = await uploadAndAnalyzeRenwu3(formData)
+        // 调用新的仅分析API
+        const response = await analyzeFileOnlyRenwu3(formData)
         
-        console.log('上传响应:', response) // 调试日志
+        console.log('分析响应:', response) // 调试日志
         
         if (response.code === 200) {
           // 判断数据在response还是response.data中
@@ -782,7 +1022,7 @@ export default {
           
           console.log('解析数据:', data) // 调试日志
           
-          // 步骤2: 文档解析(模拟,实际由后端完成)
+          // 步骤2: 文档解析
           this.updateAiStep('parse', 'success', '文档解析完成', '成功提取文档文本内容', {
             text: data.extractedText || '文档内容已提取',
             length: data.textLength || 0
@@ -805,10 +1045,12 @@ export default {
           
           this.analysisCompleted = true
           
-          // 保存结果
+          // 保存临时资源信息（未保存到数据库）
+          this.tempResourceInfo = data.tempResource
+          
+          // 保存分析结果
           this.uploadResult = {
             message: response.msg,
-            resource: data.resource,
             recommendationCount: data.recommendationCount
           }
           
@@ -819,28 +1061,26 @@ export default {
           }))
           
           console.log('推荐列表已设置:', this.recommendations) // 调试日志
-          console.log('每个推荐项的详情:')
-          this.recommendations.forEach((item, index) => {
-            console.log(`  [${index}] matched:${item.matched}, selected:${item.selected}, kpId:${item.kpId}, title:${item.extractedTitle}`)
-          })
           console.log('选中的知识点ID:', this.selectedKpIds) // 调试日志
+          console.log('临时资源信息:', this.tempResourceInfo) // 调试日志
           
-          this.currentResourceId = data.resource.id
+          // 清空currentResourceId，因为还未保存
+          this.currentResourceId = null
           
-          // 清空表单
-          this.fileList = []
-          this.selectedFile = null
+          // 保留文件显示，不清空文件列表
+          // this.fileList = []
+          // this.selectedFile = null
           
-          this.$message.success('AI分析完成!')
+          this.$message.success('AI分析完成! 点击"保存"按钮保存资源和关联')
         } else {
-          this.updateAiStep('error', 'danger', '分析失败', response.msg || '上传失败')
-          this.$message.error(response.msg || '上传失败')
+          this.updateAiStep('error', 'danger', '分析失败', response.msg || '分析失败')
+          this.$message.error(response.msg || '分析失败')
         }
       } catch (error) {
-        console.error('上传失败:', error)
+        console.error('分析失败:', error)
         console.error('错误详情:', error.response) // 打印完整响应
         this.updateAiStep('error', 'danger', '系统错误', error.message)
-        this.$message.error('上传失败: ' + error.message)
+        this.$message.error('分析失败: ' + error.message)
       } finally {
         this.uploading = false
       }
@@ -852,34 +1092,148 @@ export default {
     },
     
     // 保存按钮
-    handleSave() {
-      if (!this.currentResourceId) {
-        this.$message.warning('没有可保存的资源')
+    async handleSave() {
+      // 检查是否选择了小节
+      if (!this.uploadForm.sectionId) {
+        this.$message.warning('请选择要关联的小节')
         return
       }
-      this.$message.success('资源已保存')
-      // 可以在这里添加额外的保存逻辑
+      
+      // 收集所有已选中的知识点ID（包括匹配的、已有的）
+      const matchedKpIds = [
+        ...this.selectedKpIds,
+        ...this.selectedAvailableKps
+      ].filter(id => id)
+      
+      if (matchedKpIds.length === 0) {
+        this.$message.warning('请至少选择一个知识点')
+        return
+      }
+      
+      try {
+        // 如果是新分析的资源（还未保存到数据库）
+        if (this.tempResourceInfo && !this.currentResourceId) {
+          // 第一步：保存资源到数据库
+          const saveResponse = await saveResourceRenwu3({
+            courseId: this.uploadForm.courseId,
+            fileName: this.tempResourceInfo.fileName,
+            fileType: this.tempResourceInfo.fileType,
+            fileSize: this.tempResourceInfo.fileSize,
+            filePath: this.tempResourceInfo.filePath,
+            description: this.tempResourceInfo.description
+          })
+          
+          console.log('保存资源响应:', saveResponse) // 调试日志
+          
+          if (saveResponse.code !== 200) {
+            this.$message.error('保存资源失败')
+            return
+          }
+          
+          // 获取保存的资源ID（处理不同的响应结构）
+          const resource = saveResponse.resource || (saveResponse.data && saveResponse.data.resource)
+          if (!resource || !resource.id) {
+            console.error('无法获取资源ID:', saveResponse)
+            this.$message.error('保存成功但获取资源ID失败')
+            return
+          }
+          
+          this.currentResourceId = resource.id
+          console.log('资源已保存，ID:', this.currentResourceId)
+        }
+        
+        // 第二步：如果有资源ID，将资源关联到课程资源知识点表
+        if (this.currentResourceId) {
+          const resourceResponse = await confirmKnowledgePointsRenwu3({
+            resourceId: this.currentResourceId,
+            kpIds: matchedKpIds
+          })
+          
+          if (resourceResponse.code !== 200) {
+            this.$message.error('资源关联知识点失败')
+            return
+          }
+        }
+        
+        // 第三步：将知识点关联到小节
+        const sectionResponse = await setSectionKnowledgePoints({
+          sectionId: this.uploadForm.sectionId,
+          kpIds: matchedKpIds
+        })
+        
+        if (sectionResponse.code === 200) {
+          const message = this.currentResourceId 
+            ? `资源已保存，关联了 ${matchedKpIds.length} 个知识点到课程资源和小节`
+            : `已关联 ${matchedKpIds.length} 个知识点到小节`
+          this.$message.success(message)
+          // 发送上传成功事件
+          this.$emit('upload-success')
+          // 清空表单和临时数据
+          this.uploadForm = {
+            courseId: this.hideCourseSelect ? this.courseId : '',
+            courseTitle: '',
+            description: '',
+            sectionPath: [],
+            sectionId: null
+          }
+          this.fileList = []
+          this.selectedFile = null
+          this.recommendations = []
+          this.currentResourceId = null
+          this.tempResourceInfo = null
+          this.uploadResult = null
+          this.matchedKnowledgePoints = []
+        } else {
+          this.$message.warning('资源已保存，但小节关联知识点失败')
+        }
+      } catch (error) {
+        console.error('保存失败:', error)
+        this.$message.error('保存失败')
+      }
     },
     
     // 取消按钮
-    handleCancel() {
-      this.$confirm('确定要取消吗？未保存的数据将丢失。', '提示', {
+    async handleCancel() {
+      const hasUnsaved = this.tempResourceInfo || this.currentResourceId
+      const confirmMessage = hasUnsaved 
+        ? '确定要取消吗？已分析的结果和未保存的知识点关联将被清除。' 
+        : '确定要取消吗？'
+        
+      this.$confirm(confirmMessage, '提示', {
         confirmButtonText: '确定',
         cancelButtonText: '取消',
         type: 'warning'
-      }).then(() => {
-        // 清空表单
+      }).then(async () => {
+        // 如果已经保存了资源到数据库，删除它
+        if (this.currentResourceId) {
+          try {
+            await delResourceRenwu3(this.currentResourceId)
+            console.log('已删除资源:', this.currentResourceId)
+          } catch (error) {
+            console.error('删除资源失败:', error)
+          }
+        }
+        
+        // 清空表单和临时数据
         this.uploadForm = {
-          courseId: '',
+          courseId: this.hideCourseSelect ? this.courseId : '',
           courseTitle: '',
-          description: ''
+          description: '',
+          sectionPath: [],
+          sectionId: null
         }
         this.fileList = []
         this.selectedFile = null
         this.recommendations = []
         this.currentResourceId = null
+        this.tempResourceInfo = null
         this.uploadResult = null
         this.$message.info('已取消')
+        
+        // 如果在课程详情页，返回列表
+        if (this.hideCourseSelect) {
+          this.$emit('back')
+        }
       }).catch(() => {})
     },
 

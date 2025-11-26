@@ -12,12 +12,23 @@ import com.ruoyi.system.domain.CourseResourceRenwu3;
 import com.ruoyi.system.domain.KnowledgePointRenwu3;
 import com.ruoyi.system.service.ICourseResourceServiceRenwu3;
 import com.ruoyi.system.service.IResourceTaggingServiceRenwu3;
+import com.ruoyi.system.utils.BusinessUserUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.http.MediaType;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
 
+import javax.servlet.http.HttpServletResponse;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.OutputStream;
+import java.net.URLEncoder;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -104,7 +115,7 @@ public class CourseResourceControllerRenwu3 extends BaseController
             resource.setFileUrl(filePath);
             resource.setDescription(description);
             resource.setDownloadCount(0);
-            resource.setUploadUserId(SecurityUtils.getUserId());
+            resource.setUploadUserId(BusinessUserUtils.getCurrentBusinessUserId());
             resource.setCreateTime(new Date());
             resource.setUpdateTime(new Date());
             
@@ -150,13 +161,142 @@ public class CourseResourceControllerRenwu3 extends BaseController
         }
     }
 
-    @Log(title = "确认资源知识点-任务3", businessType = BusinessType.UPDATE)
-    @PostMapping("/confirmKnowledgePoints")
-    public AjaxResult confirmKnowledgePoints(
-        @RequestParam("resourceId") Long resourceId,
-        @RequestParam("kpIds") List<Long> kpIds
+    /**
+     * 仅分析文件并推荐知识点，不保存资源到数据库
+     * 用于智能分析阶段，真正保存在用户点击"保存"按钮时进行
+     */
+    @Log(title = "分析文件-任务3", businessType = BusinessType.OTHER)
+    @PostMapping("/analyzeOnly")
+    public AjaxResult analyzeOnly(
+        @RequestParam("file") MultipartFile file,
+        @RequestParam("courseId") Long courseId,
+        @RequestParam("courseTitle") String courseTitle,
+        @RequestParam(value = "description", required = false) String description
     )
     {
+        try
+        {
+            if (file.isEmpty())
+            {
+                return error("上传文件不能为空");
+            }
+
+            String fileName = file.getOriginalFilename();
+            String extension = FileUploadUtils.getExtension(file);
+            String fileType = extension.toLowerCase();
+
+            // 验证文件类型
+            boolean isDocument = fileType.equals("pdf") || fileType.equals("doc") || fileType.equals("docx");
+            boolean isVideo = fileType.equals("mp4") || fileType.equals("avi") || fileType.equals("mov") 
+                || fileType.equals("wmv") || fileType.equals("flv") || fileType.equals("mkv");
+            
+            if (!isDocument && !isVideo)
+            {
+                return error("只支持PDF、Word和视频格式的文件");
+            }
+
+            // 临时保存文件用于分析
+            String tempFilePath = FileUploadUtils.upload(RuoYiConfig.getUploadPath(), file);
+            String uploadPath = RuoYiConfig.getProfile();
+            String relativePath = tempFilePath;
+            if (relativePath.startsWith("/profile/")) {
+                relativePath = relativePath.substring("/profile/".length());
+            } else if (relativePath.startsWith("\\profile\\")) {
+                relativePath = relativePath.substring("\\profile\\".length());
+            }
+            File uploadedFile = new File(uploadPath, relativePath);
+            
+            logger.info("【任务3】仅分析文档: {}", uploadedFile.getAbsolutePath());
+            
+            // 调用分析服务
+            Map<String, Object> analysisResult = resourceTaggingService
+                .analyzeAndRecommendKnowledgePoints(uploadedFile, fileType, courseId, courseTitle);
+            
+            List<Map<String, Object>> recommendations = (List<Map<String, Object>>) analysisResult.get("recommendations");
+            String extractedText = (String) analysisResult.get("extractedText");
+            Integer textLength = (Integer) analysisResult.get("textLength");
+            
+            // 返回分析结果，包含临时文件信息（不保存到数据库）
+            AjaxResult result = success("文件分析完成");
+            
+            // 构建临时资源信息
+            Map<String, Object> tempResource = new HashMap<>();
+            tempResource.put("fileName", fileName);
+            tempResource.put("fileType", fileType);
+            tempResource.put("fileSize", file.getSize());
+            tempResource.put("filePath", tempFilePath);
+            tempResource.put("description", description != null ? description : "");
+            
+            result.put("tempResource", tempResource);
+            result.put("recommendations", recommendations);
+            result.put("recommendationCount", recommendations.size());
+            result.put("extractedText", extractedText);
+            result.put("textLength", textLength);
+            
+            logger.info("【任务3】分析完成，推荐了{}个知识点（未保存资源）", recommendations.size());
+            
+            return result;
+        }
+        catch (Exception e)
+        {
+            logger.error("【任务3】文件分析失败", e);
+            return error("文件分析失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 保存分析后的资源到数据库
+     */
+    @Log(title = "保存资源-任务3", businessType = BusinessType.INSERT)
+    @PostMapping("/saveResource")
+    public AjaxResult saveResource(@RequestBody Map<String, Object> params)
+    {
+        try
+        {
+            Long courseId = Long.valueOf(params.get("courseId").toString());
+            String fileName = params.get("fileName").toString();
+            String fileType = params.get("fileType").toString();
+            Long fileSize = Long.valueOf(params.get("fileSize").toString());
+            String filePath = params.get("filePath").toString();
+            String description = params.containsKey("description") ? params.get("description").toString() : "";
+            
+            // 创建课程资源记录
+            CourseResourceRenwu3 resource = new CourseResourceRenwu3();
+            resource.setCourseId(courseId);
+            resource.setName(fileName);
+            resource.setFileType(fileType);
+            resource.setFileSize(fileSize);
+            resource.setFileUrl(filePath);
+            resource.setDescription(description);
+            resource.setDownloadCount(0);
+            resource.setUploadUserId(BusinessUserUtils.getCurrentBusinessUserId());
+            resource.setCreateTime(new Date());
+            resource.setUpdateTime(new Date());
+            
+            courseResourceService.insertCourseResource(resource);
+            
+            logger.info("【任务3】资源保存成功: {}", resource.getId());
+            
+            AjaxResult result = success("资源保存成功");
+            result.put("resource", resource);
+            return result;
+        }
+        catch (Exception e)
+        {
+            logger.error("【任务3】资源保存失败", e);
+            return error("资源保存失败: " + e.getMessage());
+        }
+    }
+
+    @Log(title = "确认资源知识点-任务3", businessType = BusinessType.UPDATE)
+    @PostMapping("/confirmKnowledgePoints")
+    public AjaxResult confirmKnowledgePoints(@RequestBody Map<String, Object> params)
+    {
+        Long resourceId = Long.valueOf(params.get("resourceId").toString());
+        @SuppressWarnings("unchecked")
+        List<Integer> kpIdsInt = (List<Integer>) params.get("kpIds");
+        List<Long> kpIds = kpIdsInt.stream().map(Long::valueOf).collect(java.util.stream.Collectors.toList());
+        
         logger.info("【任务3】确认资源{}的知识点: {}", resourceId, kpIds);
         boolean success = resourceTaggingService.confirmResourceKnowledgePoints(resourceId, kpIds);
         return success ? success("知识点关联成功") : error("保存失败");
@@ -174,15 +314,15 @@ public class CourseResourceControllerRenwu3 extends BaseController
      */
     @Log(title = "创建知识点-任务3", businessType = BusinessType.INSERT)
     @PostMapping("/createKnowledgePoint")
-    public AjaxResult createKnowledgePoint(
-        @RequestParam("resourceId") Long resourceId,
-        @RequestParam("courseId") Long courseId,
-        @RequestParam("kpTitle") String kpTitle
-    )
+    public AjaxResult createKnowledgePoint(@RequestBody Map<String, Object> params)
     {
+        Long resourceId = Long.valueOf(params.get("resourceId").toString());
+        Long courseId = Long.valueOf(params.get("courseId").toString());
+        String kpTitle = params.get("kpTitle").toString();
+        
         logger.info("【任务3】创建新知识点: resourceId={}, courseId={}, title={}", resourceId, courseId, kpTitle);
         
-        Long creatorUserId = SecurityUtils.getUserId();
+        Long creatorUserId = BusinessUserUtils.getCurrentBusinessUserId();
         Long kpId = resourceTaggingService.createAndLinkKnowledgePoint(resourceId, courseId, kpTitle, creatorUserId);
         
         if (kpId != null)
@@ -202,15 +342,16 @@ public class CourseResourceControllerRenwu3 extends BaseController
      */
     @Log(title = "批量创建知识点-任务3", businessType = BusinessType.INSERT)
     @PostMapping("/batchCreateKnowledgePoints")
-    public AjaxResult batchCreateKnowledgePoints(
-        @RequestParam("resourceId") Long resourceId,
-        @RequestParam("courseId") Long courseId,
-        @RequestParam("kpTitles") List<String> kpTitles
-    )
+    public AjaxResult batchCreateKnowledgePoints(@RequestBody Map<String, Object> params)
     {
+        Long resourceId = Long.valueOf(params.get("resourceId").toString());
+        Long courseId = Long.valueOf(params.get("courseId").toString());
+        @SuppressWarnings("unchecked")
+        List<String> kpTitles = (List<String>) params.get("kpTitles");
+        
         logger.info("【任务3】批量创建知识点: resourceId={}, courseId={}, count={}", resourceId, courseId, kpTitles.size());
         
-        Long creatorUserId = SecurityUtils.getUserId();
+        Long creatorUserId = BusinessUserUtils.getCurrentBusinessUserId();
         List<Long> createdIds = resourceTaggingService.batchCreateAndLinkKnowledgePoints(resourceId, courseId, kpTitles, creatorUserId);
         
         AjaxResult result = success("成功创建" + createdIds.size() + "个知识点");
@@ -224,7 +365,7 @@ public class CourseResourceControllerRenwu3 extends BaseController
     @PostMapping
     public AjaxResult add(@RequestBody CourseResourceRenwu3 courseResource)
     {
-        courseResource.setUploadUserId(SecurityUtils.getUserId());
+        courseResource.setUploadUserId(BusinessUserUtils.getCurrentBusinessUserId());
         return toAjax(courseResourceService.insertCourseResource(courseResource));
     }
 
@@ -243,6 +384,112 @@ public class CourseResourceControllerRenwu3 extends BaseController
     public AjaxResult remove(@PathVariable Long[] ids)
     {
         return toAjax(courseResourceService.deleteCourseResourceByIds(ids));
+    }
+
+    /**
+     * 下载课程资源文件
+     */
+    @GetMapping("/download/{id}")
+    public void download(@PathVariable Long id, HttpServletResponse response)
+    {
+        try
+        {
+            CourseResourceRenwu3 resource = courseResourceService.selectCourseResourceById(id);
+            if (resource == null || resource.getFileUrl() == null)
+            {
+                response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+                return;
+            }
+
+            // 获取文件路径（去掉可能的URL前缀）
+            String fileUrl = resource.getFileUrl();
+            String filePath = fileUrl;
+            
+            // 如果是相对路径，则添加上传路径前缀
+            if (!fileUrl.startsWith("http") && !fileUrl.startsWith("/"))
+            {
+                filePath = RuoYiConfig.getProfile() + "/" + fileUrl;
+            }
+            else if (fileUrl.startsWith("/profile"))
+            {
+                filePath = RuoYiConfig.getProfile() + fileUrl.substring(8);
+            }
+
+            File file = new File(filePath);
+            if (!file.exists())
+            {
+                response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+                return;
+            }
+
+            // 获取文件名
+            String fileName = resource.getFileName();
+            if (fileName == null || fileName.isEmpty())
+            {
+                fileName = resource.getName();
+            }
+            if (fileName == null || fileName.isEmpty())
+            {
+                fileName = file.getName();
+            }
+
+            // 设置响应头
+            response.setContentType(getContentType(resource.getFileType()));
+            response.setHeader(HttpHeaders.CONTENT_DISPOSITION, 
+                "attachment; filename=" + URLEncoder.encode(fileName, "UTF-8"));
+            response.setContentLengthLong(file.length());
+
+            // 读取文件并写入响应流
+            try (FileInputStream fis = new FileInputStream(file);
+                 OutputStream os = response.getOutputStream())
+            {
+                byte[] buffer = new byte[4096];
+                int bytesRead;
+                while ((bytesRead = fis.read(buffer)) != -1)
+                {
+                    os.write(buffer, 0, bytesRead);
+                }
+                os.flush();
+            }
+        }
+        catch (Exception e)
+        {
+            logger.error("文件下载失败", e);
+            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    /**
+     * 根据文件类型获取Content-Type
+     */
+    private String getContentType(String fileType)
+    {
+        if (fileType == null) return "application/octet-stream";
+        
+        fileType = fileType.toLowerCase();
+        switch (fileType)
+        {
+            case "pdf":
+                return "application/pdf";
+            case "doc":
+                return "application/msword";
+            case "docx":
+                return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+            case "mp4":
+                return "video/mp4";
+            case "avi":
+                return "video/x-msvideo";
+            case "mov":
+                return "video/quicktime";
+            case "wmv":
+                return "video/x-ms-wmv";
+            case "flv":
+                return "video/x-flv";
+            case "mkv":
+                return "video/x-matroska";
+            default:
+                return "application/octet-stream";
+        }
     }
 
     @PostMapping("/chat")
