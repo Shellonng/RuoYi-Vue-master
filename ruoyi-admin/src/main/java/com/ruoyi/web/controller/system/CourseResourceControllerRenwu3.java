@@ -168,7 +168,8 @@ public class CourseResourceControllerRenwu3 extends BaseController
     @Log(title = "分析文件-任务3", businessType = BusinessType.OTHER)
     @PostMapping("/analyzeOnly")
     public AjaxResult analyzeOnly(
-        @RequestParam("file") MultipartFile file,
+        @RequestParam(value = "file", required = false) MultipartFile file,
+        @RequestParam(value = "filePath", required = false) String existingFilePath,
         @RequestParam("courseId") Long courseId,
         @RequestParam("courseTitle") String courseTitle,
         @RequestParam(value = "description", required = false) String description
@@ -176,14 +177,64 @@ public class CourseResourceControllerRenwu3 extends BaseController
     {
         try
         {
-            if (file.isEmpty())
+            File uploadedFile;
+            String fileName;
+            String fileType;
+            Long fileSize;
+            String tempFilePath;
+            
+            // 判断是上传新文件还是使用已有文件
+            if (existingFilePath != null && !existingFilePath.isEmpty())
             {
-                return error("上传文件不能为空");
+                // 使用已有文件路径
+                logger.info("【任务3】使用已有文件分析: {}", existingFilePath);
+                
+                String uploadPath = RuoYiConfig.getProfile();
+                String relativePath = existingFilePath;
+                
+                // 处理路径前缀
+                if (relativePath.startsWith("/profile/")) {
+                    relativePath = relativePath.substring("/profile/".length());
+                } else if (relativePath.startsWith("\\profile\\")) {
+                    relativePath = relativePath.substring("\\profile\\".length());
+                }
+                
+                uploadedFile = new File(uploadPath, relativePath);
+                
+                if (!uploadedFile.exists())
+                {
+                    return error("文件不存在: " + uploadedFile.getAbsolutePath());
+                }
+                
+                fileName = uploadedFile.getName();
+                String extension = fileName.substring(fileName.lastIndexOf(".") + 1);
+                fileType = extension.toLowerCase();
+                fileSize = uploadedFile.length();
+                tempFilePath = existingFilePath;
             }
-
-            String fileName = file.getOriginalFilename();
-            String extension = FileUploadUtils.getExtension(file);
-            String fileType = extension.toLowerCase();
+            else if (file != null && !file.isEmpty())
+            {
+                // 上传新文件
+                fileName = file.getOriginalFilename();
+                String extension = FileUploadUtils.getExtension(file);
+                fileType = extension.toLowerCase();
+                fileSize = file.getSize();
+                
+                // 临时保存文件用于分析
+                tempFilePath = FileUploadUtils.upload(RuoYiConfig.getUploadPath(), file);
+                String uploadPath = RuoYiConfig.getProfile();
+                String relativePath = tempFilePath;
+                if (relativePath.startsWith("/profile/")) {
+                    relativePath = relativePath.substring("/profile/".length());
+                } else if (relativePath.startsWith("\\profile\\")) {
+                    relativePath = relativePath.substring("\\profile\\".length());
+                }
+                uploadedFile = new File(uploadPath, relativePath);
+            }
+            else
+            {
+                return error("请提供文件或文件路径");
+            }
 
             // 验证文件类型
             boolean isDocument = fileType.equals("pdf") || fileType.equals("doc") || fileType.equals("docx");
@@ -194,19 +245,8 @@ public class CourseResourceControllerRenwu3 extends BaseController
             {
                 return error("只支持PDF、Word和视频格式的文件");
             }
-
-            // 临时保存文件用于分析
-            String tempFilePath = FileUploadUtils.upload(RuoYiConfig.getUploadPath(), file);
-            String uploadPath = RuoYiConfig.getProfile();
-            String relativePath = tempFilePath;
-            if (relativePath.startsWith("/profile/")) {
-                relativePath = relativePath.substring("/profile/".length());
-            } else if (relativePath.startsWith("\\profile\\")) {
-                relativePath = relativePath.substring("\\profile\\".length());
-            }
-            File uploadedFile = new File(uploadPath, relativePath);
             
-            logger.info("【任务3】仅分析文档: {}", uploadedFile.getAbsolutePath());
+            logger.info("【任务3】分析文档: {}", uploadedFile.getAbsolutePath());
             
             // 调用分析服务
             Map<String, Object> analysisResult = resourceTaggingService
@@ -223,7 +263,7 @@ public class CourseResourceControllerRenwu3 extends BaseController
             Map<String, Object> tempResource = new HashMap<>();
             tempResource.put("fileName", fileName);
             tempResource.put("fileType", fileType);
-            tempResource.put("fileSize", file.getSize());
+            tempResource.put("fileSize", fileSize);
             tempResource.put("filePath", tempFilePath);
             tempResource.put("description", description != null ? description : "");
             
@@ -233,7 +273,7 @@ public class CourseResourceControllerRenwu3 extends BaseController
             result.put("extractedText", extractedText);
             result.put("textLength", textLength);
             
-            logger.info("【任务3】分析完成，推荐了{}个知识点（未保存资源）", recommendations.size());
+            logger.info("【任务3】分析完成，推荐了{}个知识点", recommendations.size());
             
             return result;
         }

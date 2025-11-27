@@ -352,6 +352,16 @@
             <div class="video-actions">
               <el-button size="small" type="primary" @click="handleReplaceVideo">更换视频</el-button>
               <el-button size="small" type="danger" @click="handleRemoveVideo">删除视频</el-button>
+              <el-button 
+                size="small" 
+                type="success" 
+                icon="el-icon-magic-stick"
+                @click="handleAiExtractKnowledgePoints"
+                :loading="aiExtracting"
+                style="margin-left: 10px;"
+              >
+                {{ aiExtracting ? '正在分析...' : '智能提取知识点' }}
+              </el-button>
             </div>
           </div>
           <el-upload
@@ -465,6 +475,7 @@ import { listChapterByCourse } from "@/api/course/chapter";
 import { getCourse } from "@/api/course/course";
 import { listKnowledgePointBySection, addKnowledgePoint, setSectionKnowledgePoints } from "@/api/course/knowledgePoint";
 import { getCommentTree, addComment, delComment, getCurrentBusinessUser } from "@/api/system/comment";
+import { analyzeFileOnlyRenwu3 } from "@/api/system/courseResourceRenwu3";
 import { getToken } from "@/utils/auth";
 
 export default {
@@ -566,7 +577,11 @@ export default {
           { required: true, message: '请选择知识点等级', trigger: 'change' }
         ]
       },
-      availableKnowledgePoints: [] // 所有可用的知识点
+      availableKnowledgePoints: [], // 所有可用的知识点
+      
+      // AI智能提取相关
+      aiExtracting: false, // AI提取中状态
+      aiExtractedKps: [] // AI提取的知识点列表
     };
   },
   created() {
@@ -691,6 +706,102 @@ export default {
         this.$message.success('视频上传成功！');
       } else {
         this.$message.error(response.msg || '上传失败');
+      }
+    },
+
+    /** AI智能提取知识点 */
+    async handleAiExtractKnowledgePoints() {
+      if (!this.editForm.videoUrl) {
+        this.$message.warning('请先上传视频');
+        return;
+      }
+
+      // 确认对话框
+      try {
+        await this.$confirm(
+          '将使用AI分析视频内容并提取知识点，此过程可能需要几分钟时间，是否继续？',
+          '智能提取知识点',
+          {
+            confirmButtonText: '开始分析',
+            cancelButtonText: '取消',
+            type: 'info'
+          }
+        );
+      } catch {
+        return; // 用户取消
+      }
+
+      this.aiExtracting = true;
+      
+      try {
+        // 从videoUrl中提取文件路径
+        const videoPath = this.editForm.videoUrl.replace(process.env.VUE_APP_BASE_API, '');
+        
+        // 构建FormData
+        const formData = new FormData();
+        formData.append('filePath', videoPath);
+        formData.append('courseId', this.courseId);
+        formData.append('courseTitle', this.sectionInfo.chapterName || '');
+        
+        this.$message.info('正在分析视频内容，请稍候...');
+        
+        // 调用AI分析API
+        const response = await analyzeFileOnlyRenwu3(formData);
+        
+        if (response.code === 200) {
+          const data = response.data || response;
+          const recommendations = data.recommendations || [];
+          
+          if (recommendations.length === 0) {
+            this.$message.warning('未能从视频中提取到知识点');
+            return;
+          }
+          
+          // 处理提取的知识点
+          let addedCount = 0;
+          for (const rec of recommendations) {
+            // 检查是否已存在相同名称的知识点
+            const exists = this.editForm.knowledgePoints.some(
+              kp => kp.name === rec.extractedTitle
+            );
+            
+            if (!exists) {
+              // 如果是已匹配的知识点，使用数据库中的信息
+              if (rec.matched && rec.knowledgePointId) {
+                this.editForm.knowledgePoints.push({
+                  id: rec.knowledgePointId,
+                  name: rec.knowledgePointTitle || rec.extractedTitle,
+                  description: rec.knowledgePointDescription || '',
+                  level: rec.knowledgePointLevel || 'BASIC'
+                });
+              } else {
+                // 新知识点，使用AI提取的信息
+                this.editForm.knowledgePoints.push({
+                  id: null, // 新知识点没有ID
+                  name: rec.extractedTitle,
+                  description: rec.extractedDescription || '',
+                  level: rec.extractedLevel || 'BASIC'
+                });
+              }
+              addedCount++;
+            }
+          }
+          
+          if (addedCount > 0) {
+            this.$message.success(`成功提取${addedCount}个知识点，已添加到列表中`);
+          } else {
+            this.$message.info('提取的知识点已全部存在于列表中');
+          }
+          
+        } else {
+          this.$message.error(response.msg || 'AI分析失败');
+        }
+        
+      } catch (error) {
+        console.error('AI提取知识点失败:', error);
+        this.$message.error('AI分析失败: ' + (error.message || '未知错误'));
+      } finally {
+        this.aiExtracting = false;
       }
     },
 
