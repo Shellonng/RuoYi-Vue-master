@@ -16,21 +16,27 @@
 
     <!-- 统计卡片 -->
     <el-row :gutter="20" class="stats-row">
-      <el-col :span="6">
-        <div class="stat-card purple">
-          <div class="stat-icon">
-            <i class="el-icon-notebook-2"></i>
+      <el-col :span="8">
+        <div class="stat-card chart-card">
+          <div class="chart-header">
+            <span class="chart-title">出错知识点排行</span>
+            <el-date-picker
+              v-model="selectedDate"
+              type="date"
+              size="mini"
+              placeholder="选择日期"
+              :picker-options="pickerOptions"
+              :clearable="true"
+              @change="handleDateChange"
+              style="width: 140px;"
+            />
           </div>
-          <div class="stat-content">
-            <div class="stat-label">总课程数</div>
-            <div class="stat-value">{{ stats.totalCourses || 0 }}</div>
-            <div class="stat-desc">本学期 {{ stats.currentSemesterCourses || 0 }} 门</div>
-          </div>
+          <div id="errorKpChart" style="width: 100%; height: 220px;"></div>
         </div>
       </el-col>
-      <el-col :span="12">
+      <el-col :span="8">
         <div class="stat-card chart-card">
-          <div id="courseChart" style="width: 100%; height: 200px;"></div>
+          <div id="courseChart" style="width: 100%; height: 260px;"></div>
           <!-- 下沿触发区域 -->
           <div class="timeline-trigger" @mouseenter="showTimeline = true"></div>
           <transition name="timeline-fade">
@@ -68,16 +74,9 @@
           </transition>
         </div>
       </el-col>
-      <el-col :span="6">
-        <div class="stat-card green">
-          <div class="stat-icon">
-            <i class="el-icon-trophy"></i>
-          </div>
-          <div class="stat-content">
-            <div class="stat-label">平均成绩</div>
-            <div class="stat-value">{{ stats.avgScore || 0 }}</div>
-            <div class="stat-desc">较上期 {{ stats.scoreChange > 0 ? '+' : '' }}{{ stats.scoreChange || 0 }}</div>
-          </div>
+      <el-col :span="8">
+        <div class="stat-card chart-card">
+          <div id="burndownChart" style="width: 100%; height: 260px;"></div>
         </div>
       </el-col>
     </el-row>
@@ -312,7 +311,7 @@
 </template>
 
 <script>
-import { listCourse, getCourseStats, getCourse, addCourse, updateCourse, delCourse } from "@/api/course/course";
+import { listCourse, getCourseStats, getCourse, addCourse, updateCourse, delCourse, getKpErrorStats } from "@/api/course/course";
 import { generateCourseDescription } from "@/api/course/generation";
 import { getToken } from "@/utils/auth";
 import * as echarts from 'echarts';
@@ -324,6 +323,16 @@ export default {
       // ECharts 实例
       chartInstance: null,
       chartTimer: null,
+      burndownChartInstance: null,
+      errorKpChartInstance: null,
+      errorKpTimer: null,
+      // 知识点错误统计相关
+      selectedDate: null,
+      pickerOptions: {
+        disabledDate(time) {
+          return time.getTime() > Date.now();
+        }
+      },
       // 时间轴相关
       showTimeline: false,
       timelineProgress: 0,
@@ -410,6 +419,8 @@ export default {
   mounted() {
     this.$nextTick(() => {
       this.initChart();
+      this.initBurndownChart();
+      this.initErrorKpChart();
     });
   },
   beforeDestroy() {
@@ -418,6 +429,15 @@ export default {
     }
     if (this.chartInstance) {
       this.chartInstance.dispose();
+    }
+    if (this.burndownChartInstance) {
+      this.burndownChartInstance.dispose();
+    }
+    if (this.errorKpTimer) {
+      clearInterval(this.errorKpTimer);
+    }
+    if (this.errorKpChartInstance) {
+      this.errorKpChartInstance.dispose();
     }
   },
   methods: {
@@ -1158,6 +1178,347 @@ export default {
         });
       }
       return seriesData;
+    },
+    /** 初始化燃尽图 */
+    initBurndownChart() {
+      const chartDom = document.getElementById('burndownChart');
+      if (!chartDom) return;
+      
+      this.burndownChartInstance = echarts.init(chartDom);
+      
+      // 模拟12天的迭代周期数据
+      const days = [];
+      for (let i = 1; i <= 12; i++) {
+        days.push('第' + i + '天');
+      }
+      
+      // 理想剩余课时（线性递减）
+      const totalHours = 260;
+      const idealData = [];
+      for (let i = 0; i <= 12; i++) {
+        idealData.push(Math.round(totalHours - (totalHours / 12) * i));
+      }
+      
+      // 实际剩余课时（模拟真实进度，有波动）
+      const actualData = [260, 245, 230, 210, 205, 180, 160, 115, null, null, null, null, null];
+      
+      // 预测剩余课时（基于实际进度预测）
+      const forecastData = [null, null, null, null, null, null, null, 115, 85, 55, 25, 5, 0];
+      
+      const option = {
+        tooltip: {
+          trigger: 'axis',
+          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+          borderColor: '#ddd',
+          borderWidth: 1,
+          textStyle: {
+            color: '#333',
+            fontSize: 12
+          },
+          formatter: function(params) {
+            let html = params[0].axisValue + '<br/>';
+            params.forEach(item => {
+              if (item.value !== null && item.value !== undefined) {
+                html += `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${item.color};margin-right:5px;"></span>`;
+                html += `${item.seriesName}: <strong>${item.value}课时</strong><br/>`;
+              }
+            });
+            return html;
+          }
+        },
+        legend: {
+          data: ['理想剩余课时', '实际剩余课时', '预测剩余课时'],
+          top: 10,
+          textStyle: {
+            fontSize: 11
+          }
+        },
+        grid: {
+          left: '8%',
+          right: '3%',
+          top: '20%',
+          bottom: '10%',
+          containLabel: true
+        },
+        xAxis: {
+          type: 'category',
+          data: days,
+          boundaryGap: false,
+          axisLabel: {
+            fontSize: 10,
+            interval: 1
+          }
+        },
+        yAxis: {
+          type: 'value',
+          name: '剩余课时',
+          nameTextStyle: {
+            fontSize: 11
+          },
+          axisLabel: {
+            fontSize: 10,
+            formatter: '{value}'
+          },
+          splitLine: {
+            lineStyle: {
+              type: 'dashed',
+              color: '#e0e0e0'
+            }
+          }
+        },
+        series: [
+          {
+            name: '理想剩余课时',
+            type: 'line',
+            data: idealData,
+            smooth: false,
+            lineStyle: {
+              width: 2,
+              color: '#909399'
+            },
+            itemStyle: {
+              color: '#909399'
+            },
+            symbol: 'circle',
+            symbolSize: 6
+          },
+          {
+            name: '实际剩余课时',
+            type: 'line',
+            data: actualData,
+            smooth: true,
+            lineStyle: {
+              width: 3,
+              color: '#409EFF'
+            },
+            itemStyle: {
+              color: '#409EFF'
+            },
+            symbol: 'circle',
+            symbolSize: 8,
+            areaStyle: {
+              color: {
+                type: 'linear',
+                x: 0,
+                y: 0,
+                x2: 0,
+                y2: 1,
+                colorStops: [
+                  { offset: 0, color: 'rgba(64, 158, 255, 0.3)' },
+                  { offset: 1, color: 'rgba(64, 158, 255, 0.05)' }
+                ]
+              }
+            }
+          },
+          {
+            name: '预测剩余课时',
+            type: 'line',
+            data: forecastData,
+            smooth: true,
+            lineStyle: {
+              width: 2,
+              type: 'dashed',
+              color: '#E6A23C'
+            },
+            itemStyle: {
+              color: '#E6A23C'
+            },
+            symbol: 'circle',
+            symbolSize: 6
+          }
+        ]
+      };
+      
+      this.burndownChartInstance.setOption(option);
+      
+      // 响应式调整
+      window.addEventListener('resize', () => {
+        if (this.burndownChartInstance) {
+          this.burndownChartInstance.resize();
+        }
+      });
+    },
+    /** 初始化出错知识点排行榜 */
+    initErrorKpChart() {
+      const chartDom = document.getElementById('errorKpChart');
+      if (!chartDom) return;
+      
+      this.errorKpChartInstance = echarts.init(chartDom);
+      
+      // 从后端获取真实数据
+      this.fetchKpErrorStats();
+    },
+    /** 获取知识点错误统计数据 */
+    fetchKpErrorStats() {
+      // 格式化选中的日期
+      let targetDate = null;
+      if (this.selectedDate) {
+        const date = new Date(this.selectedDate);
+        targetDate = date.getFullYear() + '-' + 
+                     String(date.getMonth() + 1).padStart(2, '0') + '-' + 
+                     String(date.getDate()).padStart(2, '0');
+      }
+      
+      // 调用后端API获取知识点错误统计
+      getKpErrorStats(null, targetDate).then(response => {
+        const statsData = response.data || [];
+        
+        // 转换为图表数据格式
+        const allKpData = statsData.map(item => ({
+          name: item.knowledgePointName,
+          value: item.errorCount
+        }));
+        
+        // 如果没有数据，使用默认提示
+        if (allKpData.length === 0) {
+          allKpData.push({ name: '暂无错题数据', value: 0 });
+        }
+        
+        this.renderErrorKpChart(allKpData);
+      }).catch(error => {
+        console.error('获取知识点错误统计失败:', error);
+        // 失败时显示提示
+        this.renderErrorKpChart([{ name: '数据加载失败', value: 0 }]);
+      });
+    },
+    /** 日期选择变化处理 */
+    handleDateChange(date) {
+      // 清除滚动定时器
+      if (this.errorKpTimer) {
+        clearInterval(this.errorKpTimer);
+        this.errorKpTimer = null;
+      }
+      
+      // 重新获取数据
+      this.fetchKpErrorStats();
+    },
+    /** 渲染知识点错误排行榜 */
+    renderErrorKpChart(allKpData) {
+      
+      // 现代感渐变色配置（中等饱和度、清新明亮）
+      const colorSchemes = [
+        ['#E85D75', '#F07B93'], // 珊瑚粉（第1名）
+        ['#F39C6B', '#F7B089'], // 活力橙（第2名）
+        ['#F4C95D', '#F7D67B'], // 阳光黄（第3名）
+        ['#6FB8D0', '#8CC9DD'], // 天空蓝
+        ['#7B9FE0', '#96B3E8'], // 浅蓝紫
+        ['#9B88D3', '#B09EDD'], // 薰衣草紫
+        ['#6FD4A8', '#8DDEBB'], // 薄荷绿
+        ['#5CAAD2', '#7ABFDD'], // 海洋蓝
+        ['#B4D96A', '#C5E387'], // 柠檬绿
+        ['#A78BC5', '#B9A0D1']  // 紫藤色
+      ];
+      
+      let currentStartIndex = 0;
+      const displayCount = 10;
+      
+      const updateChart = () => {
+        const displayData = allKpData.slice(currentStartIndex, currentStartIndex + displayCount);
+        
+        const option = {
+          grid: {
+            top: 10,
+            bottom: 30,
+            left: 60,
+            right: 80
+          },
+          tooltip: {
+            trigger: 'axis',
+            axisPointer: {
+              type: 'shadow'
+            },
+            formatter: function(params) {
+              if (params && params.length > 0) {
+                const data = params[0];
+                return `<strong>${data.name}</strong><br/>错误次数: ${data.value} 次`;
+              }
+              return '';
+            }
+          },
+          xAxis: {
+            max: 'dataMax',
+            axisLabel: {
+              formatter: (n) => Math.round(n) + ''
+            }
+          },
+          yAxis: {
+            type: 'category',
+            inverse: true,
+            max: displayCount - 1,
+            axisLabel: {
+              show: true,
+              fontSize: 13,
+              fontWeight: 'bold',
+              color: '#333'
+            },
+            animationDuration: 300,
+            animationDurationUpdate: 300,
+            data: displayData.map(item => item.name)
+          },
+          series: [
+            {
+              realtimeSort: true,
+              type: 'bar',
+              data: displayData.map((item, index) => ({
+                value: item.value,
+                itemStyle: {
+                  color: {
+                    type: 'linear',
+                    x: 0,
+                    y: 0,
+                    x2: 1,
+                    y2: 0,
+                    colorStops: [
+                      { offset: 0, color: colorSchemes[index % colorSchemes.length][0] },
+                      { offset: 1, color: colorSchemes[index % colorSchemes.length][1] }
+                    ]
+                  }
+                }
+              })),
+              label: {
+                show: true,
+                precision: 0,
+                position: 'right',
+                valueAnimation: true,
+                fontFamily: 'monospace',
+                fontSize: 12,
+                fontWeight: 'bold',
+                color: '#333',
+                formatter: '{c} 次'
+              },
+              barWidth: 16
+            }
+          ],
+          animationDuration: 0,
+          animationDurationUpdate: 2000,
+          animationEasing: 'linear',
+          animationEasingUpdate: 'linear'
+        };
+        
+        this.errorKpChartInstance.setOption(option, true);
+      };
+      
+      // 初始化显示
+      updateChart();
+      
+      // 只有在未选择日期时才启动滚动效果
+      if (!this.selectedDate && allKpData.length > displayCount) {
+        // 实现滚动榜效果
+        this.errorKpTimer = setInterval(() => {
+          currentStartIndex++;
+          if (currentStartIndex > allKpData.length - displayCount) {
+            currentStartIndex = 0;
+          }
+          updateChart();
+        }, 2000);
+      }
+      
+      // 响应式调整
+      window.addEventListener('resize', () => {
+        if (this.errorKpChartInstance) {
+          this.errorKpChartInstance.resize();
+        }
+      });
     }
   }
 };
@@ -1289,6 +1650,20 @@ export default {
     display: block;
     position: relative;
     overflow: visible;
+    
+    .chart-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      padding: 0 4px;
+      
+      .chart-title {
+        font-size: 14px;
+        font-weight: bold;
+        color: #303133;
+      }
+    }
   }
 }
 

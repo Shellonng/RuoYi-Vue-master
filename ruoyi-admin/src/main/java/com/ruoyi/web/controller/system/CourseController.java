@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import com.ruoyi.common.annotation.Log;
 import com.ruoyi.common.core.controller.BaseController;
@@ -19,7 +20,9 @@ import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.core.page.TableDataInfo;
 import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.system.domain.Course;
+import com.ruoyi.system.domain.vo.KnowledgePointErrorStats;
 import com.ruoyi.system.service.ICourseService;
+import com.ruoyi.system.service.IKnowledgePointService;
 
 /**
  * 课程 信息操作处理
@@ -32,6 +35,9 @@ public class CourseController extends BaseController
 {
     @Autowired
     private ICourseService courseService;
+
+    @Autowired
+    private IKnowledgePointService knowledgePointService;
 
     /**
      * 获取课程列表（当前教师的课程）
@@ -91,5 +97,17 @@ public class CourseController extends BaseController
     public AjaxResult remove(@PathVariable Long[] ids)
     {
         return toAjax(courseService.deleteCourseByIds(ids));
+    }
+
+    /**
+     * 获取知识点错误统计
+     */
+    @GetMapping("/kpErrorStats")
+    public AjaxResult getKpErrorStats(
+            @RequestParam(required = false) Long courseId,
+            @RequestParam(required = false) String targetDate)
+    {
+        List<KnowledgePointErrorStats> stats = knowledgePointService.selectKnowledgePointErrorStats(courseId, targetDate);
+        return success(stats);
     }
 }

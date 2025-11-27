@@ -2,6 +2,7 @@ package com.ruoyi.system.mapper;
 
 import java.util.List;
 import com.ruoyi.system.domain.KnowledgePoint;
+import com.ruoyi.system.domain.vo.KnowledgePointErrorStats;
 import org.apache.ibatis.annotations.Param;
 
 /**
@@ -83,4 +84,13 @@ public interface KnowledgePointMapper
      * @return 结果
      */
     public int batchInsertKnowledgePoints(List<KnowledgePoint> knowledgePointList);
+
+    /**
+     * 统计知识点错误次数（最近30天）
+     *
+     * @param courseId 课程ID
+     * @param targetDate 目标日期（可选，格式：yyyy-MM-dd）
+     * @return 知识点错误统计列表
+     */
+    public List<KnowledgePointErrorStats> selectKnowledgePointErrorStats(@Param("courseId") Long courseId, @Param("targetDate") String targetDate);
 }

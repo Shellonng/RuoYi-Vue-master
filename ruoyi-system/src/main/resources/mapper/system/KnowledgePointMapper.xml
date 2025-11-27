@@ -140,4 +140,35 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         </foreach>
     </insert>
 
+    <!-- 统计知识点错误次数 -->
+    <select id="selectKnowledgePointErrorStats" resultType="com.ruoyi.system.domain.vo.KnowledgePointErrorStats">
+        SELECT 
+            kp.id AS knowledgePointId,
+            kp.title AS knowledgePointName,
+            COUNT(*) AS errorCount
+        FROM student_answer sa
+        INNER JOIN question q ON sa.question_id = q.id
+        INNER JOIN knowledge_point kp ON q.knowledge_point = kp.id
+        WHERE sa.is_correct = 0
+        AND sa.is_deleted = 0
+        AND q.is_deleted = 0
+        AND kp.is_deleted = 0
+        <if test="courseId != null">
+            AND kp.course_id = #{courseId}
+        </if>
+        <choose>
+            <when test="targetDate != null and targetDate != ''">
+                <!-- 如果指定了日期，查询该日期当天的数据 -->
+                AND DATE(sa.answer_time) = #{targetDate}
+            </when>
+            <otherwise>
+                <!-- 未指定日期时，查询最近30天的数据 -->
+                AND sa.answer_time >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+            </otherwise>
+        </choose>
+        GROUP BY kp.id, kp.title
+        ORDER BY errorCount DESC
+        LIMIT 50
+    </select>
+
 </mapper>

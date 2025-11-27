@@ -50,3 +50,12 @@ export function delCourse(id) {
     method: 'delete'
   })
 }
+
+// 查询知识点错误统计
+export function getKpErrorStats(courseId, targetDate) {
+  return request({
+    url: '/course/kpErrorStats',
+    method: 'get',
+    params: { courseId, targetDate }
+  })
+}

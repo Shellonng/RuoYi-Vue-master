@@ -4,6 +4,7 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import com.ruoyi.system.domain.KnowledgePoint;
+import com.ruoyi.system.domain.vo.KnowledgePointErrorStats;
 import com.ruoyi.system.mapper.KnowledgePointMapper;
 import com.ruoyi.system.service.IKnowledgePointService;
 
@@ -129,5 +130,18 @@ public class KnowledgePointServiceImpl implements IKnowledgePointService
             return 0;
         }
         return knowledgePointMapper.batchInsertKnowledgePoints(knowledgePointList);
+    }
+
+    /**
+     * 统计知识点错误次数（最近30天）
+     *
+     * @param courseId 课程ID
+     * @param targetDate 目标日期（可选，格式：yyyy-MM-dd）
+     * @return 知识点错误统计列表
+     */
+    @Override
+    public List<KnowledgePointErrorStats> selectKnowledgePointErrorStats(Long courseId, String targetDate)
+    {
+        return knowledgePointMapper.selectKnowledgePointErrorStats(courseId, targetDate);
     }
 }
