@@ -65,6 +65,16 @@
           <div class="tab-header">
             <div class="add-ai-btn-wrapper">
               <el-button type="primary" size="small" icon="el-icon-magic-stick" @click="openAIGenerateDialog">一键生成课程结构</el-button>
+              <el-button 
+                type="warning" 
+                size="small" 
+                icon="el-icon-date" 
+                @click="openTeachingPlanDialog"
+                :loading="loadingPlan"
+                style="margin-left: 10px;"
+              >
+                安排教学计划
+              </el-button>
             </div>
             <div class="add-chapter-btn-wrapper">
               <el-button type="primary" size="small" icon="el-icon-setting" @click="openChapterManageDialog">章节管理</el-button>
@@ -996,6 +1006,70 @@
       </div>
     </el-dialog>
 
+    <!-- 安排教学计划对话框 -->
+    <el-dialog
+      title="教学计划安排"
+      :visible.sync="teachingPlanDialogVisible"
+      width="1000px"
+      @close="handleTeachingPlanDialogClose"
+    >
+      <div v-if="generatingPlan" style="text-align: center; padding: 40px;">
+        <i class="el-icon-loading" style="font-size: 40px; color: #409EFF;"></i>
+        <p style="margin-top: 20px; color: #666;">AI正在为您生成教学计划，请稍候...</p>
+      </div>
+      
+      <div v-else-if="teachingPlanData" style="display: flex; gap: 20px;">
+        <!-- 日历滚动区域 -->
+        <div :style="{ flex: 1, height: calendarContainerHeight + 'px', overflowY: 'auto', overflowX: 'hidden' }">
+          <div ref="teachingCalendar" style="width: 100%;"></div>
+        </div>
+        
+        <!-- 图例说明 - 右侧垂直排列 -->
+        <div style="width: 140px; flex-shrink: 0;">
+          <div style="position: sticky; top: 0;">
+            <div v-for="(chapter, index) in teachingPlanData.graphData" :key="index" 
+                 style="display: flex; align-items: center; margin-bottom: 12px; padding: 8px; background-color: #f5f7fa; border-radius: 4px;">
+              <span :style="{ 
+                display: 'inline-block', 
+                width: '20px', 
+                height: '20px', 
+                backgroundColor: getChapterColor(index), 
+                marginRight: '8px', 
+                borderRadius: '3px',
+                flexShrink: 0
+              }"></span>
+              <span style="font-size: 13px; color: #333; line-height: 1.4; word-break: break-all;">{{ chapter[2] }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div v-else style="text-align: center; padding: 40px; color: #999;">
+        <i class="el-icon-info" style="font-size: 40px;"></i>
+        <p style="margin-top: 20px;">暂无教学计划数据</p>
+      </div>
+
+      <div slot="footer" class="dialog-footer">
+        <el-button @click="teachingPlanDialogVisible = false">关闭</el-button>
+        <el-button 
+          type="warning" 
+          icon="el-icon-magic-stick"
+          @click="aiGenerateTeachingPlan" 
+          :loading="generatingPlan"
+        >
+          AI智能安排
+        </el-button>
+        <el-button 
+          type="primary" 
+          @click="saveTeachingPlanAsResource" 
+          :disabled="!teachingPlanData"
+          :loading="savingPlan"
+        >
+          保存为课程资源
+        </el-button>
+      </div>
+    </el-dialog>
+
     <!-- 作业编辑对话框 -->
     <homework-dialog
       :visible="homeworkDialogVisible"
@@ -1022,14 +1096,15 @@
 </template>
 
 <script>
-import { getCourse } from "@/api/course/course";
+import { getCourse, generateTeachingPlan } from "@/api/course/course";
 import { listChapterByCourse, addChapter, updateChapter, delChapter } from "@/api/course/chapter";
 import { listSectionByChapter, addSection, updateSection, delSection, findSectionByVideoUrl } from "@/api/course/section";
 import { listKnowledgePointBySection } from "@/api/course/knowledgePoint";
 import { uploadAndGenerate } from "@/api/course/generation";
 import { generateKnowledgeGraph, listKpRelationByCourse } from "@/api/course/kpRelation";
 import { getAssignmentsByKnowledgePoint, getAssignment, updateAssignment, delAssignment } from "@/api/system/assignment";
-import { getCourseResourcesByKnowledgePoint, delCourseResource } from "@/api/course/courseResource";
+import { getCourseResourcesByKnowledgePoint, delCourseResource, listCourseResource, updateCourseResource } from "@/api/course/courseResource";
+import request from "@/utils/request";
 import ExamManagement from "@/views/assignment/exam/index.vue";
 import HomeworkManagement from "@/views/assignment/homework/index.vue";
 import HomeworkDialog from "@/views/assignment/homework.vue";
@@ -1192,6 +1267,14 @@ export default {
       examDialogVisible: false, // 考试编辑对话框显示状态
       editExamData: null, // 编辑的考试数据
       examDialogWidth: '40%', // 考试对话框宽度
+      // 教学计划相关
+      teachingPlanDialogVisible: false, // 教学计划对话框显示状态
+      loadingPlan: false, // 加载计划状态
+      generatingPlan: false, // AI生成计划中状态
+      teachingPlanData: null, // 教学计划数据
+      teachingCalendarChart: null, // 教学日历图表实例
+      savingPlan: false, // 保存计划中状态
+      calendarContainerHeight: 700, // 日历容器高度
     };
   },
   created() {
@@ -2555,6 +2638,465 @@ export default {
       this.courseTextContent = '';
       this.aiGenerateDialogVisible = true;
     },
+    
+    /** 获取章节颜色 */
+    getChapterColor(index) {
+      const chapterColors = [
+        '#F8C757', // RGB(248,199,87) 黄色
+        '#99D17F', // RGB(153,209,127) 绿色
+        '#516DC2', // RGB(81,109,194) 蓝色
+        '#ED6765', // RGB(237,103,101) 红色
+        '#3D9F73', // RGB(61,159,115) 青色
+        '#7CC2DF'  // RGB(124,194,223) 浅蓝色
+      ];
+      return chapterColors[index % chapterColors.length];
+    },
+    
+    /** 打开教学计划对话框 */
+    async openTeachingPlanDialog() {
+      // 检查是否有章节数据
+      if (!this.chapterList || this.chapterList.length === 0) {
+        this.$message.warning('当前课程还没有章节，请先添加章节内容');
+        return;
+      }
+
+      // 检查课程时间
+      if (!this.courseInfo.startTime || !this.courseInfo.endTime) {
+        this.$message.warning('当前课程未设置开始和结束时间，请先在课程信息中设置');
+        return;
+      }
+
+      this.teachingPlanDialogVisible = true;
+      this.loadingPlan = true;
+      this.teachingPlanData = null;
+      
+      try {
+        // 先查询课程资源表中是否已有教学计划
+        const response = await listCourseResource({
+          courseId: this.courseId,
+          name: '教学计划安排'
+        });
+        
+        if (response.code === 200 && response.rows && response.rows.length > 0) {
+          // 找到已有的教学计划
+          const existingPlan = response.rows[0];
+          
+          if (existingPlan.description) {
+            try {
+              // 解析描述字段中的JSON数据
+              this.teachingPlanData = JSON.parse(existingPlan.description);
+              
+              // 等待DOM更新后渲染图表
+              this.$nextTick(() => {
+                this.renderTeachingCalendar();
+              });
+              
+              this.$message.success('已加载现有教学计划');
+            } catch (error) {
+              console.error('解析教学计划数据失败:', error);
+              this.$message.warning('教学计划数据格式错误，请重新生成');
+            }
+          }
+        } else {
+          // 没有找到已有计划
+          this.$message.info('暂无教学计划，请点击"AI智能安排"按钮生成');
+        }
+      } catch (error) {
+        console.error('查询教学计划失败:', error);
+        this.$message.error('查询教学计划失败: ' + (error.message || '未知错误'));
+      } finally {
+        this.loadingPlan = false;
+      }
+    },
+    
+    /** AI智能生成教学计划 */
+    async aiGenerateTeachingPlan() {
+      // 检查是否有章节数据
+      if (!this.chapterList || this.chapterList.length === 0) {
+        this.$message.warning('当前课程还没有章节，请先添加章节内容');
+        return;
+      }
+
+      this.generatingPlan = true;
+      
+      try {
+        // 构建课程结构数据
+        const courseStructure = this.chapterList.map(chapter => ({
+          chapterId: chapter.id,
+          chapterTitle: chapter.title,
+          chapterDescription: chapter.description || '',
+          sections: (chapter.sections || []).map(section => ({
+            sectionId: section.id,
+            sectionTitle: section.title,
+            sectionDescription: section.description || ''
+          }))
+        }));
+        
+        // 调用后端AI服务生成教学计划
+        const response = await generateTeachingPlan({
+          courseId: this.courseId,
+          courseTitle: this.courseInfo.title,
+          courseStructure: courseStructure,
+          startTime: this.courseInfo.startTime,
+          endTime: this.courseInfo.endTime
+        });
+        
+        if (response.code === 200 && response.data) {
+          this.teachingPlanData = response.data;
+          
+          // 等待DOM更新后渲染图表
+          this.$nextTick(() => {
+            this.renderTeachingCalendar();
+          });
+          
+          this.$message.success('AI教学计划生成成功！');
+        } else {
+          this.$message.error(response.msg || '生成教学计划失败');
+        }
+      } catch (error) {
+        console.error('生成教学计划失败:', error);
+        this.$message.error('生成教学计划失败: ' + (error.message || '未知错误'));
+      } finally {
+        this.generatingPlan = false;
+      }
+    },
+    
+    /** 渲染教学日历 */
+    async renderTeachingCalendar() {
+      if (!this.$refs.teachingCalendar || !this.teachingPlanData) {
+        return;
+      }
+      
+      // 销毁旧实例
+      if (this.teachingCalendarChart) {
+        this.teachingCalendarChart.dispose();
+      }
+      
+      const { graphData, links, dateRange, chapterDataList, backgroundData } = this.teachingPlanData;
+      
+      // 计算日期范围，确定需要显示多少个月
+      const startDate = new Date(dateRange[0]);
+      const endDate = new Date(dateRange[1]);
+      const monthsDiff = (endDate.getFullYear() - startDate.getFullYear()) * 12 + 
+                         (endDate.getMonth() - startDate.getMonth()) + 1;
+      
+      // 根据月份数量设置图表实际高度
+      const chartHeight = monthsDiff * 260 + 120;
+      
+      // 滚动容器高度固定为500px
+      this.calendarContainerHeight = 500;
+      
+      // 等待DOM更新
+      await this.$nextTick();
+      
+      // 设置图表div高度
+      this.$refs.teachingCalendar.style.height = chartHeight + 'px';
+      
+      // 创建新实例
+      this.teachingCalendarChart = echarts.init(this.$refs.teachingCalendar);
+      
+      // 使用自定义颜色
+      const chapterColors = [
+        '#F8C757', // RGB(248,199,87) 黄色
+        '#99D17F', // RGB(153,209,127) 绿色
+        '#516DC2', // RGB(81,109,194) 蓝色
+        '#ED6765', // RGB(237,103,101) 红色
+        '#3D9F73', // RGB(61,159,115) 青色
+        '#7CC2DF'  // RGB(124,194,223) 浅蓝色
+      ];
+      
+      // 构建图例数据
+      const legendData = graphData.map((item, index) => ({
+        name: item[2],  // 章节标题
+        icon: 'rect',
+        itemStyle: {
+          color: chapterColors[index % chapterColors.length]
+        }
+      }));
+      
+      // 构建系列数据
+      const series = [
+        {
+          type: 'graph',
+          edgeSymbol: ['none', 'arrow'],
+          coordinateSystem: 'calendar',
+          links: links,
+          symbolSize: 20,
+          calendarIndex: 0,
+          itemStyle: {
+            color: '#FFD700',
+            shadowBlur: 9,
+            shadowOffsetX: 1.5,
+            shadowOffsetY: 3,
+            shadowColor: '#555'
+          },
+          lineStyle: {
+            color: '#D10E00',
+            width: 2,
+            opacity: 1
+          },
+          data: graphData,
+          z: 20
+        }
+      ];
+      
+      // 添加背景层（灰色填充最后一个月未占用的日期）
+      if (backgroundData && backgroundData.length > 0) {
+        series.push({
+          type: 'heatmap',
+          coordinateSystem: 'calendar',
+          data: backgroundData,
+          label: {
+            show: true,
+            formatter: function(params) {
+              const date = new Date(params.value[0]);
+              return date.getDate();
+            },
+            fontSize: 14,
+            fontWeight: 'bold',
+            color: '#999'
+          }
+        });
+      }
+      
+      // 为每个章节添加一个热力图系列（不同颜色）
+      const visualMapList = [];
+      
+      // 背景层的visualMap
+      if (backgroundData && backgroundData.length > 0) {
+        visualMapList.push({
+          show: false,
+          min: 0,
+          max: 0,
+          seriesIndex: 1, // 背景层
+          inRange: {
+            color: ['#E8E8E8', '#E8E8E8'] // 浅灰色
+          }
+        });
+      }
+      
+      chapterDataList.forEach((chapterData, index) => {
+        const seriesIndex = backgroundData && backgroundData.length > 0 ? index + 2 : index + 1;
+        series.push({
+          type: 'heatmap',
+          coordinateSystem: 'calendar',
+          data: chapterData,
+          label: {
+            show: true,
+            formatter: function(params) {
+              const date = new Date(params.value[0]);
+              return date.getDate();
+            },
+            fontSize: 14,
+            fontWeight: 'bold',
+            color: '#fff'
+          }
+        });
+        
+        // 为每个热力图系列配置visualMap
+        visualMapList.push({
+          show: false,
+          min: 0,
+          max: 1000,
+          seriesIndex: seriesIndex,
+          inRange: {
+            color: [chapterColors[index % chapterColors.length], chapterColors[index % chapterColors.length]]
+          }
+        });
+      });
+      
+      const option = {
+        legend: {
+          data: legendData.map(item => item.name),
+          top: 20,
+          left: 'center',
+          orient: 'horizontal',
+          textStyle: {
+            fontSize: 12
+          },
+          itemWidth: 25,
+          itemHeight: 14,
+          itemGap: 15
+        },
+        tooltip: {
+          formatter: function(params) {
+            if (params.seriesType === 'graph' && params.data && params.data.length >= 3) {
+              return '<strong>' + params.data[2] + '</strong><br/>' +
+                     '开始日期: ' + params.data[0] + '<br/>' +
+                     '预计天数: ' + Math.round(params.data[1] / 100) + '天';
+            } else if (params.seriesType === 'heatmap') {
+              const date = new Date(params.value[0]);
+              const chapterIndex = Math.round(params.value[1] / 100) - 1;
+              const chapterName = graphData[chapterIndex] ? graphData[chapterIndex][2] : '';
+              return chapterName + '<br/>' + params.value[0] + '<br/>' + date.getDate() + '号';
+            }
+            return params.name;
+          }
+        },
+        calendar: {
+          top: 60,
+          left: 'center',
+          orient: 'vertical',
+          cellSize: 35,
+          yearLabel: {
+            margin: 40,
+            fontSize: 24
+          },
+          dayLabel: {
+            firstDay: 1,
+            nameMap: ['日', '一', '二', '三', '四', '五', '六'],
+            fontSize: 11,
+            color: '#333'
+          },
+          monthLabel: {
+            nameMap: 'cn',
+            margin: 12,
+            fontSize: 16,
+            color: '#999'
+          },
+          range: dateRange,
+          splitLine: {
+            show: true,
+            lineStyle: {
+              color: '#000',
+              width: 2,
+              type: 'solid'
+            }
+          },
+          itemStyle: {
+            borderWidth: 0.5,
+            borderColor: '#fff'
+          }
+        },
+        visualMap: visualMapList,
+        series: series
+      };
+      
+      this.teachingCalendarChart.setOption(option);
+    },
+    
+    /** 关闭教学计划对话框 */
+    handleTeachingPlanDialogClose() {
+      if (this.teachingCalendarChart) {
+        this.teachingCalendarChart.dispose();
+        this.teachingCalendarChart = null;
+      }
+    },
+    
+    /** 保存教学计划为课程资源（保存为图片） */
+    async saveTeachingPlanAsResource() {
+      if (!this.teachingPlanData || !this.teachingCalendarChart) {
+        return;
+      }
+      
+      this.savingPlan = true;
+      
+      try {
+        // 1. 将图表导出为base64图片
+        const base64 = this.teachingCalendarChart.getDataURL({
+          type: 'png',
+          pixelRatio: 2, // 高清
+          backgroundColor: '#fff'
+        });
+        
+        // 2. 将base64转换为Blob
+        const arr = base64.split(',');
+        const mime = arr[0].match(/:(.*?);/)[1];
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+          u8arr[n] = bstr.charCodeAt(n);
+        }
+        const blob = new Blob([u8arr], { type: mime });
+        
+        // 3. 创建FormData上传文件
+        const formData = new FormData();
+        const fileName = `教学计划_${new Date().getTime()}.png`;
+        formData.append('file', blob, fileName);
+        
+        // 4. 上传文件
+        const uploadResponse = await request({
+          url: '/common/upload',
+          method: 'post',
+          data: formData,
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        
+        if (uploadResponse.code !== 200) {
+          throw new Error(uploadResponse.msg || '上传失败');
+        }
+        
+        const fileUrl = uploadResponse.url;
+        const fileSize = blob.size;
+        
+        // 5. 将教学计划数据序列化为JSON字符串存储在description中
+        const descriptionData = JSON.stringify(this.teachingPlanData);
+        
+        // 6. 先查询是否已存在教学计划记录
+        const queryResponse = await listCourseResource({
+          courseId: this.courseId,
+          name: '教学计划安排'
+        });
+        
+        let saveResponse;
+        if (queryResponse.code === 200 && queryResponse.rows && queryResponse.rows.length > 0) {
+          // 存在记录，执行更新操作
+          const existingResource = queryResponse.rows[0];
+          const resourceData = {
+            id: existingResource.id,
+            courseId: this.courseId,
+            name: '教学计划安排',
+            fileType: 'png',
+            fileSize: fileSize,
+            fileUrl: fileUrl,
+            description: descriptionData
+          };
+          
+          saveResponse = await updateCourseResource(resourceData);
+        } else {
+          // 不存在记录，执行新增操作
+          const resourceData = {
+            courseId: this.courseId,
+            name: '教学计划安排',
+            fileType: 'png',
+            fileSize: fileSize,
+            fileUrl: fileUrl,
+            description: descriptionData
+          };
+          
+          saveResponse = await request({
+            url: '/courseResource',
+            method: 'post',
+            data: resourceData
+          });
+        }
+        
+        if (saveResponse.code === 200) {
+          this.$message.success('教学计划已保存为课程资源');
+          this.teachingPlanDialogVisible = false;
+          // 刷新资源列表（如果有的话）
+          if (this.loadCourseResources) {
+            this.loadCourseResources();
+          }
+        } else {
+          throw new Error(saveResponse.msg || '保存失败');
+        }
+        
+      } catch (error) {
+        console.error('保存教学计划失败:', error);
+        this.$message.error('保存教学计划失败: ' + (error.message || '未知错误'));
+      } finally {
+        this.savingPlan = false;
+      }
+    },
+    
+    /** 导出教学计划（已弃用，保留兼容） */
+    exportTeachingPlan() {
+      // 已改为保存为课程资源
+      this.saveTeachingPlanAsResource();
+    },
+    
     /** 关闭AI生成对话框 */
     handleAIGenerateDialogClose() {
       this.outlineFiles = [];

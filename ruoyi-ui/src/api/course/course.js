@@ -59,3 +59,13 @@ export function getKpErrorStats(courseId, targetDate) {
     params: { courseId, targetDate }
   })
 }
+
+// AI生成教学计划
+export function generateTeachingPlan(data) {
+  return request({
+    url: '/course/generateTeachingPlan',
+    method: 'post',
+    data: data,
+    timeout: 60000  // 60秒超时，AI生成需要较长时间
+  })
+}

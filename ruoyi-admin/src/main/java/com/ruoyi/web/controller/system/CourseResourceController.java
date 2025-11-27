@@ -20,6 +20,7 @@ import com.ruoyi.system.domain.CourseResource;
 import com.ruoyi.system.service.ICourseResourceService;
 import com.ruoyi.common.utils.poi.ExcelUtil;
 import com.ruoyi.common.core.page.TableDataInfo;
+import com.ruoyi.system.utils.BusinessUserUtils;
 
 /**
  * 课程资源Controller
@@ -82,6 +83,10 @@ public class CourseResourceController extends BaseController
     @PostMapping
     public AjaxResult add(@RequestBody CourseResource courseResource)
     {
+        // 自动设置上传用户ID为当前登录用户
+        if (courseResource.getUploadUserId() == null) {
+            courseResource.setUploadUserId(BusinessUserUtils.getCurrentBusinessUserId());
+        }
         return toAjax(courseResourceService.insertCourseResource(courseResource));
     }
 

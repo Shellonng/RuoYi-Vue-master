@@ -23,6 +23,7 @@ import com.ruoyi.system.domain.Course;
 import com.ruoyi.system.domain.vo.KnowledgePointErrorStats;
 import com.ruoyi.system.service.ICourseService;
 import com.ruoyi.system.service.IKnowledgePointService;
+import com.ruoyi.system.service.ITeachingPlanService;
 
 /**
  * 课程 信息操作处理
@@ -38,6 +39,9 @@ public class CourseController extends BaseController
 
     @Autowired
     private IKnowledgePointService knowledgePointService;
+    
+    @Autowired
+    private ITeachingPlanService teachingPlanService;
 
     /**
      * 获取课程列表（当前教师的课程）
@@ -109,5 +113,24 @@ public class CourseController extends BaseController
     {
         List<KnowledgePointErrorStats> stats = knowledgePointService.selectKnowledgePointErrorStats(courseId, targetDate);
         return success(stats);
+    }
+    
+    /**
+     * AI生成教学计划
+     */
+    @Log(title = "生成教学计划", businessType = BusinessType.OTHER)
+    @PostMapping("/generateTeachingPlan")
+    public AjaxResult generateTeachingPlan(@RequestBody Map<String, Object> params)
+    {
+        try
+        {
+            Map<String, Object> planData = teachingPlanService.generateTeachingPlan(params);
+            return success(planData);
+        }
+        catch (Exception e)
+        {
+            logger.error("生成教学计划失败", e);
+            return error("生成教学计划失败: " + e.getMessage());
+        }
     }
 }
