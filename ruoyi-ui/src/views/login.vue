@@ -70,7 +70,7 @@ export default {
   name: "Login",
   data() {
     return {
-      title: process.env.VUE_APP_TITLE,
+      title: 'Smart Class',
       codeUrl: "",
       loginForm: {
         username: "admin",

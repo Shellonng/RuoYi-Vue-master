@@ -2,7 +2,8 @@
 SQLyog Ultimate v8.71 
 MySQL - 8.0.13 : Database - education_platform_v1
 *********************************************************************
-*/
+*/
+
 
 /*!40101 SET NAMES utf8 */;
 

@@ -11,7 +11,7 @@
       <div class="detail-left">
         <div class="course-card-container">
           <div class="course-cover">
-            <img :src="courseInfo.coverImage || 'https://via.placeholder.com/378x252?text=Course+Cover'" alt="课程封面" />
+            <img :src="getCoverUrl(courseInfo.coverImage)" alt="课程封面" />
             <div class="course-status" v-if="courseStatus">
               <el-tag :type="courseStatusType" size="small">{{ courseStatus }}</el-tag>
             </div>
@@ -1435,17 +1435,11 @@ export default {
     getCourseInfo() {
       getCourse(this.courseId).then(response => {
         const data = response.data;
-        // 处理封面图片路径
-        let coverImage = data.coverImage || '';
-        if (coverImage && !coverImage.startsWith('http')) {
-          // 如果不是完整URL,添加服务器前缀
-          coverImage = process.env.VUE_APP_BASE_API + coverImage;
-        }
         
         this.courseInfo = {
           title: data.title || '',
           description: data.description || '',
-          coverImage: coverImage,
+          coverImage: data.coverImage || '',
           credit: data.credit || 0,
           term: data.term || '',
           studentCount: data.studentCount || 0,
@@ -1457,6 +1451,19 @@ export default {
       }).catch(() => {
         this.$message.error('获取课程信息失败');
       });
+    },
+    /** 获取封面URL */
+    getCoverUrl(coverImage) {
+      if (!coverImage) {
+        return require('@/assets/images/default-course-cover.png');
+      }
+      if (coverImage.startsWith('http://') || coverImage.startsWith('https://')) {
+        return coverImage;
+      }
+      if (coverImage.startsWith('data:image')) {
+        return coverImage;
+      }
+      return process.env.VUE_APP_BASE_API + coverImage;
     },
     /** 获取章节列表 */
     getChapterList(animated = false, waitForKnowledgePoints = false) {

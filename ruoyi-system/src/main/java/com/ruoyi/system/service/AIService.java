@@ -901,4 +901,113 @@ public class AIService
             throw new ServiceException("匹配知识点失败：" + e.getMessage());
         }
     }
+
+    /**
+     * 教学助手"小智"对话功能
+     * 
+     * @param userMessage 用户消息
+     * @param messageHistory 消息历史记录
+     * @return AI回复内容
+     */
+    public String chatWithTeachingAssistant(String userMessage, java.util.List<java.util.Map<String, String>> messageHistory)
+    {
+        try
+        {
+            log.info("教学助手小智处理消息，用户消息：{}", userMessage);
+
+            // 构建系统提示词，定义小智的角色和能力
+            String systemPrompt = "你是教学助手\"小智\"，专门为教师提供教学帮助。你的职责包括：\n" +
+                "1. 解答教学相关问题，如课程设计、教学方法、学生管理等\n" +
+                "2. 提供作业设计建议和评分标准\n" +
+                "3. 帮助教师分析学生学习数据和表现\n" +
+                "4. 推荐教学资源和工具\n" +
+                "5. 协助处理日常教学管理任务\n" +
+                "请以友好、专业的语气回答问题，提供实用的建议和解决方案。";
+
+            // 构建消息列表
+            java.util.List<Message> messages = new java.util.ArrayList<>();
+            
+            // 添加系统提示
+            messages.add(Message.builder()
+                .role(Role.SYSTEM.getValue())
+                .content(systemPrompt)
+                .build());
+
+            // 添加历史消息（保留最近10轮对话）
+            int startIndex = Math.max(0, messageHistory.size() - 20); // 10轮对话 = 20条消息
+            for (int i = startIndex; i < messageHistory.size(); i++)
+            {
+                java.util.Map<String, String> msg = messageHistory.get(i);
+                String role = msg.get("role");
+                String content = msg.get("content");
+                
+                if ("user".equals(role))
+                {
+                    messages.add(Message.builder()
+                        .role(Role.USER.getValue())
+                        .content(content)
+                        .build());
+                }
+                else if ("assistant".equals(role))
+                {
+                    messages.add(Message.builder()
+                        .role(Role.ASSISTANT.getValue())
+                        .content(content)
+                        .build());
+                }
+            }
+
+            // 如果最后一条不是当前用户消息，则添加
+            if (messageHistory.isEmpty() || !userMessage.equals(messageHistory.get(messageHistory.size() - 1).get("content")))
+            {
+                messages.add(Message.builder()
+                    .role(Role.USER.getValue())
+                    .content(userMessage)
+                    .build());
+            }
+
+            // 构建请求参数
+            GenerationParam param = GenerationParam.builder()
+                .apiKey(aiConfig.getApiKey()) // 使用配置文件中的API Key
+                .model(aiConfig.getModel()) // 使用配置文件中的模型
+                .messages(messages)
+                .resultFormat(GenerationParam.ResultFormat.MESSAGE)
+                .topP(0.8)
+                .enableSearch(false) // 不启用搜索
+                .build();
+
+            log.info("调用通义千问API，消息数量：{}，模型：{}", messages.size(), aiConfig.getModel());
+
+            // 调用API
+            Generation gen = new Generation();
+            GenerationResult result = gen.call(param);
+
+            // 提取回复内容
+            String reply = result.getOutput().getChoices().get(0).getMessage().getContent();
+            
+            if (reply == null || reply.trim().isEmpty())
+            {
+                reply = "抱歉，我暂时无法理解您的问题，请换个方式提问。";
+            }
+
+            log.info("AI助手回复成功，回复长度：{}", reply.length());
+            
+            return reply.trim();
+        }
+        catch (NoApiKeyException e)
+        {
+            log.error("API Key未设置", e);
+            throw new ServiceException("AI API Key配置错误");
+        }
+        catch (ApiException e)
+        {
+            log.error("AI API调用失败", e);
+            throw new ServiceException("AI服务调用失败：" + e.getMessage());
+        }
+        catch (Exception e)
+        {
+            log.error("教学助手处理消息时发生错误", e);
+            throw new ServiceException("教学助手处理失败：" + e.getMessage());
+        }
+    }
 }

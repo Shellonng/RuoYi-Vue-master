@@ -7,18 +7,18 @@
           <el-avatar :size="60" :src="avatar">{{ userName }}</el-avatar>
         </div>
         <div class="welcome-text">
-          <h2>{{ greeting }}今天也要充满活力地教学哦！</h2>
+          <h2>{{ greeting }}{{ userName }}，祝您工作顺利！</h2>
           <div class="tag-group">
-            <el-tag type="info" effect="plain">系统管理员</el-tag>
-            <el-tag type="success" effect="plain">优秀教师</el-tag>
-            <el-tag type="warning" effect="plain">AI学习专题</el-tag>
+            <el-tag v-if="teacherInfo.department" type="info" effect="plain">{{ teacherInfo.department }}</el-tag>
+            <el-tag v-if="teacherInfo.title" type="success" effect="plain">{{ teacherInfo.title }}</el-tag>
+            <el-tag v-if="teacherInfo.specialty" type="warning" effect="plain">{{ teacherInfo.specialty }}</el-tag>
           </div>
         </div>
       </div>
       <div class="action-buttons">
-        <el-button type="primary" icon="el-icon-plus">创建课程</el-button>
-        <el-button type="success" icon="el-icon-document">布置作业</el-button>
-        <el-button type="warning" icon="el-icon-user">创建班级</el-button>
+        <el-button type="primary" icon="el-icon-video-play" @click="startClass">开始上课</el-button>
+        <el-button type="success" icon="el-icon-document" @click="goToTaskManagement">发布任务</el-button>
+        <el-button type="warning" icon="el-icon-upload" @click="goToResourceManagement">上传资源</el-button>
       </div>
     </div>
 
@@ -324,6 +324,50 @@
       </el-col>
     </el-row>
 
+    <!-- 开始上课对话框 -->
+    <el-dialog 
+      title="开始上课" 
+      :visible.sync="startClassDialogVisible" 
+      width="500px"
+      :close-on-click-modal="false">
+      <el-form :model="classForm" label-width="80px">
+        <el-form-item label="选择课程">
+          <el-select v-model="classForm.courseId" placeholder="请选择课程" @change="handleCourseChange" style="width: 100%">
+            <el-option
+              v-for="course in courseList"
+              :key="course.id"
+              :label="course.title"
+              :value="course.id">
+            </el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="选择章节">
+          <el-select v-model="classForm.chapterId" placeholder="请先选择课程" :disabled="!classForm.courseId" @change="handleChapterChange" style="width: 100%">
+            <el-option
+              v-for="chapter in chapterList"
+              :key="chapter.id"
+              :label="chapter.title"
+              :value="chapter.id">
+            </el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="选择小节">
+          <el-select v-model="classForm.sectionId" placeholder="请先选择章节" :disabled="!classForm.chapterId" style="width: 100%">
+            <el-option
+              v-for="section in sectionList"
+              :key="section.id"
+              :label="section.title"
+              :value="section.id">
+            </el-option>
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <span slot="footer" class="dialog-footer">
+        <el-button @click="startClassDialogVisible = false">取 消</el-button>
+        <el-button type="primary" @click="confirmStartClass">确 定</el-button>
+      </span>
+    </el-dialog>
+
     <!-- 任务详情对话框 -->
     <el-dialog 
       title="任务提交详情" 
@@ -440,6 +484,7 @@ import { getTodayActiveStatsByVideo, getVideoTitles } from "@/api/video/learning
 import { listAssignment } from "@/api/system/assignment";
 import { listAssignmentSubmission } from "@/api/system/assignmentSubmission";
 import { listEnrollment } from "@/api/system/enrollment";
+import { getTeacherProfile } from "@/api/system/teacher";
 import * as echarts from 'echarts';
 
 export default {
@@ -453,7 +498,7 @@ export default {
       teachingPlanData: null, // 教学计划数据
       miniTeachingCalendarChart: null, // 迷你教学日历图表实例
       activityChart: null, // 活跃人数图表实例
-      defaultCover: require('@/assets/images/profile.jpg'),
+      defaultCover: require('@/assets/images/default-course-cover.png'),
       calendarScrollHeight: 450, // 日历滚动区域高度
       burndownChartInstance: null, // 课时燃尽图实例
       taskList: [], // 任务列表
@@ -473,13 +518,28 @@ export default {
           return time.getTime() > Date.now();
         }
       },
+      // 开始上课对话框相关
+      startClassDialogVisible: false,
+      classForm: {
+        courseId: null,
+        chapterId: null,
+        sectionId: null
+      },
+      chapterList: [],
+      sectionList: [],
       // 任务相关数据
       taskFilter: 'all', // 任务筛选: all, homework, exam
       // 待办事项相关数据
       todoItems: [], // 待办事项列表
       scrollOffset: 0, // 滚动偏移量
       scrollTimer: null, // 滚动定时器
-      currentTodoIndex: 0 // 当前显示的待办事项索引
+      currentTodoIndex: 0, // 当前显示的待办事项索引
+      // 教师信息
+      teacherInfo: {
+        department: '',
+        title: '',
+        specialty: ''
+      }
     };
   },
   computed: {
@@ -533,6 +593,7 @@ export default {
     this.getAllCourseList();
     this.getTaskList();
     this.getTodoItems();
+    this.getTeacherInfo();
   },
   mounted() {
     this.$nextTick(() => {
@@ -572,6 +633,80 @@ export default {
     this.stopTodoScroll();
   },
   methods: {
+    // 开始上课
+    startClass() {
+      this.startClassDialogVisible = true;
+      this.classForm = {
+        courseId: null,
+        chapterId: null,
+        sectionId: null
+      };
+      this.chapterList = [];
+      this.sectionList = [];
+    },
+    // 课程选择变化
+    async handleCourseChange(courseId) {
+      this.classForm.chapterId = null;
+      this.classForm.sectionId = null;
+      this.sectionList = [];
+      
+      if (courseId) {
+        try {
+          const { listChapter } = await import("@/api/course/chapter");
+          const response = await listChapter({ courseId: courseId });
+          this.chapterList = response.rows || [];
+        } catch (error) {
+          console.error('获取章节列表失败:', error);
+          this.$message.error('获取章节列表失败');
+        }
+      } else {
+        this.chapterList = [];
+      }
+    },
+    // 章节选择变化
+    async handleChapterChange(chapterId) {
+      this.classForm.sectionId = null;
+      
+      if (chapterId) {
+        try {
+          const { listSection } = await import("@/api/course/section");
+          const response = await listSection({ chapterId: chapterId });
+          this.sectionList = response.rows || [];
+        } catch (error) {
+          console.error('获取小节列表失败:', error);
+          this.$message.error('获取小节列表失败');
+        }
+      } else {
+        this.sectionList = [];
+      }
+    },
+    // 确认开始上课
+    confirmStartClass() {
+      if (!this.classForm.courseId) {
+        this.$message.warning('请选择课程');
+        return;
+      }
+      if (!this.classForm.chapterId) {
+        this.$message.warning('请选择章节');
+        return;
+      }
+      if (!this.classForm.sectionId) {
+        this.$message.warning('请选择小节');
+        return;
+      }
+      
+      // 跳转到小节详情页
+      this.$router.push(`/section/${this.classForm.courseId}/${this.classForm.sectionId}`);
+      this.startClassDialogVisible = false;
+    },
+    // 跳转到任务管理（考试管理）
+    goToTaskManagement() {
+      this.$router.push('/assignment/exam');
+    },
+    // 跳转到资源管理（上传资源）
+    goToResourceManagement() {
+      this.$router.push('/resourceTagging/resourceTaggingRenwu3');
+    },
     getCourseList() {
       listCourse({ pageNum: 1, pageSize: 4 }).then(response => {
         this.courseList = response.rows || [];
@@ -613,6 +748,20 @@ export default {
       } catch (error) {
         console.error('加载课程列表失败:', error);
       }
+    },
+    // 获取教师信息
+    getTeacherInfo() {
+      getTeacherProfile().then(response => {
+        if (response.data) {
+          this.teacherInfo = {
+            department: response.data.department || '',
+            title: response.data.title || '',
+            specialty: response.data.specialty || ''
+          };
+        }
+      }).catch(error => {
+        console.error('获取教师信息失败:', error);
+      });
     },
     async loadTeachingPlan() {
       if (!this.selectedCourseId) {
@@ -820,10 +969,7 @@ export default {
       this.miniTeachingCalendarChart.setOption(option);
     },
     goToCourse(courseId) {
-      this.$router.push({ path: `/course/detail/${courseId}` });
-    },
-    viewAllCourses() {
-      this.$router.push({ path: '/course' });
+      this.$router.push(`/detail/${courseId}`);
     },
     formatProgress(startTime, endTime) {
       if (!startTime || !endTime) return '未设置';
@@ -1479,7 +1625,7 @@ export default {
     },
     viewAllCourses() {
       // 跳转到课程管理页面
-      this.$router.push('/course/course');
+      this.$router.push('/course');
     },
     formatDueDate(date) {
       if (!date) return '';
@@ -1523,27 +1669,149 @@ export default {
     },
     // AI助手功能处理
     handleAiFeature(type) {
-      switch(type) {
-        case 'analysis':
-          this.$message.info('学情分析功能正在开发中...');
-          break;
-        case 'grading':
-          this.$message.info('智能批改功能正在开发中...');
-          break;
-        case 'content':
-          this.$message.info('内容生成功能正在开发中...');
-          break;
-        case 'recommend':
-          this.$message.info('题目推荐功能正在开发中...');
-          break;
-        case 'knowledge':
-          this.$message.info('知识图谱功能正在开发中...');
-          break;
-        case 'tagging':
-          this.$message.info('智能打标功能正在开发中...');
-          break;
-        default:
-          this.$message.info('功能正在开发中...');
+      const featureInfo = {
+        analysis: {
+          title: '学情分析',
+          icon: 'el-icon-data-analysis',
+          content: `
+            <div style="line-height: 1.8;">
+              <h4 style="color: #4A90E2; margin-bottom: 10px;">功能介绍</h4>
+              <p>通过AI智能分析学生的学习数据，帮助教师全面了解学生学习情况。</p>
+              
+              <h4 style="color: #4A90E2; margin: 15px 0 10px 0;">主要功能</h4>
+              <ul style="margin: 0; padding-left: 20px;">
+                <li>分析学生视频观看进度和完成度</li>
+                <li>统计作业提交情况和正确率</li>
+                <li>识别学习薄弱环节和知识盲点</li>
+                <li>生成个性化学习建议报告</li>
+                <li>可视化展示班级整体学情趋势</li>
+              </ul>
+              
+              <h4 style="color: #4A90E2; margin: 15px 0 10px 0;">使用场景</h4>
+              <p>适用于期中期末总结、个别辅导、教学调整等场景，帮助教师精准掌握学情。</p>
+            </div>
+          `
+        },
+        grading: {
+          title: '智能批改',
+          icon: 'el-icon-edit-outline',
+          content: `
+            <div style="line-height: 1.8;">
+              <h4 style="color: #4A90E2; margin-bottom: 10px;">功能介绍</h4>
+              <p>基于AI技术自动批改学生作业，减轻教师批改负担，提高批改效率。</p>
+              
+              <h4 style="color: #4A90E2; margin: 15px 0 10px 0;">主要功能</h4>
+              <ul style="margin: 0; padding-left: 20px;">
+                <li>自动批改客观题（选择、判断、填空）</li>
+                <li>智能评分主观题（简答、论述）</li>
+                <li>识别常见错误并给出改进建议</li>
+                <li>生成详细的批改报告和统计数据</li>
+                <li>支持批量批改，一键完成全班作业</li>
+              </ul>
+              
+              <h4 style="color: #4A90E2; margin: 15px 0 10px 0;">使用场景</h4>
+              <p>适用于日常作业批改、随堂测验评分、期末考试阅卷等，大幅提升批改效率。</p>
+            </div>
+          `
+        },
+        content: {
+          title: '内容生成',
+          icon: 'el-icon-document',
+          content: `
+            <div style="line-height: 1.8;">
+              <h4 style="color: #4A90E2; margin-bottom: 10px;">功能介绍</h4>
+              <p>利用AI技术辅助教师快速生成高质量的教学内容和材料。</p>
+              
+              <h4 style="color: #4A90E2; margin: 15px 0 10px 0;">主要功能</h4>
+              <ul style="margin: 0; padding-left: 20px;">
+                <li>根据教学大纲自动生成课程讲义</li>
+                <li>智能创作教学案例和应用场景</li>
+                <li>生成配套的练习题和测试题</li>
+                <li>制作知识总结和思维导图</li>
+                <li>支持多种格式导出（Word、PDF、Markdown）</li>
+              </ul>
+              
+              <h4 style="color: #4A90E2; margin: 15px 0 10px 0;">使用场景</h4>
+              <p>适用于备课、制作课件、编写教案等场景，显著提升教学内容准备效率。</p>
+            </div>
+          `
+        },
+        recommend: {
+          title: '题目推荐',
+          icon: 'el-icon-question',
+          content: `
+            <div style="line-height: 1.8;">
+              <h4 style="color: #4A90E2; margin-bottom: 10px;">功能介绍</h4>
+              <p>基于学生学习情况和知识掌握程度，智能推荐适合的练习题目。</p>
+              
+              <h4 style="color: #4A90E2; margin: 15px 0 10px 0;">主要功能</h4>
+              <ul style="margin: 0; padding-left: 20px;">
+                <li>分析学生薄弱知识点，推荐针对性题目</li>
+                <li>根据难度梯度推荐由易到难的题目</li>
+                <li>智能匹配题型和考点分布</li>
+                <li>支持个性化推荐和班级整体推荐</li>
+                <li>提供题目解析和参考答案</li>
+              </ul>
+              
+              <h4 style="color: #4A90E2; margin: 15px 0 10px 0;">使用场景</h4>
+              <p>适用于课后练习布置、针对性辅导、考前复习等，实现精准教学。</p>
+            </div>
+          `
+        },
+        knowledge: {
+          title: '知识图谱',
+          icon: 'el-icon-share',
+          content: `
+            <div style="line-height: 1.8;">
+              <h4 style="color: #4A90E2; margin-bottom: 10px;">功能介绍</h4>
+              <p>构建课程知识体系的可视化图谱，清晰展示知识点之间的关联关系。</p>
+              
+              <h4 style="color: #4A90E2; margin: 15px 0 10px 0;">主要功能</h4>
+              <ul style="margin: 0; padding-left: 20px;">
+                <li>自动构建课程知识点关系网络</li>
+                <li>可视化展示知识点前后依赖关系</li>
+                <li>标注学生在各知识点的掌握情况</li>
+                <li>推荐最优学习路径和顺序</li>
+                <li>支持知识图谱的交互式浏览和编辑</li>
+              </ul>
+              
+              <h4 style="color: #4A90E2; margin: 15px 0 10px 0;">使用场景</h4>
+              <p>适用于课程设计、学习路径规划、知识体系梳理等，帮助学生系统掌握知识。</p>
+            </div>
+          `
+        },
+        tagging: {
+          title: '智能打标',
+          icon: 'el-icon-price-tag',
+          content: `
+            <div style="line-height: 1.8;">
+              <h4 style="color: #4A90E2; margin-bottom: 10px;">功能介绍</h4>
+              <p>自动为教学资源和题目打上知识点标签，便于分类管理和精准检索。</p>
+              
+              <h4 style="color: #4A90E2; margin: 15px 0 10px 0;">主要功能</h4>
+              <ul style="margin: 0; padding-left: 20px;">
+                <li>智能识别资源内容，自动打上知识点标签</li>
+                <li>为题目标注考点、难度、题型等属性</li>
+                <li>支持批量打标和标签管理</li>
+                <li>建立统一的标签体系和分类标准</li>
+                <li>实现资源的快速检索和智能推荐</li>
+              </ul>
+              
+              <h4 style="color: #4A90E2; margin: 15px 0 10px 0;">使用场景</h4>
+              <p>适用于资源库建设、题库管理、教学资源整理等，提升资源利用效率。</p>
+            </div>
+          `
+        }
+      };
+
+      const info = featureInfo[type];
+      if (info) {
+        this.$alert(info.content, info.title, {
+          dangerouslyUseHTMLString: true,
+          confirmButtonText: '我知道了',
+          customClass: 'ai-feature-dialog',
+          center: false
+        });
       }
     },
     // 获取待办事项
@@ -1757,7 +2025,7 @@ export default {
 }
 
 .welcome-banner {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #4A90E2 0%, #50C9C3 100%);
   border-radius: 12px;
   padding: 30px;
   color: white;
@@ -1765,7 +2033,7 @@ export default {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);
 
   .welcome-content {
     display: flex;
@@ -1831,8 +2099,8 @@ export default {
 
   .course-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 20px;
+    grid-template-columns: repeat(5, 1fr); // 改为5列
+    gap: 16px; // 减小间距以适应更多卡片
   }
 
   .course-card {
@@ -2301,7 +2569,7 @@ export default {
   }
   
   .ai-main-feature {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #4A90E2 0%, #50C9C3 100%);
     border-radius: 8px;
     padding: 18px;
     color: white;
@@ -2444,6 +2712,75 @@ export default {
   
   .el-button + .el-button {
     margin-left: 10px;
+  }
+}
+
+// AI功能说明对话框样式
+::v-deep .ai-feature-dialog {
+  width: 600px;
+  
+  .el-message-box__header {
+    padding: 20px 20px 15px;
+    background: linear-gradient(135deg, #4A90E2 0%, #50C9C3 100%);
+    
+    .el-message-box__title {
+      color: white;
+      font-size: 18px;
+      font-weight: 600;
+    }
+    
+    .el-message-box__headerbtn {
+      top: 20px;
+      
+      .el-message-box__close {
+        color: white;
+        
+        &:hover {
+          color: rgba(255, 255, 255, 0.8);
+        }
+      }
+    }
+  }
+  
+  .el-message-box__content {
+    padding: 25px 20px;
+    max-height: 500px;
+    overflow-y: auto;
+    
+    h4 {
+      margin: 0 0 10px 0;
+      font-size: 15px;
+      font-weight: 600;
+    }
+    
+    p {
+      margin: 0 0 10px 0;
+      color: #606266;
+      font-size: 14px;
+    }
+    
+    ul {
+      color: #606266;
+      font-size: 14px;
+      
+      li {
+        margin-bottom: 8px;
+        line-height: 1.6;
+      }
+    }
+  }
+  
+  .el-message-box__btns {
+    padding: 15px 20px 20px;
+    
+    .el-button--primary {
+      background: linear-gradient(135deg, #4A90E2 0%, #50C9C3 100%);
+      border: none;
+      
+      &:hover {
+        opacity: 0.9;
+      }
+    }
   }
 }
 </style>

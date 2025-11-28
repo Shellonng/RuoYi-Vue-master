@@ -80,7 +80,7 @@ export default {
       }
     }
     return {
-      title: process.env.VUE_APP_TITLE,
+      title: 'Smart Class',
       codeUrl: "",
       registerForm: {
         username: "",

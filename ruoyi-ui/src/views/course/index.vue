@@ -660,7 +660,7 @@ export default {
     },
     /** 获取默认封面 */
     getDefaultCover() {
-      return 'https://via.placeholder.com/300x200/409eff/ffffff?text=Course';
+      return require('@/assets/images/default-course-cover.png');
     },
     /** 获取状态类名 */
     getStatusClass(status) {
