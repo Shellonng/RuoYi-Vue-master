@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.VideoLearningBehaviorMapper">
+    
+    <resultMap type="com.ruoyi.system.domain.VideoLearningBehavior" id="VideoLearningBehaviorResult">
+        <result property="id"    column="id"    />
+        <result property="studentId"    column="student_id"    />
+        <result property="videoId"    column="video_id"    />
+        <result property="watchDuration"    column="watch_duration"    />
+        <result property="videoDuration"    column="video_duration"    />
+        <result property="completionRate"    column="completion_rate"    />
+        <result property="watchCount"    column="watch_count"    />
+        <result property="heatmapData"    column="heatmap_data"    />
+        <result property="isCompleted"    column="is_completed"    />
+        <result property="fastForwardCount"    column="fast_forward_count"    />
+        <result property="pauseCount"    column="pause_count"    />
+        <result property="playbackSpeed"    column="playback_speed"    />
+        <result property="firstWatchAt"    column="first_watch_at"    />
+        <result property="lastWatchAt"    column="last_watch_at"    />
+        <result property="createdAt"    column="created_at"    />
+        <result property="updatedAt"    column="updated_at"    />
+    </resultMap>
+
+    <sql id="selectVideoLearningBehaviorVo">
+        select id, student_id, video_id, watch_duration, video_duration, completion_rate, watch_count, heatmap_data, is_completed, fast_forward_count, pause_count, playback_speed, first_watch_at, last_watch_at, created_at, updated_at from video_learning_behavior
+    </sql>
+
+    <select id="selectVideoLearningBehaviorList" parameterType="com.ruoyi.system.domain.VideoLearningBehavior" resultMap="VideoLearningBehaviorResult">
+        <include refid="selectVideoLearningBehaviorVo"/>
+        <where>  
+            <if test="studentId != null "> and student_id = #{studentId}</if>
+            <if test="videoId != null "> and video_id = #{videoId}</if>
+            <if test="lastWatchAt != null "> and last_watch_at = #{lastWatchAt}</if>
+        </where>
+    </select>
+    
+    <select id="selectVideoLearningBehaviorById" parameterType="Long" resultMap="VideoLearningBehaviorResult">
+        <include refid="selectVideoLearningBehaviorVo"/>
+        where id = #{id}
+    </select>
+
+    <select id="selectTodayLearningBehaviors" resultMap="VideoLearningBehaviorResult">
+        select 
+            vlb.id, vlb.student_id, vlb.video_id, vlb.watch_duration, vlb.video_duration, 
+            vlb.completion_rate, vlb.watch_count, vlb.heatmap_data, vlb.is_completed, 
+            vlb.fast_forward_count, vlb.pause_count, vlb.playback_speed, 
+            vlb.first_watch_at, vlb.last_watch_at, vlb.created_at, vlb.updated_at
+        from video_learning_behavior vlb
+        where DATE(vlb.last_watch_at) = CURDATE()
+        and vlb.watch_duration > 0
+        order by vlb.last_watch_at
+    </select>
+    
+    <!-- 查询视频ID对应的小节标题 -->
+    <select id="selectSectionTitleByVideoId" parameterType="Long" resultType="String">
+        select s.title 
+        from section s
+        inner join video v on s.video_url = v.file_path
+        where v.id = #{videoId}
+        limit 1
+    </select>
+        
+</mapper>
