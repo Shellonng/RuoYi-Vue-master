@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="ai-assistant-container">
     <!-- 浮动按钮 -->
     <div 
@@ -33,13 +33,6 @@
           </div>
         </div>
         <div class="header-actions">
-          <el-tooltip :content="autoPlayVoice ? '关闭自动播放' : '开启自动播放'" placement="left">
-            <i 
-              :class="autoPlayVoice ? 'el-icon-video-play' : 'el-icon-video-pause'" 
-              @click="toggleAutoPlay"
-              :style="{ color: autoPlayVoice ? '#67c23a' : '#909399' }"
-            ></i>
-          </el-tooltip>
           <el-tooltip content="清空对话" placement="left">
             <i class="el-icon-delete" @click="clearChat"></i>
           </el-tooltip>
@@ -171,8 +164,7 @@ export default {
       isShaking: false,
       welcomeShown: false,
       playingIndex: null,  // 当前播放的消息索引
-      currentAudio: null,   // 当前音频对象
-      autoPlayVoice: true   // 是否自动播放语音
+      currentAudio: null    // 当前音频对象
     };
   },
   computed: {
@@ -360,97 +352,101 @@ export default {
         // 调用TTS API
         const response = await textToSpeech(plainText, 'CHERRY');
         
-        console.log('TTS API响应:', response);
+        console.log('TTS响应:', response);
         
-        if (response.code === 200) {
-          // 后端使用AjaxResult.success()返回，数据在msg字段中
-          const audioBase64 = response.msg || response.data;
-          
-          if (!audioBase64) {
-            throw new Error('未获取到音频数据');
-          }
-          
-          console.log('✓ 收到Base64音频，长度:', audioBase64.length, '字符');
+        if (response.code === 200 && response.data) {
+          // 后端返回Base64编码的音频数据
+          const audioBase64 = response.data;
+          console.log('收到音频Base64数据，类型:', typeof audioBase64, '长度:', audioBase64.length);
+          console.log('Base64前20个字符:', audioBase64.substring(0, 20));
           
           try {
+            // 移除可能的data URL前缀
+            let base64String = audioBase64;
+            if (audioBase64.includes('base64,')) {
+              base64String = audioBase64.split('base64,')[1];
+              console.log('移除前缀后，Base64长度:', base64String.length);
+            }
+            
             // Base64解码
-            console.log('开始Base64解码...');
-            const binaryString = window.atob(audioBase64);
-            console.log('✓ Base64解码成功，二进制长度:', binaryString.length, '字节');
+            const binaryString = window.atob(base64String);
+            console.log('解码后二进制字符串长度:', binaryString.length);
             
             const bytes = new Uint8Array(binaryString.length);
             for (let i = 0; i < binaryString.length; i++) {
               bytes[i] = binaryString.charCodeAt(i);
             }
-            console.log('✓ 创建Uint8Array成功');
+            console.log('Uint8Array创建成功，长度:', bytes.length);
+            console.log('音频文件头:', bytes.slice(0, 12));
             
-            // 检查WAV文件头
-            const header = String.fromCharCode(...bytes.slice(0, 4));
-            console.log('文件头标识:', header, '(应该是RIFF)');
+            // 创建Blob（阿里云返回的是MP3格式）
+            const blob = new Blob([bytes], { type: 'audio/mpeg' });
+            console.log('创建Blob成功，大小:', blob.size, 'bytes, 类型:', blob.type);
             
-            // 创建Blob（使用通用的audio格式，让浏览器自动识别）
-            const blob = new Blob([bytes], { type: 'audio/wav' });
-            const blobUrl = URL.createObjectURL(blob);
-            console.log('✓ 创建Blob URL成功，大小:', bytes.length, '字节');
-            console.log('Blob URL:', blobUrl);
+            // 创建本地URL
+            const audioUrl = URL.createObjectURL(blob);
+            console.log('创建Blob URL:', audioUrl);
             
-            // 播放
-            console.log('创建Audio对象...');
-            this.currentAudio = new Audio(blobUrl);
-            console.log('✓ Audio对象创建成功');
+            // 创建音频对象并播放
+            this.currentAudio = new Audio(audioUrl);
             
             this.currentAudio.onloadedmetadata = () => {
-              console.log('✓ 音频加载完成，时长:', this.currentAudio.duration, '秒');
+              console.log('音频元数据加载完成，时长:', this.currentAudio.duration);
             };
             
             this.currentAudio.onended = () => {
-              console.log('✓ 播放完成');
+              console.log('音频播放完成');
               this.playingIndex = null;
               this.currentAudio = null;
-              URL.revokeObjectURL(blobUrl);
+              URL.revokeObjectURL(audioUrl);
             };
             
             this.currentAudio.onerror = (e) => {
-              const err = this.currentAudio.error;
-              console.error('✗ 音频播放错误:');
-              console.error('  错误代码:', err?.code);
-              console.error('  错误信息:', err?.message);
-              console.error('  1=ABORTED, 2=NETWORK, 3=DECODE, 4=SRC_NOT_SUPPORTED');
-              this.$message.error('播放失败，错误代码: ' + err?.code);
+              console.error('音频播放错误事件:', e);
+              console.error('Audio error对象:', {
+                code: this.currentAudio.error?.code,
+                message: this.currentAudio.error?.message,
+                MEDIA_ERR_ABORTED: this.currentAudio.error?.MEDIA_ERR_ABORTED,
+                MEDIA_ERR_NETWORK: this.currentAudio.error?.MEDIA_ERR_NETWORK,
+                MEDIA_ERR_DECODE: this.currentAudio.error?.MEDIA_ERR_DECODE,
+                MEDIA_ERR_SRC_NOT_SUPPORTED: this.currentAudio.error?.MEDIA_ERR_SRC_NOT_SUPPORTED
+              });
+              this.$message.error('音频播放失败，错误代码:' + (this.currentAudio.error?.code || 'unknown'));
               this.playingIndex = null;
-              URL.revokeObjectURL(blobUrl);
+              this.currentAudio = null;
+              URL.revokeObjectURL(audioUrl);
             };
             
-            console.log('调用play()方法...');
-            this.currentAudio.play()
-              .then(() => {
-                console.log('✓✓✓ 播放成功！✓✓✓');
-                this.$message.success('正在播放语音');
-              })
-              .catch(err => {
-                console.error('✗ play()失败:');
-                console.error('  错误名称:', err.name);
-                console.error('  错误信息:', err.message);
-                
-                if (err.name === 'NotAllowedError') {
-                  console.log('  原因: 浏览器阻止自动播放，需要用户交互');
-                  this.$message.warning('请再次点击播放按钮');
-                } else if (err.name === 'NotSupportedError') {
-                  console.log('  原因: 浏览器不支持此音频格式');
-                  this.$message.error('浏览器不支持WAV格式');
-                } else {
-                  this.$message.error('播放失败: ' + err.message);
-                }
-                
-                this.playingIndex = null;
-                URL.revokeObjectURL(blobUrl);
+            // 播放
+            console.log('准备播放音频...');
+            this.currentAudio.play().then(() => {
+              console.log('音频开始播放成功');
+            }).catch(err => {
+              console.error('play()方法失败:', err);
+              console.error('错误详情:', {
+                name: err.name,
+                message: err.message,
+                stack: err.stack
               });
               
-          } catch (error) {
-            console.error('✗ 处理音频失败:');
-            console.error('  错误:', error);
-            console.error('  错误栈:', error.stack);
-            this.$message.error('音频处理失败: ' + error.message);
+              if (err.name === 'NotAllowedError') {
+                this.$alert('请点击确定按钮播放语音', '需要用户操作', {
+                  confirmButtonText: '播放',
+                  callback: () => {
+                    if (this.currentAudio) {
+                      this.currentAudio.play();
+                    }
+                  }
+                });
+              } else {
+                this.$message.error('播放失败：' + err.message);
+                this.playingIndex = null;
+              }
+            });
+          } catch (decodeError) {
+            console.error('Base64解码失败详情:', decodeError);
+            console.error('错误栈:', decodeError.stack);
+            this.$message.error('音频数据解码失败: ' + decodeError.message);
             this.playingIndex = null;
           }
         } else {

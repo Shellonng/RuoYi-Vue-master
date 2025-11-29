@@ -995,7 +995,11 @@ export default {
       if (coverImage.startsWith('data:image')) {
         return coverImage;
       }
-      return process.env.VUE_APP_BASE_API + coverImage;
+      // 拼接服务器地址并对路径进行编码（处理中文文件名）
+      const baseUrl = process.env.VUE_APP_BASE_API;
+      // 分割路径，对每个部分进行编码
+      const pathParts = coverImage.split('/').map(part => encodeURIComponent(part));
+      return baseUrl + pathParts.join('/');
     },
     getStatusClass(status) {
       const classMap = {
@@ -1016,10 +1020,16 @@ export default {
     async initActivityChart() {
       if (!this.$refs.activityChart) return;
       this.activityChart = echarts.init(this.$refs.activityChart);
-      // 获取多视频分时活跃人数数据
-      const response = await getTodayActiveStatsByVideo();
-      const titleResponse = await getVideoTitles();
-      if (response.code === 200) {
+      
+      try {
+        // 获取多视频分时活跃人数数据
+        const response = await getTodayActiveStatsByVideo();
+        const titleResponse = await getVideoTitles();
+        
+        console.log('活跃人数数据响应:', response);
+        console.log('视频标题响应:', titleResponse);
+        
+        if (response.code === 200) {
         const stats = response.data;
         const titleMap = titleResponse.code === 200 ? titleResponse.data : {};
         const hours = [];
@@ -1101,6 +1111,13 @@ export default {
             this.activityChart.resize();
           }
         });
+      } else {
+        console.error('获取活跃人数数据失败:', response.msg);
+        this.$message.error('获取活跃人数数据失败: ' + (response.msg || '未知错误'));
+      }
+      } catch (error) {
+        console.error('加载活跃人数图表失败:', error);
+        this.$message.error('加载活跃人数图表失败');
       }
     },
     initBurndownChart() {

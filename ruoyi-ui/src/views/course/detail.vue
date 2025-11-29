@@ -1463,7 +1463,11 @@ export default {
       if (coverImage.startsWith('data:image')) {
         return coverImage;
       }
-      return process.env.VUE_APP_BASE_API + coverImage;
+      // 拼接服务器地址并对路径进行编码（处理中文文件名）
+      const baseUrl = process.env.VUE_APP_BASE_API;
+      // 分割路径，对每个部分进行编码
+      const pathParts = coverImage.split('/').map(part => encodeURIComponent(part));
+      return baseUrl + pathParts.join('/');
     },
     /** 获取章节列表 */
     getChapterList(animated = false, waitForKnowledgePoints = false) {

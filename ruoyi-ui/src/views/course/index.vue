@@ -266,7 +266,7 @@
             <img v-if="form.coverImage" :src="getCoverUrl(form.coverImage)" class="cover-preview">
             <i v-else class="el-icon-plus cover-uploader-icon"></i>
           </el-upload>
-          <div class="upload-tip">建议尺寸：300x200px，支持jpg、png格式，大小不超过2MB</div>
+          <div class="upload-tip">建议尺寸：300x200px，支持 JPG、PNG、GIF、WebP 格式，大小不超过5MB</div>
         </el-form-item>
 
         <el-form-item label="学分" prop="credit">
@@ -595,16 +595,18 @@ export default {
     },
     /** 上传前验证 */
     beforeCoverUpload(file) {
-      const isImage = file.type === 'image/jpeg' || file.type === 'image/png';
-      const isLt2M = file.size / 1024 / 1024 < 2;
+      // 支持更多图片格式：JPG、PNG、GIF、WebP
+      const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+      const isImage = validTypes.includes(file.type);
+      const isLt5M = file.size / 1024 / 1024 < 5; // 改为5MB
 
       if (!isImage) {
-        this.$message.error('上传封面图片只能是 JPG 或 PNG 格式!');
+        this.$message.error('上传封面图片只能是 JPG、PNG、GIF 或 WebP 格式!');
       }
-      if (!isLt2M) {
-        this.$message.error('上传封面图片大小不能超过 2MB!');
+      if (!isLt5M) {
+        this.$message.error('上传封面图片大小不能超过 5MB!');
       }
-      return isImage && isLt2M;
+      return isImage && isLt5M;
     },
     /** 上传成功回调 */
     handleCoverSuccess(response, file) {
@@ -655,8 +657,11 @@ export default {
       if (coverImage.startsWith('data:image')) {
         return coverImage;
       }
-      // 否则拼接服务器地址
-      return process.env.VUE_APP_BASE_API + coverImage;
+      // 拼接服务器地址并对路径进行编码（处理中文文件名）
+      const baseUrl = process.env.VUE_APP_BASE_API;
+      // 分割路径，对每个部分进行编码
+      const pathParts = coverImage.split('/').map(part => encodeURIComponent(part));
+      return baseUrl + pathParts.join('/');
     },
     /** 获取默认封面 */
     getDefaultCover() {
