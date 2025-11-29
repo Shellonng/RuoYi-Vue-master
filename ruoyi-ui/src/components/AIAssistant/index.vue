@@ -72,11 +72,16 @@
                   type="text" 
                   size="mini"
                   @click="playAudio(message.content, index)"
-                  :loading="playingIndex === index"
+                  :loading="voiceLoadingIndex === index || playingIndex === index"
+                  :disabled="voiceLoadingIndex === index && playingIndex !== index"
                   class="play-audio-btn"
                 >
-                  <i :class="playingIndex === index ? 'el-icon-loading' : 'el-icon-video-play'"></i>
-                  {{ playingIndex === index ? '播放中...' : '播放' }}
+                  <i v-if="voiceLoadingIndex === index && playingIndex !== index" class="el-icon-loading"></i>
+                  <i v-else-if="playingIndex === index" class="el-icon-video-pause"></i>
+                  <i v-else class="el-icon-video-play"></i>
+                  <span v-if="voiceLoadingIndex === index && playingIndex !== index">生成中</span>
+                  <span v-else-if="playingIndex === index">播放中</span>
+                  <span v-else>播放</span>
                 </el-button>
               </div>
             </div>
@@ -133,8 +138,8 @@
           v-model="inputMessage"
           type="textarea"
           :rows="2"
-          placeholder="请输入您的问题..."
-          @keyup.enter.native="handleEnter"
+          placeholder="请输入您的问题... (回车发送, Shift+回车换行)"
+          @keydown.native="handleKeyDown"
           ref="messageInput"
         ></el-input>
         <div class="input-actions">
@@ -172,7 +177,8 @@ export default {
       welcomeShown: false,
       playingIndex: null,  // 当前播放的消息索引
       currentAudio: null,   // 当前音频对象
-      autoPlayVoice: true   // 是否自动播放语音
+      autoPlayVoice: true,  // 是否自动播放语音
+      voiceLoadingIndex: null  // 正在加载语音的消息索引
     };
   },
   computed: {
@@ -278,6 +284,17 @@ export default {
         };
         
         this.messages.push(assistantMessage);
+        
+        // 如果开启了自动播放，异步加载并播放语音
+        if (this.autoPlayVoice) {
+          const messageIndex = this.messages.length - 1;
+          this.voiceLoadingIndex = messageIndex;
+          
+          // 异步加载语音，不阻塞UI
+          this.$nextTick(() => {
+            this.playAudio(assistantMessage.content, messageIndex);
+          });
+        }
       } catch (error) {
         console.error('AI助手调用失败:', error);
         const errorMessage = {
@@ -297,11 +314,17 @@ export default {
       this.inputMessage = question;
       this.sendMessage();
     },
-    handleEnter(e) {
-      // Ctrl+Enter 或 Command+Enter 发送消息
-      if ((e.ctrlKey || e.metaKey) && e.keyCode === 13) {
-        e.preventDefault();
-        this.sendMessage();
+    handleKeyDown(e) {
+      // 回车键发送消息，Shift+回车换行
+      if (e.keyCode === 13) {
+        if (e.shiftKey) {
+          // Shift+回车：换行（默认行为，不做处理）
+          return;
+        } else {
+          // 单独回车：发送消息
+          e.preventDefault();
+          this.sendMessage();
+        }
       }
     },
     clearChat() {
@@ -315,6 +338,10 @@ export default {
         this.showWelcomeMessage();
         this.$message.success('对话已清空');
       }).catch(() => {});
+    },
+    toggleAutoPlay() {
+      this.autoPlayVoice = !this.autoPlayVoice;
+      this.$message.success(this.autoPlayVoice ? '已开启自动播放' : '已关闭自动播放');
     },
     scrollToBottom() {
       if (this.$refs.chatContainer) {
@@ -343,11 +370,13 @@ export default {
         this.currentAudio = null;
         if (this.playingIndex === messageIndex) {
           this.playingIndex = null;
+          this.voiceLoadingIndex = null;
           return;
         }
       }
       
-      this.playingIndex = messageIndex;
+      // 设置加载状态
+      this.voiceLoadingIndex = messageIndex;
       
       try {
         // 移除HTML标签，只保留纯文本
@@ -401,11 +430,14 @@ export default {
             
             this.currentAudio.onloadedmetadata = () => {
               console.log('✓ 音频加载完成，时长:', this.currentAudio.duration, '秒');
+              // 音频加载完成，清除加载状态
+              this.voiceLoadingIndex = null;
             };
             
             this.currentAudio.onended = () => {
               console.log('✓ 播放完成');
               this.playingIndex = null;
+              this.voiceLoadingIndex = null;
               this.currentAudio = null;
               URL.revokeObjectURL(blobUrl);
             };
@@ -418,6 +450,7 @@ export default {
               console.error('  1=ABORTED, 2=NETWORK, 3=DECODE, 4=SRC_NOT_SUPPORTED');
               this.$message.error('播放失败，错误代码: ' + err?.code);
               this.playingIndex = null;
+              this.voiceLoadingIndex = null;
               URL.revokeObjectURL(blobUrl);
             };
             
@@ -425,6 +458,9 @@ export default {
             this.currentAudio.play()
               .then(() => {
                 console.log('✓✓✓ 播放成功！✓✓✓');
+                // 播放开始，设置播放状态，清除加载状态
+                this.playingIndex = messageIndex;
+                this.voiceLoadingIndex = null;
                 this.$message.success('正在播放语音');
               })
               .catch(err => {
@@ -443,6 +479,7 @@ export default {
                 }
                 
                 this.playingIndex = null;
+                this.voiceLoadingIndex = null;
                 URL.revokeObjectURL(blobUrl);
               });
               
@@ -452,6 +489,7 @@ export default {
             console.error('  错误栈:', error.stack);
             this.$message.error('音频处理失败: ' + error.message);
             this.playingIndex = null;
+            this.voiceLoadingIndex = null;
           }
         } else {
           console.error('TTS API返回错误:', response);
@@ -461,6 +499,7 @@ export default {
         console.error('播放语音失败:', error);
         this.$message.error('语音播放失败：' + (error.message || '未知错误'));
         this.playingIndex = null;
+        this.voiceLoadingIndex = null;
       }
     }
   },
@@ -659,6 +698,7 @@ export default {
   .header-actions {
     display: flex;
     align-items: center;
+    gap: 8px;
     
     i {
       font-size: 16px;
