@@ -5,6 +5,10 @@
     width="90%"
     top="5vh"
     :close-on-click-modal="false"
+    append-to-body
+    :modal-append-to-body="true"
+    :lock-scroll="true"
+    custom-class="batch-grading-modal"
     @close="handleClose"
   >
     <div class="batch-grading-container">
@@ -309,6 +313,17 @@ export default {
   }
 }
 </script>
+
+<style>
+/* 全局样式：确保批量评分对话框在最上层 */
+.batch-grading-modal {
+  z-index: 3000 !important;
+}
+
+.batch-grading-modal .el-dialog__wrapper {
+  z-index: 3000 !important;
+}
+</style>
 
 <style scoped>
 .batch-grading-container {

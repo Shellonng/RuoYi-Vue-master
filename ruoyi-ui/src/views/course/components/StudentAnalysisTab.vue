@@ -128,14 +128,19 @@
     </div>
 
     <!-- 整体情况 Tab 内容 -->
-    <div v-show="activeTab === 'overall' && filters.courseId">
+    <div v-show="activeTab === 'overall' && filters.courseId" class="overall-tab-content">
+      <!-- 班级学生概览 - 不受 loading 影响 -->
       <section class="panel" v-if="filters.courseId">
         <div class="panel-head">
           <h3>班级学生概览</h3>
           <span class="hint">共 {{ studentOptions.length }} 人</span>
         </div>
         
-        <div class="student-grid" v-if="studentOptions.length">
+        <div v-if="studentLoading" class="loading-indicator">
+          <i class="el-icon-loading" style="font-size: 32px; color: #409eff;"></i>
+          <p>正在加载学生列表...</p>
+        </div>
+        <div v-else-if="studentOptions.length" class="student-grid">
           <div 
             class="student-card" 
             :class="{ active: filters.studentId === stu.id }"
@@ -154,67 +159,74 @@
         </div>
         <div v-else class="empty-placeholder">
           <i class="el-icon-user" style="font-size: 48px; color: #dcdfe6;"></i>
-          <p>暂无学生数据</p>
+          <p>{{ studentError || '暂无学生数据' }}</p>
         </div>
       </section>
 
-      <!-- 风险报告部分 -->
+      <!-- 风险报告部分 - 独立的加载状态 -->
       <section class="panel" v-if="filters.courseId">
         <div class="panel-head">
           <h3>风险分析报告</h3>
-          <span class="hint">{{ (riskKpList.length || highRiskStudents.length) ? '数据信息' : '当前没有数据' }}</span>
+          <span class="hint">{{ loading ? '正在加载...' : ((riskKpList.length || highRiskStudents.length) ? '数据信息' : '当前没有数据') }}</span>
         </div>
         
-        <!-- 风险类型分布饼图 -->
-        <div class="charts">
-          <div ref="riskTypeChartRef" class="chart" v-if="Object.keys(riskTypeCount).length > 0"></div>
-          <div v-else class="chart empty-placeholder">
-            <i class="el-icon-pie-chart" style="font-size: 48px; color: #dcdfe6;"></i>
-            <p>暂无风险类型数据</p>
-          </div>
+        <div v-if="loading" class="loading-indicator">
+          <i class="el-icon-loading" style="font-size: 32px; color: #409eff;"></i>
+          <p>正在加载风险分析数据...</p>
         </div>
         
-        <!-- 高风险知识点表格 -->
-        <h4>高风险知识点</h4>
-        <div class="table">
-          <div class="table-head">
-            <div>知识点名称</div>
-            <div>平均掌握度</div>
-            <div>低掌握度学生数</div>
-          </div>
-          <div class="table-row" v-for="item in riskKpList" :key="item.kpId">
-            <div>{{ item.kpTitle }}</div>
-            <div>{{ formatPercent(item.averageMastery) }}%</div>
-            <div>{{ item.lowMasteryCount }}</div>
-          </div>
-          <div v-if="!riskKpList.length" class="table-row empty">
-            <i class="el-icon-warning" style="margin-right: 8px; color: #909399;"></i>
-            暂无高风险知识点数据
-          </div>
-        </div>
-        
-        <!-- 高风险学生表格 -->
-        <h4>高风险学生</h4>
-        <div class="table">
-          <div class="table-head">
-            <div>学生ID</div>
-            <div>知识点</div>
-            <div>掌握度</div>
-            <div>风险等级</div>
-          </div>
-          <div class="table-row" v-for="item in highRiskStudents" :key="item.studentId + item.kpId">
-            <div>{{ item.studentId }}</div>
-            <div>{{ item.kpTitle }}</div>
-            <div>{{ formatPercent(item.masteryScore) }}%</div>
-            <div>
-              <span v-if="item.riskLevel === 'HIGH'" class="risk-high">高风险</span>
-              <span v-else-if="item.riskLevel === 'MEDIUM'" class="risk-medium">中风险</span>
-              <span v-else class="risk-low">低风险</span>
+        <div v-else>
+          <!-- 风险类型分布饼图 -->
+          <div class="charts">
+            <div ref="riskTypeChartRef" class="chart" v-show="Object.keys(riskTypeCount).length > 0"></div>
+            <div v-show="Object.keys(riskTypeCount).length === 0" class="chart empty-placeholder">
+              <i class="el-icon-pie-chart" style="font-size: 48px; color: #dcdfe6;"></i>
+              <p>暂无风险类型数据</p>
             </div>
           </div>
-          <div v-if="!highRiskStudents.length" class="table-row empty">
-            <i class="el-icon-success" style="margin-right: 8px; color: #67c23a;"></i>
-            暂无高风险学生（这是好消息！）
+          
+          <!-- 高风险知识点表格 -->
+          <h4>高风险知识点</h4>
+          <div class="table">
+            <div class="table-head">
+              <div>知识点名称</div>
+              <div>平均掌握度</div>
+              <div>低掌握度学生数</div>
+            </div>
+            <div class="table-row" v-for="item in riskKpList" :key="item.kpId">
+              <div>{{ item.kpTitle }}</div>
+              <div>{{ formatPercent(item.averageMastery) }}%</div>
+              <div>{{ item.lowMasteryCount }}</div>
+            </div>
+            <div v-if="!riskKpList.length" class="table-row empty">
+              <i class="el-icon-warning" style="margin-right: 8px; color: #909399;"></i>
+              暂无高风险知识点数据
+            </div>
+          </div>
+          
+          <!-- 高风险学生表格 -->
+          <h4>高风险学生</h4>
+          <div class="table">
+            <div class="table-head">
+              <div>学生ID</div>
+              <div>知识点</div>
+              <div>掌握度</div>
+              <div>风险等级</div>
+            </div>
+            <div class="table-row" v-for="item in highRiskStudents" :key="item.studentId + item.kpId">
+              <div>{{ item.studentId }}</div>
+              <div>{{ item.kpTitle }}</div>
+              <div>{{ formatPercent(item.masteryScore) }}%</div>
+              <div>
+                <span v-if="item.riskLevel === 'HIGH'" class="risk-high">高风险</span>
+                <span v-else-if="item.riskLevel === 'MEDIUM'" class="risk-medium">中风险</span>
+                <span v-else class="risk-low">低风险</span>
+              </div>
+            </div>
+            <div v-if="!highRiskStudents.length" class="table-row empty">
+              <i class="el-icon-success" style="margin-right: 8px; color: #67c23a;"></i>
+              暂无高风险学生（这是好消息！）
+            </div>
           </div>
         </div>
       </section>
@@ -319,8 +331,10 @@ export default {
     courseId: {
       immediate: true,
       handler(newVal) {
+        console.log('[Watch courseId] 值变化:', newVal)
         if (newVal) {
           this.filters.courseId = newVal
+          console.log('[Watch courseId] 开始加载学生列表和数据')
           this.fetchStudents()
           this.reload()
         }
@@ -338,6 +352,7 @@ export default {
     },
     activeTab: {
       handler(newVal) {
+        console.log('[activeTab] 标签页切换到:', newVal)
         this.$nextTick(() => {
           if (newVal === 'detailed') {
             if (!this.filters.studentId && this.studentOptions.length > 0) {
@@ -347,10 +362,75 @@ export default {
             if (this.pieChart) this.pieChart.resize()
             if (this.trendChart) this.trendChart.resize()
           } else if (newVal === 'overall') {
-            if (this.riskTypeChart) this.riskTypeChart.resize()
+            console.log('[activeTab] 切换到整体情况，检查风险报告数据:', {
+              riskTypeCount: Object.keys(this.riskTypeCount).length,
+              riskKpList: this.riskKpList.length,
+              highRiskStudents: this.highRiskStudents.length
+            })
+            
+            // 延迟一下确保 DOM 完全可见
+            setTimeout(() => {
+              console.log('[activeTab] 延迟后尝试渲染风险类型图表')
+              this.tryRenderRiskChart()
+            }, 100)
+            
+            // 如果图表已存在，调整大小
+            if (this.riskTypeChart) {
+              this.riskTypeChart.resize()
+            }
           }
         })
       }
+    },
+    riskTypeCount: {
+      handler(newVal) {
+        console.log('[riskTypeCount] 数据变化:', Object.keys(newVal).length, '个风险类型')
+        // 当风险数据更新且在整体情况标签页时，尝试渲染图表
+        if (this.activeTab === 'overall' && Object.keys(newVal).length > 0) {
+          this.$nextTick(() => {
+            console.log('[riskTypeCount] 触发图表渲染尝试')
+            this.tryRenderRiskChart()
+          })
+        }
+      },
+      deep: true
+    }
+  },
+  mounted() {
+    console.log('[mounted] 组件已挂载, courseId:', this.courseId, 'activeTab:', this.activeTab)
+    // 如果默认是整体情况标签页，延迟检查图表渲染
+    if (this.activeTab === 'overall') {
+      // 使用多次尝试确保图表能渲染
+      console.log('[mounted] 默认标签页是整体情况，开始多次检查渲染')
+      
+      // 第一次尝试：立即检查
+      this.$nextTick(() => {
+        this.tryRenderRiskChart()
+      })
+      
+      // 第二次尝试：500ms 后
+      setTimeout(() => {
+        console.log('[mounted] 500ms 后再次检查')
+        this.tryRenderRiskChart()
+      }, 500)
+      
+      // 第三次尝试：1000ms 后
+      setTimeout(() => {
+        console.log('[mounted] 1000ms 后最后检查')
+        this.tryRenderRiskChart()
+      }, 1000)
+    }
+  },
+  activated() {
+    // 如果使用了 keep-alive，在组件激活时也触发检查
+    console.log('[activated] 组件被激活, activeTab:', this.activeTab)
+    if (this.activeTab === 'overall') {
+      this.$nextTick(() => {
+        if (Object.keys(this.riskTypeCount).length > 0 && this.$refs.riskTypeChartRef) {
+          console.log('[activated] 重新渲染风险类型图表')
+          this.renderRiskTypeChart()
+        }
+      })
     }
   },
   beforeDestroy() {
@@ -378,12 +458,37 @@ export default {
       this.renderTrendChart()
     },
     
+    tryRenderRiskChart() {
+      console.log('[tryRenderRiskChart] 尝试渲染风险图表')
+      console.log('[tryRenderRiskChart] 状态检查:', {
+        activeTab: this.activeTab,
+        hasData: Object.keys(this.riskTypeCount).length,
+        hasRef: !!this.$refs.riskTypeChartRef
+      })
+      
+      if (this.activeTab === 'overall' && Object.keys(this.riskTypeCount).length > 0) {
+        if (this.$refs.riskTypeChartRef) {
+          console.log('[tryRenderRiskChart] 条件满足，开始渲染（忽略可见性检查）')
+          this.renderRiskTypeChart()
+        } else {
+          console.log('[tryRenderRiskChart] ref 不存在，跳过')
+        }
+      } else {
+        console.log('[tryRenderRiskChart] 条件不满足:', {
+          wrongTab: this.activeTab !== 'overall',
+          noData: Object.keys(this.riskTypeCount).length === 0
+        })
+      }
+    },
+    
     async reload(silent = false) {
       if (!this.filters.courseId) {
         this.error = "请先选择课程"
         this.clearData()
         return
       }
+      
+      console.log('[Reload] 开始重新加载数据, courseId:', this.filters.courseId, 'studentId:', this.filters.studentId)
       
       if (!silent) this.loading = true
       this.error = ''
@@ -399,9 +504,11 @@ export default {
           this.performanceData = {}
         }
         await Promise.all(promises)
+        console.log('[Reload] 数据加载完成')
         await this.$nextTick()
         this.renderCharts()
       } catch (e) {
+        console.error('[Reload] 加载失败:', e)
         this.error = e.message || "加载失败"
       } finally {
         if (!silent) this.loading = false
@@ -410,6 +517,7 @@ export default {
     
     async fetchStudents() {
       if (!this.filters.courseId) return
+      console.log('[fetchStudents] 开始加载学生列表, courseId:', this.filters.courseId)
       this.studentLoading = true
       this.studentError = ''
       try {
@@ -430,6 +538,7 @@ export default {
               id: enrollment.studentUserId,
               name: enrollment.studentName || `学生${enrollment.studentUserId}`
             }))
+            console.log('[fetchStudents] 成功从RuoYi加载学生:', this.studentOptions.length, '人')
             return
           }
         } catch (e) {
@@ -453,11 +562,12 @@ export default {
           throw new Error(data.message || "获取学生列表失败")
         }
       } catch (e) {
-        console.error("Fetch students error:", e)
+        console.error("[fetchStudents] 加载失败:", e)
         this.studentError = "获取学生列表失败，请检查网络"
         this.studentOptions = []
       } finally {
         this.studentLoading = false
+        console.log('[fetchStudents] 完成, studentOptions:', this.studentOptions.length)
       }
     },
     
@@ -499,15 +609,29 @@ export default {
       if (!this.filters.courseId) return
       
       const url = `${BASE_URL}/api/analysis/risk/report?courseId=${this.filters.courseId}`
+      console.log('[风险报告] 开始加载, courseId:', this.filters.courseId)
       try {
         const resp = await fetch(url)
         const data = await resp.json()
+        console.log('[风险报告] API响应:', data)
         const reportData = data.data || {}
         this.riskTypeCount = reportData.riskTypeCount || {}
         this.riskKpList = reportData.kpRiskList || []
         this.highRiskStudents = reportData.highRiskStudents || []
+        console.log('[风险报告] 数据加载完成 - 风险类型:', Object.keys(this.riskTypeCount).length, 
+                    '高风险知识点:', this.riskKpList.length, 
+                    '高风险学生:', this.highRiskStudents.length)
+        
+        // 数据加载完成后，如果当前在整体情况标签页，则立即渲染风险类型图表
+        await this.$nextTick()
+        if (this.activeTab === 'overall') {
+          console.log('[风险报告] 当前在整体情况标签页，立即渲染图表')
+          this.renderRiskTypeChart()
+        } else {
+          console.log('[风险报告] 当前不在整体情况标签页，等待标签页切换时渲染')
+        }
       } catch (e) {
-        console.warn("使用示例数据", url, e)
+        console.warn("[风险报告] 加载失败", url, e)
         this.riskTypeCount = {}
         this.riskKpList = []
         this.highRiskStudents = []
@@ -648,12 +772,27 @@ export default {
     },
     
     renderRiskTypeChart() {
-      if (!this.$refs.riskTypeChartRef) return
-      if (this.riskTypeChart) this.riskTypeChart.dispose()
-      this.riskTypeChart = echarts.init(this.$refs.riskTypeChartRef)
+      console.log('[风险类型图表] 开始渲染, activeTab:', this.activeTab)
+      
+      if (!this.$refs.riskTypeChartRef) {
+        console.log('[风险类型图表] ref不存在，DOM可能未就绪')
+        return
+      }
+      
+      const refElement = this.$refs.riskTypeChartRef
+      console.log('[风险类型图表] ref元素找到，准备初始化图表')
+      
+      if (this.riskTypeChart) {
+        console.log('[风险类型图表] 销毁旧图表实例')
+        this.riskTypeChart.dispose()
+      }
+      
+      this.riskTypeChart = echarts.init(refElement)
       
       const riskTypes = Object.keys(this.riskTypeCount)
       const counts = Object.values(this.riskTypeCount)
+      
+      console.log('[风险类型图表] 渲染数据 - 类型:', riskTypes, '数量:', counts)
       
       this.riskTypeChart.setOption({
         backgroundColor: "#fff",
@@ -677,6 +816,8 @@ export default {
           }
         ]
       })
+      
+      console.log('[风险类型图表] 渲染完成')
     },
     
     renderTrendChart() {
@@ -779,6 +920,25 @@ export default {
   background: rgba(0, 0, 0, 0.6);
   z-index: 900;
   backdrop-filter: blur(2px);
+}
+
+.loading-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 100px 20px;
+  gap: 16px;
+}
+
+.loading-indicator p {
+  font-size: 16px;
+  color: #606266;
+  margin: 0;
+}
+
+.overall-tab-content {
+  min-height: 400px;
 }
 
 .top {
