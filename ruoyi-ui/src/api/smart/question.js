@@ -139,3 +139,21 @@ export function searchQuestions(keyword, params) {
     }
   })
 }
+
+// 获取知识点列表（按课程ID）
+export function getKnowledgePoints(courseId) {
+  return smartRequest({
+    url: '/api/knowledge-points/list',
+    method: 'get',
+    params: { courseId }
+  })
+}
+
+// 按知识点统计
+export function getKnowledgePointStats(courseId) {
+  return smartRequest({
+    url: '/api/questions/statistics/knowledge-point',
+    method: 'get',
+    params: { courseId }
+  })
+}

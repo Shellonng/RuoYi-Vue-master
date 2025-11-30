@@ -435,7 +435,9 @@ import {
   batchDeleteQuestions,
   getQuestionDetail,
   getQuestionTypeStats,
-  getQuestionDifficultyStats
+  getQuestionDifficultyStats,
+  getKnowledgePoints,
+  getKnowledgePointStats
 } from '@/api/smart/question'
 
 export default {
@@ -562,12 +564,26 @@ export default {
     
     /** 加载知识点列表 */
     async loadKnowledgePoints() {
+      if (!this.courseId) {
+        console.warn('[题库] 缺少 courseId，无法加载知识点')
+        return
+      }
+      
       try {
-        // 这里需要调用获取知识点的接口
-        // 暂时使用空数组，您可以根据实际情况调用对应的 API
-        this.knowledgePoints = []
+        console.log('[题库] 开始加载知识点，课程ID:', this.courseId)
+        const res = await getKnowledgePoints(this.courseId)
+        console.log('[题库] 知识点API响应:', res)
+        
+        if (res.code === 200) {
+          this.knowledgePoints = res.data || []
+          console.log('[题库] 知识点加载成功，数量:', this.knowledgePoints.length)
+        } else {
+          console.error('[题库] 知识点API返回错误:', res.message)
+          this.knowledgePoints = []
+        }
       } catch (error) {
-        console.error('获取知识点列表失败:', error)
+        console.error('[题库] 获取知识点列表失败:', error)
+        this.knowledgePoints = []
       }
     },
     
@@ -756,17 +772,19 @@ export default {
     /** 加载统计 */
     async loadStatistics() {
       try {
-        const [typeRes, diffRes] = await Promise.all([
+        const [typeRes, diffRes, kpRes] = await Promise.all([
           getQuestionTypeStats(this.courseId),
-          getQuestionDifficultyStats(this.courseId)
+          getQuestionDifficultyStats(this.courseId),
+          getKnowledgePointStats(this.courseId)
         ])
         
         this.typeStats = typeRes.data || typeRes || []
         this.difficultyStats = diffRes.data || diffRes || []
-        this.kpStats = [] // 如果有知识点统计接口，可以添加
+        this.kpStats = kpRes.data || kpRes || []
         
         this.statisticsVisible = true
       } catch (error) {
+        console.error('[题库] 加载统计失败:', error)
         this.$message.error('加载统计失败')
       }
     },
