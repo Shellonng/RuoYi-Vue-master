@@ -448,6 +448,20 @@
           </div>
         </div>
       </el-tab-pane>
+
+      <!-- 学情分析标签页 -->
+      <el-tab-pane label="学情分析" name="studentAnalysis">
+        <div class="tab-content">
+          <student-analysis-tab :course-id="courseId" />
+        </div>
+      </el-tab-pane>
+
+      <!-- 视频分析标签页 -->
+      <el-tab-pane label="视频分析" name="videoAnalysis">
+        <div class="tab-content">
+          <video-analysis-tab :course-id="courseId" />
+        </div>
+      </el-tab-pane>
     </el-tabs>
 
     <!-- 小节详情抽屉 -->
@@ -1128,6 +1142,8 @@ import CourseResourceManagement from "@/views/course/components/CourseResourceMa
 import CourseResourceUpload from "@/views/course/components/CourseResourceUpload.vue";
 import CourseStudentManagement from "@/views/course/components/CourseStudentManagement.vue";
 import QuestionBankManager from "@/components/SmartFeatures/QuestionBankManager.vue";
+import StudentAnalysisTab from "@/views/course/components/StudentAnalysisTab.vue";
+import VideoAnalysisTab from "@/views/course/components/VideoAnalysisTab.vue";
 import Sortable from 'sortablejs';
 import * as echarts from 'echarts';
 // ForceGraph3D从全局window对象获取(通过index.html引入)
@@ -1143,7 +1159,9 @@ export default {
     CourseResourceManagement,
     CourseResourceUpload,
     CourseStudentManagement,
-    QuestionBankManager
+    QuestionBankManager,
+    StudentAnalysisTab,
+    VideoAnalysisTab
   },
   data() {
     return {

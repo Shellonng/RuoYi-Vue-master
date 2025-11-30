@@ -1,6 +1,16 @@
 <template>
   <div class="app-container">
-    <div v-if="!showSubmissionDetail" class="homework-list-view">
+    <!-- 批改详情页面 -->
+    <assignment-grading-detail 
+      v-if="showGradingDetail" 
+      :submission-id="currentGradingSubmissionId"
+      @close="closeGradingDetail"
+    />
+    
+    <div v-else-if="!showSubmissionDetail" class="homework-list-view">
+      <!-- 作业概览模块 - 热力图和环形图 -->
+      <assignment-overview :course-id="queryParams.courseId" />
+      
       <el-form :model="queryParams" ref="queryForm" size="small" :inline="true" v-show="showSearch" label-width="68px">
         <el-form-item label="作业名称" prop="title">
           <el-autocomplete
@@ -197,7 +207,6 @@
             {{ currentAssignment.status === 1 ? '已发布' : '未发布' }}
           </el-tag>
         </div>
-        <el-button type="primary" icon="el-icon-refresh" size="mini" :loading="submissionLoading" @click="fetchSubmissionList">刷新</el-button>
       </div>
 
       <el-card class="submission-summary-card" shadow="never">
@@ -248,57 +257,88 @@
         </el-form-item>
       </el-form>
 
-      <el-table v-loading="submissionLoading" :data="submissionList">
-        <el-table-column label="序号" width="70" align="center">
-          <template slot-scope="scope">
-            {{ (submissionQuery.pageNum - 1) * submissionQuery.pageSize + scope.$index + 1 }}
-          </template>
-        </el-table-column>
-        <el-table-column label="学生ID" prop="studentUserId" align="center" width="120" />
-        <el-table-column label="学生姓名" min-width="160">
-          <template slot-scope="scope">
-            {{ scope.row.studentName || scope.row.studentUsername || '-' }}
-          </template>
-        </el-table-column>
-        <el-table-column label="得分" prop="score" align="center" width="100">
-          <template slot-scope="scope">
-            {{ scope.row.score != null ? scope.row.score : '-' }}
-          </template>
-        </el-table-column>
-        <el-table-column label="提交时间" prop="submitTime" align="center" min-width="180">
-          <template slot-scope="scope">
-            {{ formatDateTime(scope.row.submitTime) }}
-          </template>
-        </el-table-column>
-        <el-table-column label="状态" prop="status" align="center" width="140">
-          <template slot-scope="scope">
-            <el-tag :type="getSubmissionStatusTagType(scope.row.status)">
-              {{ formatSubmissionStatus(scope.row.status) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" align="center" width="160">
-          <template slot-scope="scope">
-            <el-tooltip content="查看提交" placement="top">
+      <el-card class="submissions-card" shadow="hover">
+        <template #header>
+          <div class="card-header-smart">
+            <span class="title-smart">
+              <i class="el-icon-data-line"></i>
+              学生提交记录
+            </span>
+            <div>
+              <el-button type="warning" icon="el-icon-setting" size="small" @click="openBatchGrading">
+                批量评分管理
+              </el-button>
+              <el-button type="primary" icon="el-icon-refresh" size="small" :loading="submissionLoading" @click="fetchSubmissionList">
+                刷新
+              </el-button>
+            </div>
+          </div>
+        </template>
+
+        <el-table
+          :data="submissionList"
+          border
+          stripe
+          v-loading="submissionLoading"
+          class="submissions-table-smart"
+        >
+          <el-table-column prop="id" sortable label="提交ID" width="90" align="center">
+            <template slot-scope="scope">
+              <el-tag size="small" type="info">{{ scope.row.id }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="studentName" sortable label="学生" width="140" align="center">
+            <template slot-scope="scope">
+              <div class="student-info-smart">
+                <i class="el-icon-user-solid student-avatar-smart"></i>
+                <span>{{ scope.row.studentName || scope.row.studentUsername || scope.row.studentUserId }}</span>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column prop="title" sortable label="作业" min-width="180" show-overflow-tooltip>
+            <template slot-scope="scope">
+              {{ currentAssignment ? currentAssignment.title : '-' }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="score" sortable label="得分" width="100" align="center">
+            <template slot-scope="scope">
+              <span v-if="scope.row.score !== null && scope.row.score !== undefined" class="score-value-smart">
+                {{ scope.row.score }}
+              </span>
+              <el-tag v-else size="small" type="info">待批改</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="status" sortable label="状态" width="100" align="center">
+            <template slot-scope="scope">
+              <el-tag :type="getSubmissionStatusTagType(scope.row.status)" effect="light">
+                {{ formatSubmissionStatus(scope.row.status) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="submitTime" sortable label="提交时间" width="170" align="center">
+            <template slot-scope="scope">
+              <span class="time-text-smart">{{ formatDateTime(scope.row.submitTime) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="120" fixed="right" align="center">
+            <template slot-scope="scope">
               <el-button
-                size="mini"
-                type="text"
-                icon="el-icon-view"
-                @click="handleSubmissionAction('preview', scope.row)"
-              />
-            </el-tooltip>
-            <el-tooltip content="批改" placement="top">
-              <el-button
-                size="mini"
-                type="text"
+                size="small"
+                type="primary"
                 icon="el-icon-edit"
-                :disabled="scope.row.status === 0"
                 @click="handleSubmissionAction('grade', scope.row)"
-              />
-            </el-tooltip>
-          </template>
-        </el-table-column>
-      </el-table>
+                :disabled="scope.row.status === 0"
+              >
+                批改
+              </el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+
+        <div v-if="submissionList.length === 0 && !submissionLoading" class="empty-submissions-smart">
+          <el-empty description="暂无提交记录" />
+        </div>
+      </el-card>
 
       <div class="pagination-container submission-pagination" :style="{ marginTop: getSubmissionPaginationMargin() }">
         <div class="pagination-info">
@@ -323,7 +363,14 @@
       </div>
     </div>
 
-    <el-dialog
+    <!-- 批量评分管理弹窗 -->
+    <batch-grading-modal 
+      :visible.sync="batchGradingVisible" 
+      :assignment-id="currentAssignment ? currentAssignment.id : null"
+      :submission-list="submissionList"
+      @close="batchGradingVisible = false"
+      @graded="handleBatchGraded"
+    />    <el-dialog
       title="提交详情"
       :visible.sync="submissionPreviewDialog.visible"
       width="640px"
@@ -528,11 +575,17 @@ import { listCourse } from "@/api/course/course"
 import { setAssignmentKnowledgePoints } from "@/api/system/assignmentKp"
 import { listAssignmentSubmission, getAssignmentSubmission, gradeAssignmentSubmission } from "@/api/system/assignmentSubmission"
 import Homework from '../homework.vue'
+import AssignmentOverview from '@/components/SmartFeatures/AssignmentOverview.vue'
+import AssignmentGradingDetail from '@/components/SmartFeatures/AssignmentGradingDetail.vue'
+import BatchGradingModal from '@/components/SmartFeatures/BatchGradingModal.vue'
 
 export default {
   name: "HomeworkManagement",
   components: {
-    Homework
+    Homework,
+    AssignmentOverview,
+    AssignmentGradingDetail,
+    BatchGradingModal
   },
   props: {
     // 是否隐藏课程选择
@@ -576,6 +629,12 @@ export default {
       showSubmissionDetail: false,
       // 当前查看的作业
       currentAssignment: null,
+      // 是否展示批改详情页面
+      showGradingDetail: false,
+      // 当前批改的提交ID
+      currentGradingSubmissionId: null,
+      // 批量评分管理弹窗显示状态
+      batchGradingVisible: false,
       // 提交记录加载
       submissionLoading: false,
       // 提交记录列表
@@ -874,48 +933,30 @@ export default {
         this.$message.warning('该学生尚未提交作业，无法批改')
         return
       }
-      this.gradeDialog.visible = true
-      this.gradeDialog.loading = true
       
-      this.requestSubmissionDetail(row.id)
-        .then(detail => {
-          if (detail && detail.id) {
-            this.gradeDialog.form = {
-              id: detail.id,
-              studentName: detail.studentName || detail.studentUsername || '',
-              studentUsername: detail.studentUsername || '',
-              score: detail.score != null ? Number(detail.score) : null,
-              feedback: detail.feedback || '',
-              status: detail.status != null ? detail.status : 2,
-              // 添加更多字段以便显示完整信息
-              submitTime: detail.submitTime,
-              gradeTime: detail.gradeTime,
-              gradedByName: detail.gradedByName,
-              content: detail.content,
-              fileName: detail.fileName,
-              filePath: detail.filePath
-            }
-            this.$nextTick(() => {
-              if (this.$refs.gradeFormRef) {
-                this.$refs.gradeFormRef.clearValidate()
-              }
-              if (this.$refs.feedbackFormRef) {
-                this.$refs.feedbackFormRef.clearValidate()
-              }
-            })
-          } else {
-            this.$message.warning('未找到提交详情')
-            this.gradeDialog.visible = false
-          }
-        })
-        .catch(error => {
-          console.error('加载批改信息失败:', error)
-          this.$message.error(error.msg || '加载批改信息失败，请稍后重试')
-          this.gradeDialog.visible = false
-        })
-        .finally(() => {
-          this.gradeDialog.loading = false
-        })
+      // 切换到批改详情页面
+      this.currentGradingSubmissionId = row.id
+      this.showGradingDetail = true
+    },
+    /** 关闭批改详情页面 */
+    closeGradingDetail() {
+      this.showGradingDetail = false
+      this.currentGradingSubmissionId = null
+      // 刷新提交列表以显示最新状态
+      if (this.showSubmissionDetail && this.currentAssignment) {
+        this.fetchSubmissionList()
+      }
+    },
+    /** 打开批量评分管理 */
+    openBatchGrading() {
+      this.batchGradingVisible = true
+    },
+    /** 处理批量批改完成 */
+    handleBatchGraded() {
+      // 刷新提交列表
+      if (this.showSubmissionDetail && this.currentAssignment) {
+        this.fetchSubmissionList()
+      }
     },
     /** 提交批改结果 */
     submitGrade() {
@@ -1408,4 +1449,86 @@ body .el-loading-mask {
 .grade-dialog .el-descriptions-item__content .el-form-item {
   margin-bottom: 0;
 }
+
+/* 智能提交列表样式 */
+.submissions-card {
+  margin-bottom: 20px;
+  border-radius: 8px;
+  border: 1px solid #EBEEF5;
+}
+
+.submissions-card .el-card__header {
+  padding: 16px 20px;
+  background: linear-gradient(180deg, #f8fafc, #ffffff);
+  border-bottom: 1px solid #EBEEF5;
+}
+
+.card-header-smart {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.title-smart {
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.title-smart i {
+  font-size: 18px;
+  color: #409EFF;
+}
+
+.submissions-table-smart {
+  width: 100%;
+}
+
+.submissions-table-smart .el-table__header th {
+  background-color: #F5F7FA;
+  color: #606266;
+  font-weight: 600;
+}
+
+.submissions-table-smart .el-table__body tr:hover > td {
+  background-color: rgba(64, 158, 255, 0.05);
+}
+
+.student-info-smart {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.student-avatar-smart {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background-color: #E4E7ED;
+  color: #909399;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+
+.score-value-smart {
+  font-weight: 600;
+  color: #409EFF;
+  font-size: 14px;
+}
+
+.time-text-smart {
+  font-size: 13px;
+  color: #909399;
+}
+
+.empty-submissions-smart {
+  padding: 40px 0;
+}
 </style>
+
