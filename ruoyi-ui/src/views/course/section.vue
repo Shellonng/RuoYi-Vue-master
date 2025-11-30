@@ -30,12 +30,12 @@
           <div class="video-player" v-if="sectionInfo.videoUrl">
             <video 
               ref="videoPlayer"
-              class="video-js"
+              :src="sectionInfo.videoUrl"
               controls
               preload="auto"
               :poster="sectionInfo.coverImage"
+              style="width: 100%; max-height: 600px;"
             >
-              <source :src="sectionInfo.videoUrl" type="video/mp4">
               您的浏览器不支持视频播放
             </video>
           </div>
@@ -49,7 +49,7 @@
             :show-file-list="false"
             :on-success="handleVideoUploadSuccess"
             :before-upload="beforeVideoUpload"
-            accept="video/*"
+            accept=".mp4,.avi,.mov,.wmv,.flv,.mkv,.webm,video/*"
           >
             <div class="video-placeholder">
               <i class="el-icon-upload"></i>
@@ -66,7 +66,7 @@
             :show-file-list="false"
             :on-success="handleVideoUploadSuccess"
             :before-upload="beforeVideoUpload"
-            accept="video/*"
+            accept=".mp4,.avi,.mov,.wmv,.flv,.mkv,.webm,video/*"
           >
           </el-upload>
         </div>
@@ -372,7 +372,7 @@
             :show-file-list="false"
             :on-success="handleEditVideoUploadSuccess"
             :before-upload="beforeVideoUpload"
-            accept="video/*"
+            accept=".mp4,.avi,.mov,.wmv,.flv,.mkv,.webm,video/*"
           >
             <el-button size="small" type="primary">
               <i class="el-icon-upload"></i> 上传视频
@@ -387,7 +387,7 @@
             :show-file-list="false"
             :on-success="handleEditVideoUploadSuccess"
             :before-upload="beforeVideoUpload"
-            accept="video/*"
+            accept=".mp4,.avi,.mov,.wmv,.flv,.mkv,.webm,video/*"
           >
           </el-upload>
         </el-form-item>
@@ -597,12 +597,7 @@ export default {
     this.loadCurrentUser();
   },
   mounted() {
-    // 如果是视频类型，初始化视频播放器
-    if (this.sectionInfo.type === 'video') {
-      this.$nextTick(() => {
-        this.initVideoPlayer();
-      });
-    }
+    // 视频播放器将在 loadSectionData() 完成后初始化
   },
   watch: {
     // 监听路由变化，当切换到不同小节时重新加载数据
@@ -1013,13 +1008,20 @@ export default {
       }).catch(() => {});
     },
 
+    /** 根据视频文件URL获取对应的MIME类型 */
     /** 视频上传前验证 */
     beforeVideoUpload(file) {
-      const isVideo = file.type.startsWith('video/');
+      // 支持的视频格式列表
+      const allowedExtensions = ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.mkv', '.webm'];
+      const fileName = file.name.toLowerCase();
+      const fileExtension = fileName.substring(fileName.lastIndexOf('.'));
+      
+      // 检查文件类型：通过 MIME 类型或文件扩展名
+      const isVideo = file.type.startsWith('video/') || allowedExtensions.includes(fileExtension);
       const isLt500M = file.size / 1024 / 1024 < 500;
 
       if (!isVideo) {
-        this.$message.error('只能上传视频文件！');
+        this.$message.error('只能上传视频文件！支持格式：MP4、AVI、MOV、WMV、FLV、MKV、WEBM');
         return false;
       }
       if (!isLt500M) {
@@ -1112,6 +1114,8 @@ export default {
             const videoEl = this.$refs.videoPlayer;
             if (videoEl) {
               videoEl.load(); // 重新加载视频
+              // 初始化视频播放器事件监听
+              this.initVideoPlayer();
             }
           });
         }
@@ -1213,11 +1217,13 @@ export default {
     initVideoPlayer() {
       // 可以集成 video.js 或其他视频播放器库
       const video = this.$refs.videoPlayer;
-      if (video) {
+      if (video && !video._timeUpdateListenerAdded) {
         video.addEventListener('timeupdate', () => {
           // 记录播放进度
           this.currentVideoTime = video.currentTime;
         });
+        // 标记已添加监听器，避免重复添加
+        video._timeUpdateListenerAdded = true;
       }
     },
 

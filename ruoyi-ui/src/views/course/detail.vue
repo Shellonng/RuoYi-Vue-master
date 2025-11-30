@@ -268,8 +268,10 @@
             <div class="add-ai-btn-wrapper">
               <el-button type="primary" size="small" icon="el-icon-magic-stick" @click="handleGenerateKnowledgeGraph" :loading="generatingGraph">一键生成知识点图谱</el-button>
               <el-button type="success" size="small" icon="el-icon-refresh" @click="handleRefreshGraph" :loading="refreshingGraph" style="margin-left: 10px;">刷新图谱</el-button>
+              <el-button type="warning" size="small" icon="el-icon-download" @click="handleSaveGraph" :loading="savingGraph" style="margin-left: 10px;">保存图谱</el-button>
               <span v-if="generatingGraph" style="margin-left: 10px; color: #909399; font-size: 12px;">AI正在分析知识点关系，请稍候...</span>
               <span v-if="refreshingGraph" style="margin-left: 10px; color: #909399; font-size: 12px;">正在刷新图谱数据...</span>
+              <span v-if="savingGraph" style="margin-left: 10px; color: #909399; font-size: 12px;">正在保存图谱数据...</span>
             </div>
           </div>
           
@@ -304,6 +306,16 @@
                   </div>
                 </template>
               </el-autocomplete>
+              <!-- 显示模式选择器 -->
+              <el-select 
+                v-model="graphDisplayMode" 
+                size="small" 
+                @change="handleDisplayModeChange"
+                style="width: 150px; margin-left: 10px;"
+              >
+                <el-option label="层级显示" value="hierarchy"></el-option>
+                <el-option label="知识点关系" value="relations"></el-option>
+              </el-select>
             </div>
             <div id="knowledge-graph" style="width: 100%; height: 700px;"></div>
           </div>
@@ -1102,6 +1114,7 @@ import { listSectionByChapter, addSection, updateSection, delSection, findSectio
 import { listKnowledgePointBySection } from "@/api/course/knowledgePoint";
 import { uploadAndGenerate } from "@/api/course/generation";
 import { generateKnowledgeGraph, listKpRelationByCourse } from "@/api/course/kpRelation";
+import { saveKnowledgeGraph } from "@/api/course/knowledgeGraph";
 import { getAssignmentsByKnowledgePoint, getAssignment, updateAssignment, delAssignment } from "@/api/system/assignment";
 import { getCourseResourcesByKnowledgePoint, delCourseResource, listCourseResource, updateCourseResource } from "@/api/course/courseResource";
 import request from "@/utils/request";
@@ -1220,6 +1233,7 @@ export default {
       isStructureFullscreen: false, // 课程结构是否全屏
       generatingGraph: false, // 知识点图谱生成状态
       refreshingGraph: false, // 图谱刷新状态
+      savingGraph: false, // 图谱保存状态
       // 3D图谱相关
       graph3DInstance: null, // 3D图谱实例
       isGraph3DFullscreen: false, // 3D图谱是否全屏
@@ -1255,6 +1269,8 @@ export default {
       graphSearchKeyword: '', // 2D图谱搜索关键词
       graph3DSearchKeyword: '', // 3D图谱搜索关键词
       graphSearchResults: [], // 搜索结果列表
+      graphDisplayMode: 'hierarchy', // 图谱显示模式：hierarchy-层级显示，relations-知识点关系显示
+      kpRelations: [], // 知识点关系数据（从kp_relation表查询）
       // 资源详情查看
       currentResourceType: null, // 当前查看的资源类型
       currentResourceList: [], // 当前资源列表数据
@@ -3340,14 +3356,54 @@ export default {
       const echarts = require('echarts');
       this.knowledgeGraphChart = echarts.init(container);
       
-      // 准备图谱数据（即使知识点未完全加载也可以渲染章节结构）
-      const graphData = this.prepareGraphData();
-      console.log('[知识图谱] 渲染 - 节点数:', graphData.nodes.length, '连线数:', graphData.links.length);
+      // 根据显示模式准备不同的图谱数据
+      let graphData;
+      let titleText;
+      
+      if (this.graphDisplayMode === 'relations') {
+        // 知识点关系模式
+        graphData = this.prepareKpRelationGraphData();
+        titleText = '课程知识点关系图谱';
+      } else {
+        // 层级显示模式（默认）
+        graphData = this.prepareGraphData();
+        titleText = '课程知识图谱';
+      }
+      
+      console.log('[知识图谱] 渲染 - 模式:', this.graphDisplayMode, '节点数:', graphData.nodes.length, '连线数:', graphData.links.length);
+      
+      // 根据显示模式设置不同的力导向图参数
+      let forceConfig, edgeLabelConfig;
+      if (this.graphDisplayMode === 'relations') {
+        forceConfig = {
+          repulsion: 2000,
+          gravity: 0.03,
+          edgeLength: [150, 250],
+          layoutAnimation: true,
+          friction: 0.5
+        };
+        // 关闭边标签显示，避免缩放时标签脱离边的问题
+        // 关系类型信息通过tooltip显示
+        edgeLabelConfig = {
+          show: false
+        };
+      } else {
+        forceConfig = {
+          repulsion: 1200,
+          gravity: 0.05,
+          edgeLength: [200, 300],
+          layoutAnimation: true,
+          friction: 0.6
+        };
+        edgeLabelConfig = {
+          show: false
+        };
+      }
       
       // 配置选项
       const option = {
         title: {
-          text: '课程知识图谱',
+          text: titleText,
           left: 'center',
           top: 20,
           textStyle: {
@@ -3362,6 +3418,22 @@ export default {
           formatter: function(params) {
             if (params.dataType === 'node') {
               return params.data.name;
+            }
+            if (params.dataType === 'edge') {
+              const label = params.data && (params.data.relationLabel || params.data.value || '');
+              const sourceName = params.data && (params.data.sourceName || params.data.source);
+              const targetName = params.data && (params.data.targetName || params.data.target);
+              let content = '';
+              if (sourceName && targetName) {
+                content += sourceName + ' -> ' + targetName;
+              }
+              if (label) {
+                content += (content ? '<br/>' : '') + label;
+              }
+              if (params.data && params.data.relationReason) {
+                content += '<br/><span style="color:#666;">' + params.data.relationReason + '</span>';
+              }
+              return content || '';
             }
             return '';
           }
@@ -3386,13 +3458,7 @@ export default {
           labelLayout: {
             hideOverlap: false // 不自动隐藏重叠标签，避免知识点标签被隐藏
           },
-          force: {
-            repulsion: 1200,
-            gravity: 0.05,
-            edgeLength: [200, 300],
-            layoutAnimation: true,
-            friction: 0.6
-          },
+          force: forceConfig,
           // 节点始终可拖动
           edgeSymbol: ['circle', 'arrow'],
           edgeSymbolSize: [4, 10],
@@ -3400,6 +3466,7 @@ export default {
             focus: 'none',
             disabled: true
           },
+          edgeLabel: edgeLabelConfig,
           lineStyle: {
             color: 'source',
             curveness: 0.1,
@@ -3764,6 +3831,116 @@ export default {
         (B < 255 ? B < 1 ? 0 : B : 255))
         .toString(16).slice(1);
     },
+    
+    /** 准备知识点关系图谱数据（仅显示知识点节点和关系） */
+    prepareKpRelationGraphData() {
+      const nodes = [];
+      const links = [];
+      const categories = [{ name: '知识点' }];
+      
+      // 收集所有知识点
+      const kpMap = new Map(); // key: kpId, value: kp对象
+      const kpColorMap = new Map(); // key: kpId, value: 颜色（根据章节）
+      
+      const chapterColors = [
+        '#5470c6', '#91cc75', '#fac858', '#ee6666', 
+        '#73c0de', '#9a60b4', '#ea7ccc'
+      ];
+      
+      // 遍历章节和小节，收集所有知识点
+      this.chapterList.forEach((chapter, chapterIndex) => {
+        const colorScheme = chapterColors[chapterIndex % chapterColors.length];
+        
+        if (chapter.sections && chapter.sections.length > 0) {
+          chapter.sections.forEach(section => {
+            if (section.knowledgePoints && section.knowledgePoints.length > 0) {
+              section.knowledgePoints.forEach(kp => {
+                if (!kpMap.has(kp.id)) {
+                  kpMap.set(kp.id, kp);
+                  kpColorMap.set(kp.id, colorScheme);
+                }
+              });
+            }
+          });
+        }
+      });
+      
+      console.log('[知识点关系] 收集到', kpMap.size, '个知识点');
+      
+      // 创建知识点节点
+      kpMap.forEach((kp, kpId) => {
+        const color = kpColorMap.get(kpId);
+        nodes.push({
+          id: 'kp-' + kpId,
+          name: kp.name || kp.title,
+          symbolSize: 40,
+          category: 0,
+          itemStyle: {
+            color: color,
+            borderColor: '#fff',
+            borderWidth: 2
+          },
+          label: {
+            fontSize: 12,
+            fontWeight: 'bold',
+            show: true
+          },
+          kpData: kp
+        });
+      });
+      
+      // 关系类型的颜色和标签映射
+      const relationTypeMap = {
+        'prerequisite_of': { color: '#409EFF', label: '前置', width: 3 },
+        'similar_to': { color: '#67C23A', label: '相似', width: 2 },
+        'extension_of': { color: '#E6A23C', label: '进阶', width: 3 },
+        'derived_from': { color: '#F56C6C', label: '推导', width: 2.5 },
+        'counterexample_of': { color: '#909399', label: '反例', width: 2 }
+      };
+      
+      // 添加知识点关系连线
+      if (this.kpRelations && this.kpRelations.length > 0) {
+        this.kpRelations.forEach(relation => {
+          const fromId = 'kp-' + relation.fromKpId;
+          const toId = 'kp-' + relation.toKpId;
+          
+          // 确保两个知识点都存在
+          if (kpMap.has(relation.fromKpId) && kpMap.has(relation.toKpId)) {
+            const relationConfig = relationTypeMap[relation.relationType] || {
+              color: '#909399',
+              label: relation.relationType,
+              width: 2
+            };
+            
+            const fromKp = kpMap.get(relation.fromKpId);
+            const toKp = kpMap.get(relation.toKpId);
+
+            links.push({
+              source: fromId,
+              target: toId,
+              sourceName: fromKp ? (fromKp.name || fromKp.title) : '',
+              targetName: toKp ? (toKp.name || toKp.title) : '',
+              relationType: relation.relationType,
+              relationLabel: relationConfig.label,
+              relationReason: relation.reason || relation.description || '',
+              value: relationConfig.label,
+              lineStyle: {
+                color: relationConfig.color,
+                width: relationConfig.width,
+                opacity: 0.85,
+                curveness: 0.25
+              }
+              // 不再设置label属性，避免标签显示
+            });
+          }
+        });
+      }
+      
+      console.log('[知识点关系] 图谱数据：节点=', nodes.length, '关系=', links.length);
+      
+      return { nodes, links, categories };
+    },
+    
     /** 高亮节点及其相关节点 */
     highlightNodeAndRelated(nodeId, graphData) {
       if (!this.knowledgeGraphChart) return;
@@ -5037,6 +5214,97 @@ export default {
         this.refreshingGraph = false;
         this.$message.error('刷新失败');
       }
+    },
+
+    /** 保存图谱 */
+    async handleSaveGraph() {
+      if (!this.chapterList || this.chapterList.length === 0) {
+        this.$message.warning('暂无图谱数据可保存');
+        return;
+      }
+
+      this.savingGraph = true;
+      console.log('[保存图谱] 开始保存...当前显示模式:', this.graphDisplayMode);
+
+      try {
+        let graphData, saveData;
+
+        // 根据显示模式准备不同的图谱数据
+        if (this.graphDisplayMode === 'hierarchy') {
+          // 层级显示模式：保存完整的课程-章节-小节-知识点结构
+          graphData = this.prepareGraphData();
+          saveData = {
+            title: this.courseInfo.title + ' - 课程层级图谱',
+            description: '课程-章节-小节-知识点完整层级结构图谱',
+            courseId: this.courseId,
+            graphType: 'CHAPTER', // 层级显示类型
+            graphData: JSON.stringify(graphData),
+            status: 'active'
+          };
+          console.log('[保存图谱] 层级模式 - 节点数:', graphData.nodes.length, '连线数:', graphData.links.length);
+        } else {
+          // 知识点关系模式：仅保存知识点及其关系
+          if (!this.kpRelations || this.kpRelations.length === 0) {
+            this.$message.warning('暂无知识点关系数据，请先生成知识点图谱');
+            this.savingGraph = false;
+            return;
+          }
+          
+          graphData = this.prepareKpRelationGraphData();
+          saveData = {
+            title: this.courseInfo.title + ' - 知识点关系图谱',
+            description: '知识点及其关系图谱（仅包含知识点节点和关系连线）',
+            courseId: this.courseId,
+            graphType: 'COURSE', // 知识点关系类型
+            graphData: JSON.stringify(graphData),
+            status: 'active'
+          };
+          console.log('[保存图谱] 关系模式 - 知识点数:', graphData.nodes.length, '关系数:', graphData.links.length);
+        }
+
+        // 调用保存API
+        const response = await saveKnowledgeGraph(saveData);
+        
+        if (response.code === 200) {
+          const modeText = this.graphDisplayMode === 'hierarchy' ? '层级图谱' : '知识点关系图谱';
+          this.$message.success(`${modeText}保存成功`);
+          console.log('[保存图谱] 保存成功 - 类型:', saveData.graphType);
+        } else {
+          throw new Error(response.msg || '保存失败');
+        }
+      } catch (error) {
+        console.error('[保存图谱] 保存失败:', error);
+        this.$message.error('保存图谱失败: ' + (error.message || '未知错误'));
+      } finally {
+        this.savingGraph = false;
+      }
+    },
+
+    /** 处理显示模式切换 */
+    async handleDisplayModeChange(mode) {
+      console.log('[显示模式切换]', mode);
+      
+      if (mode === 'relations') {
+        // 切换到知识点关系模式，需要加载关系数据
+        try {
+          const response = await listKpRelationByCourse(this.courseId);
+          this.kpRelations = response.data || [];
+          console.log('[知识点关系] 加载了', this.kpRelations.length, '条关系');
+          
+          if (this.kpRelations.length === 0) {
+            this.$message.warning('暂无知识点关系数据，请先点击"一键生成知识点图谱"');
+          }
+        } catch (error) {
+          console.error('[知识点关系] 加载失败:', error);
+          this.$message.error('加载知识点关系失败');
+          return;
+        }
+      }
+      
+      // 重新渲染图谱
+      this.$nextTick(() => {
+        this.renderKnowledgeGraph();
+      });
     },
 
     /** 渲染3D知识图谱 */

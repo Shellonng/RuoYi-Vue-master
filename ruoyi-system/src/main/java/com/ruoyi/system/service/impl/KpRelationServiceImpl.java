@@ -1,7 +1,13 @@
 package com.ruoyi.system.service.impl;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
+import java.util.Queue;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -236,6 +242,14 @@ public class KpRelationServiceImpl implements IKpRelationService
             int insertedCount = kpRelationMapper.batchInsertKpRelations(kpRelations);
             log.info("成功插入{}条知识点关系", insertedCount);
 
+            // 8. 检查连通性并修复
+            int bridgeCount = ensureGraphConnectivity(courseId, knowledgePoints, kpRelations);
+            if (bridgeCount > 0)
+            {
+                log.info("添加了{}条桥接关系以确保图连通", bridgeCount);
+                insertedCount += bridgeCount;
+            }
+
             return String.format("成功生成%d条知识点关系", insertedCount);
         }
         catch (Exception e)
@@ -243,6 +257,116 @@ public class KpRelationServiceImpl implements IKpRelationService
             log.error("生成知识点关系图谱失败，课程ID：{}", courseId, e);
             throw new ServiceException("生成知识点关系图谱失败：" + e.getMessage());
         }
+    }
+
+    /**
+     * 确保图的连通性 - 使用BFS检测连通分量并添加桥接边
+     * @return 添加的桥接关系数量
+     */
+    private int ensureGraphConnectivity(Long courseId, List<KnowledgePoint> knowledgePoints, List<KpRelation> existingRelations)
+    {
+        if (knowledgePoints == null || knowledgePoints.size() <= 1)
+        {
+            return 0;
+        }
+
+        // 构建邻接表（无向图）
+        Map<Long, Set<Long>> adjacencyList = new HashMap<>();
+        for (KnowledgePoint kp : knowledgePoints)
+        {
+            adjacencyList.put(kp.getId(), new HashSet<>());
+        }
+
+        // 添加现有关系（双向）
+        for (KpRelation rel : existingRelations)
+        {
+            adjacencyList.get(rel.getFromKpId()).add(rel.getToKpId());
+            adjacencyList.get(rel.getToKpId()).add(rel.getFromKpId());
+        }
+
+        // BFS查找所有连通分量
+        List<Set<Long>> components = findConnectedComponents(adjacencyList, knowledgePoints);
+
+        if (components.size() <= 1)
+        {
+            log.info("图已经是全连通的，无需添加桥接边");
+            return 0;
+        }
+
+        log.warn("检测到{}个连通分量，需要添加桥接边", components.size());
+
+        // 连接所有连通分量
+        List<KpRelation> bridgeRelations = new ArrayList<>();
+        for (int i = 0; i < components.size() - 1; i++)
+        {
+            Set<Long> component1 = components.get(i);
+            Set<Long> component2 = components.get(i + 1);
+
+            // 选择两个分量中的代表节点连接
+            Long node1 = component1.iterator().next();
+            Long node2 = component2.iterator().next();
+
+            // 创建桥接关系（使用similar_to类型）
+            KpRelation bridge = new KpRelation();
+            bridge.setFromKpId(node1);
+            bridge.setToKpId(node2);
+            bridge.setRelationType("similar_to");
+            bridge.setAiGenerated(1);
+
+            bridgeRelations.add(bridge);
+            log.info("添加桥接边: {} <-> {}", node1, node2);
+        }
+
+        // 批量插入桥接关系
+        if (!bridgeRelations.isEmpty())
+        {
+            kpRelationMapper.batchInsertKpRelations(bridgeRelations);
+        }
+
+        return bridgeRelations.size();
+    }
+
+    /**
+     * 使用BFS查找所有连通分量
+     */
+    private List<Set<Long>> findConnectedComponents(Map<Long, Set<Long>> adjacencyList, List<KnowledgePoint> knowledgePoints)
+    {
+        List<Set<Long>> components = new ArrayList<>();
+        Set<Long> visited = new HashSet<>();
+
+        for (KnowledgePoint kp : knowledgePoints)
+        {
+            Long nodeId = kp.getId();
+            if (!visited.contains(nodeId))
+            {
+                // BFS遍历当前连通分量
+                Set<Long> component = new HashSet<>();
+                Queue<Long> queue = new LinkedList<>();
+                queue.offer(nodeId);
+                visited.add(nodeId);
+
+                while (!queue.isEmpty())
+                {
+                    Long current = queue.poll();
+                    component.add(current);
+
+                    // 访问所有邻居
+                    for (Long neighbor : adjacencyList.get(current))
+                    {
+                        if (!visited.contains(neighbor))
+                        {
+                            visited.add(neighbor);
+                            queue.offer(neighbor);
+                        }
+                    }
+                }
+
+                components.add(component);
+                log.info("发现连通分量，大小: {}, 节点: {}", component.size(), component);
+            }
+        }
+
+        return components;
     }
 
     /**

@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.CourseStudentMapper">
+
+    <resultMap type="CourseStudent" id="CourseStudentResult">
+        <result property="id" column="id"/>
+        <result property="courseId" column="course_id"/>
+        <result property="studentUserId" column="student_user_id"/>
+        <result property="enrollTime" column="enroll_time"/>
+        <result property="collected" column="collected"/>
+        <result property="isDeleted" column="is_deleted"/>
+        <result property="deleteTime" column="delete_time"/>
+        <result property="studentName" column="student_name"/>
+        <result property="courseName" column="course_name"/>
+    </resultMap>
+
+    <sql id="selectCourseStudentVo">
+        SELECT 
+            cs.id,
+            cs.course_id,
+            cs.student_user_id,
+            cs.enroll_time,
+            cs.collected,
+            cs.is_deleted,
+            cs.delete_time,
+            u.real_name AS student_name,
+            c.title AS course_name
+        FROM course_student cs
+        LEFT JOIN user u ON cs.student_user_id = u.id
+        LEFT JOIN course c ON cs.course_id = c.id
+    </sql>
+
+    <select id="selectCourseStudentById" parameterType="Long" resultMap="CourseStudentResult">
+        <include refid="selectCourseStudentVo"/>
+        WHERE cs.id = #{id}
+    </select>
+
+    <select id="selectByCourseAndStudent" resultMap="CourseStudentResult">
+        <include refid="selectCourseStudentVo"/>
+        WHERE cs.course_id = #{courseId}
+          AND cs.student_user_id = #{studentUserId}
+    </select>
+
+    <select id="selectCourseStudentList" parameterType="CourseStudent" resultMap="CourseStudentResult">
+        <include refid="selectCourseStudentVo"/>
+        <where>
+            <if test="courseId != null">
+                AND cs.course_id = #{courseId}
+            </if>
+            <if test="studentUserId != null">
+                AND cs.student_user_id = #{studentUserId}
+            </if>
+            <if test="collected != null">
+                AND cs.collected = #{collected}
+            </if>
+            <if test="isDeleted != null">
+                AND cs.is_deleted = #{isDeleted}
+            </if>
+        </where>
+        ORDER BY cs.enroll_time DESC
+    </select>
+
+    <insert id="insertCourseStudent" parameterType="CourseStudent" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO course_student
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="courseId != null">course_id,</if>
+            <if test="studentUserId != null">student_user_id,</if>
+            <if test="enrollTime != null">enroll_time,</if>
+            <if test="collected != null">collected,</if>
+            <if test="isDeleted != null">is_deleted,</if>
+            <if test="deleteTime != null">delete_time,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="courseId != null">#{courseId},</if>
+            <if test="studentUserId != null">#{studentUserId},</if>
+            <if test="enrollTime != null">#{enrollTime},</if>
+            <if test="collected != null">#{collected},</if>
+            <if test="isDeleted != null">#{isDeleted},</if>
+            <if test="deleteTime != null">#{deleteTime},</if>
+        </trim>
+    </insert>
+
+    <update id="updateCourseStudent" parameterType="CourseStudent">
+        UPDATE course_student
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="collected != null">collected = #{collected},</if>
+            <if test="isDeleted != null">is_deleted = #{isDeleted},</if>
+            <if test="deleteTime != null">delete_time = #{deleteTime},</if>
+        </trim>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteCourseStudentById" parameterType="Long">
+        DELETE FROM course_student WHERE id = #{id}
+    </delete>
+
+    <delete id="deleteCourseStudentByIds" parameterType="Long">
+        DELETE FROM course_student WHERE id IN
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <update id="softDeleteByCourseAndStudent">
+        UPDATE course_student
+        SET is_deleted = 1,
+            delete_time = NOW()
+        WHERE course_id = #{courseId}
+          AND student_user_id = #{studentUserId}
+    </update>
+
+    <update id="restoreByCourseAndStudent">
+        UPDATE course_student
+        SET is_deleted = 0,
+            delete_time = NULL
+        WHERE course_id = #{courseId}
+          AND student_user_id = #{studentUserId}
+    </update>
+
+</mapper>

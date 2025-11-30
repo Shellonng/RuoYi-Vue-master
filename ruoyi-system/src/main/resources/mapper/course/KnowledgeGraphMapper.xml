@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.course.mapper.KnowledgeGraphMapper">
+    
+    <resultMap type="com.ruoyi.course.domain.KnowledgeGraph" id="KnowledgeGraphResult">
+        <result property="id"    column="id"    />
+        <result property="title"    column="title"    />
+        <result property="description"    column="description"    />
+        <result property="courseId"    column="course_id"    />
+        <result property="graphType"    column="graph_type"    />
+        <result property="graphData"    column="graph_data"    />
+        <result property="creatorId"    column="creator_id"    />
+        <result property="status"    column="status"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="isDeleted"    column="is_deleted"    />
+        <result property="deleteTime"    column="delete_time"    />
+    </resultMap>
+
+    <sql id="selectKnowledgeGraphVo">
+        select id, title, description, course_id, graph_type, graph_data, creator_id, status, create_time, update_time, is_deleted, delete_time from knowledge_graph
+    </sql>
+
+    <select id="selectKnowledgeGraphList" parameterType="com.ruoyi.course.domain.KnowledgeGraph" resultMap="KnowledgeGraphResult">
+        <include refid="selectKnowledgeGraphVo"/>
+        <where>  
+            is_deleted = 0
+            <if test="title != null  and title != ''"> and title like concat('%', #{title}, '%')</if>
+            <if test="courseId != null "> and course_id = #{courseId}</if>
+            <if test="graphType != null  and graphType != ''"> and graph_type = #{graphType}</if>
+            <if test="status != null  and status != ''"> and status = #{status}</if>
+        </where>
+    </select>
+    
+    <select id="selectKnowledgeGraphById" parameterType="Long" resultMap="KnowledgeGraphResult">
+        <include refid="selectKnowledgeGraphVo"/>
+        where id = #{id} and is_deleted = 0
+    </select>
+    
+    <select id="selectKnowledgeGraphByCourseId" resultMap="KnowledgeGraphResult">
+        <include refid="selectKnowledgeGraphVo"/>
+        where course_id = #{courseId} 
+        <if test="graphType != null and graphType != ''">
+            and graph_type = #{graphType}
+        </if>
+        and is_deleted = 0
+        order by update_time desc
+        limit 1
+    </select>
+        
+    <insert id="insertKnowledgeGraph" parameterType="com.ruoyi.course.domain.KnowledgeGraph" useGeneratedKeys="true" keyProperty="id">
+        insert into knowledge_graph
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="title != null and title != ''">title,</if>
+            <if test="description != null">description,</if>
+            <if test="courseId != null">course_id,</if>
+            <if test="graphType != null and graphType != ''">graph_type,</if>
+            <if test="graphData != null">graph_data,</if>
+            <if test="creatorId != null">creator_id,</if>
+            <if test="status != null and status != ''">status,</if>
+            <if test="isDeleted != null">is_deleted,</if>
+            <if test="deleteTime != null">delete_time,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="title != null and title != ''">#{title},</if>
+            <if test="description != null">#{description},</if>
+            <if test="courseId != null">#{courseId},</if>
+            <if test="graphType != null and graphType != ''">#{graphType},</if>
+            <if test="graphData != null">#{graphData},</if>
+            <if test="creatorId != null">#{creatorId},</if>
+            <if test="status != null and status != ''">#{status},</if>
+            <if test="isDeleted != null">#{isDeleted},</if>
+            <if test="deleteTime != null">#{deleteTime},</if>
+         </trim>
+    </insert>
+
+    <update id="updateKnowledgeGraph" parameterType="com.ruoyi.course.domain.KnowledgeGraph">
+        update knowledge_graph
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="title != null and title != ''">title = #{title},</if>
+            <if test="description != null">description = #{description},</if>
+            <if test="courseId != null">course_id = #{courseId},</if>
+            <if test="graphType != null and graphType != ''">graph_type = #{graphType},</if>
+            <if test="graphData != null">graph_data = #{graphData},</if>
+            <if test="creatorId != null">creator_id = #{creatorId},</if>
+            <if test="status != null and status != ''">status = #{status},</if>
+            <if test="isDeleted != null">is_deleted = #{isDeleted},</if>
+            <if test="deleteTime != null">delete_time = #{deleteTime},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteKnowledgeGraphById" parameterType="Long">
+        update knowledge_graph set is_deleted = 1, delete_time = now() where id = #{id}
+    </delete>
+
+    <delete id="deleteKnowledgeGraphByIds" parameterType="Long">
+        update knowledge_graph set is_deleted = 1, delete_time = now() where id in 
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

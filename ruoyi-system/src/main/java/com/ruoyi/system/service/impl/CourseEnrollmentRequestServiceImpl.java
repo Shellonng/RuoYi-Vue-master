@@ -4,8 +4,10 @@ import com.ruoyi.system.utils.BusinessUserUtils;
 import com.ruoyi.system.domain.CourseEnrollmentRequest;
 import com.ruoyi.system.mapper.CourseEnrollmentRequestMapper;
 import com.ruoyi.system.service.ICourseEnrollmentRequestService;
+import com.ruoyi.system.service.ICourseStudentService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -16,6 +18,9 @@ import java.util.List;
 public class CourseEnrollmentRequestServiceImpl implements ICourseEnrollmentRequestService {
     @Autowired
     private CourseEnrollmentRequestMapper enrollmentMapper;
+
+    @Autowired
+    private ICourseStudentService courseStudentService;
 
     /**
      * 查询选课申请列表
@@ -68,8 +73,32 @@ public class CourseEnrollmentRequestServiceImpl implements ICourseEnrollmentRequ
      * @return 结果
      */
     @Override
+    @Transactional
     public int updateEnrollment(CourseEnrollmentRequest enrollment) {
-        return enrollmentMapper.updateEnrollment(enrollment);
+        // 先查询原来的状态
+        CourseEnrollmentRequest oldEnrollment = enrollmentMapper.selectEnrollmentById(enrollment.getId());
+        if (oldEnrollment == null) {
+            return 0;
+        }
+
+        // 更新选课申请状态
+        int result = enrollmentMapper.updateEnrollment(enrollment);
+
+        // 如果更新成功，根据新状态操作 course_student 表
+        if (result > 0 && enrollment.getStatus() != null) {
+            Long courseId = oldEnrollment.getCourseId();
+            Long studentUserId = oldEnrollment.getStudentUserId();
+
+            if (enrollment.getStatus() == 1) {
+                // 状态改为通过：添加或恢复学生选课记录
+                courseStudentService.addOrRestoreCourseStudent(courseId, studentUserId);
+            } else if (enrollment.getStatus() == 2) {
+                // 状态改为拒绝：软删除学生选课记录
+                courseStudentService.softDeleteByCourseAndStudent(courseId, studentUserId);
+            }
+        }
+
+        return result;
     }
 
     /**
@@ -102,7 +131,21 @@ public class CourseEnrollmentRequestServiceImpl implements ICourseEnrollmentRequ
      * @return 结果
      */
     @Override
+    @Transactional
     public int batchApprove(Long[] ids, String reviewComment) {
+        // 先查询所有待审核的申请记录
+        for (Long id : ids) {
+            CourseEnrollmentRequest enrollment = enrollmentMapper.selectEnrollmentById(id);
+            if (enrollment != null) {
+                // 添加或恢复学生选课记录
+                courseStudentService.addOrRestoreCourseStudent(
+                    enrollment.getCourseId(),
+                    enrollment.getStudentUserId()
+                );
+            }
+        }
+        
+        // 批量更新申请状态为通过
         return enrollmentMapper.batchApprove(ids, reviewComment);
     }
 
@@ -114,7 +157,21 @@ public class CourseEnrollmentRequestServiceImpl implements ICourseEnrollmentRequ
      * @return 结果
      */
     @Override
+    @Transactional
     public int batchReject(Long[] ids, String reviewComment) {
+        // 先查询所有待拒绝的申请记录
+        for (Long id : ids) {
+            CourseEnrollmentRequest enrollment = enrollmentMapper.selectEnrollmentById(id);
+            if (enrollment != null) {
+                // 软删除学生选课记录
+                courseStudentService.softDeleteByCourseAndStudent(
+                    enrollment.getCourseId(),
+                    enrollment.getStudentUserId()
+                );
+            }
+        }
+        
+        // 批量更新申请状态为拒绝
         return enrollmentMapper.batchReject(ids, reviewComment);
     }
 }

@@ -446,25 +446,41 @@ public class AIService
             log.info("Generation实例创建成功");
 
             // 构建提示词
-            String systemPrompt = "你是一个专业的教育领域专家，擅长分析知识点之间的关系。请根据给定的知识点列表，分析它们之间的关系。\n\n" +
-                "关系类型说明：\n" +
-                "1. prerequisite_of: A是B的前置知识（学习B之前需要先学习A）\n" +
-                "2. similar_to: A和B是相似的概念\n" +
-                "3. extension_of: A是B的扩展（A在B的基础上深化）\n" +
-                "4. derived_from: A派生自B（A是从B衍生出来的）\n" +
-                "5. counterexample_of: A是B的反例\n\n" +
+            String systemPrompt = "你是一个专业的教育领域专家，擅长分析知识点之间的关系。请根据给定的知识点列表，深入分析它们之间的多种关系，**确保所有知识点形成一个连通图（每个知识点至少与一个其他知识点有关系）**。\n\n" +
+                "关系类型说明（请尽可能使用所有类型）：\n" +
+                "1. prerequisite_of: A是B的前置知识（学习B之前需要先学习A）—— **最重要，优先识别**\n" +
+                "2. similar_to: A和B是相似的概念（主题相近、方法类似）\n" +
+                "3. extension_of: A是B的扩展（A在B的基础上深化或拓展）\n" +
+                "4. derived_from: A派生自B（A是从B推导、演化或应用得来的）\n" +
+                "5. counterexample_of: A是B的反例或对立概念\n\n" +
                 "请返回JSON格式，包含relations数组，每个关系包含：\n" +
                 "- fromKpId: 源知识点ID\n" +
                 "- toKpId: 目标知识点ID\n" +
                 "- relationType: 关系类型（使用上述5种之一）\n" +
-                "- reason: 简短说明（可选，不超过50字）\n\n" +
-                "注意：\n" +
-                "1. 只返回确定性强的关系，不要生成所有可能的组合\n" +
-                "2. 重点关注prerequisite_of（前置关系）和extension_of（扩展关系）\n" +
-                "3. 每个知识点建议1-3个关系即可\n" +
-                "4. 返回纯JSON，不要包含其他说明文字";
+                "- reason: 简短说明（可选，不超过30字）\n\n" +
+                "**分析要求（重要）：**\n" +
+                "1. **全连通性（必须）**：确保生成的关系图是连通的，不能有孤立的知识点或分离的子图。每个知识点至少要与其他1-2个知识点建立关系\n" +
+                "2. **丰富性**：尽量为每个知识点建立2-5个不同类型的关系\n" +
+                "3. **多样性**：优先使用prerequisite_of和extension_of，但也要积极寻找similar_to、derived_from和counterexample_of关系\n" +
+                "4. **双向关系**：如果A相似于B，也可以建立B相似于A（相似、推导关系）\n" +
+                "5. **深度分析**：\n" +
+                "   - prerequisite_of: 找出学习顺序的依赖关系\n" +
+                "   - similar_to: 找出概念、方法、应用场景的相似性\n" +
+                "   - extension_of: 找出难度递进、内容深化的关系\n" +
+                "   - derived_from: 找出理论推导、公式变换、应用转化的关系\n" +
+                "   - counterexample_of: 找出概念对立、方法对比的关系\n" +
+                "6. **质量优先**：只返回确定性强、有意义的关系\n" +
+                "7. **关系数量**：目标是生成知识点数量的2-4倍的关系（如10个知识点，生成20-40条关系），确保图的连通性和密度\n\n" +
+                "返回纯JSON，不要包含其他说明文字。";
 
-            String userPrompt = "知识点列表：\n" + knowledgePoints + "\n\n请分析这些知识点之间的关系，返回JSON格式的结果。";
+            String userPrompt = "知识点列表：\n" + knowledgePoints + "\n\n" +
+                "请深入分析这些知识点之间的各种关系，**特别注意确保所有知识点连通，不能有孤立节点**，重点关注：\n" +
+                "1. 学习顺序的先后依赖（prerequisite_of）\n" +
+                "2. 概念和方法的相似性（similar_to）\n" +
+                "3. 知识的递进和深化（extension_of）\n" +
+                "4. 理论的推导和应用（derived_from）\n" +
+                "5. 概念的对立和对比（counterexample_of）\n\n" +
+                "请为每个知识点建立2-5个不同类型的关系，确保整个知识图谱是一个连通图，返回JSON格式的结果。";
 
             Message systemMessage = Message.builder()
                     .role(Role.SYSTEM.getValue())
@@ -481,8 +497,8 @@ public class AIService
                     .model("qwen-plus")
                     .messages(Arrays.asList(systemMessage, userMessage))
                     .resultFormat(GenerationParam.ResultFormat.MESSAGE)
-                    .topP(0.7)
-                    .temperature(0.3f)  // 降低随机性，提高准确性
+                    .topP(0.8)  // 提高多样性
+                    .temperature(0.5f)  // 平衡准确性和创造性
                     .build();
 
             log.info("开始调用通义千问API生成知识点关系");
