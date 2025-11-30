@@ -46,6 +46,35 @@ module.exports = {
       '^/v3/api-docs/(.*)': {
         target: baseUrl,
         changeOrigin: true
+      },
+      // 智能功能模块代理 - 8083端口后端
+      '/smart-api': {
+        target: 'http://localhost:8083',
+        changeOrigin: true,
+        secure: false,
+        pathRewrite: {
+          '^/smart-api': ''
+        },
+        // 重要：不覆盖后端的 CORS headers，只在后端没有返回时添加
+        onProxyRes: function(proxyRes, req, res) {
+          // 如果后端已经设置了 CORS headers，就不要覆盖
+          if (!proxyRes.headers['access-control-allow-origin']) {
+            proxyRes.headers['access-control-allow-origin'] = req.headers.origin || 'http://localhost:81';
+            proxyRes.headers['access-control-allow-methods'] = 'GET,POST,PUT,DELETE,OPTIONS,PATCH';
+            proxyRes.headers['access-control-allow-headers'] = 'Content-Type,Authorization,userId,userid,X-Requested-With,Accept,Origin';
+            proxyRes.headers['access-control-allow-credentials'] = 'true';
+            proxyRes.headers['access-control-max-age'] = '3600';
+          }
+        }
+      },
+      // AI Agent 服务代理 - 8000端口
+      '/ai-api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        ws: true, // 支持 WebSocket
+        pathRewrite: {
+          '^/ai-api': ''
+        }
       }
     },
     disableHostCheck: true

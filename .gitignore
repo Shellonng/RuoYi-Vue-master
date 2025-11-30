@@ -52,3 +52,8 @@ whisper-service/venv/
 __pycache__/
 *.py[cod]
 *$py.class
+
+######################################################################
+# 智能课程第三方项目文件夹
+SmartCourseThird/
+frontend/

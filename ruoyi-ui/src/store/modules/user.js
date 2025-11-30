@@ -2,6 +2,7 @@ import router from '@/router'
 import { MessageBox, } from 'element-ui'
 import { login, logout, getInfo } from '@/api/login'
 import { getToken, setToken, removeToken } from '@/utils/auth'
+import { clearBusinessUserIdCache } from '@/utils/smartRequest'
 import { isHttp, isEmpty } from "@/utils/validate"
 import defAva from '@/assets/images/profile.jpg'
 
@@ -104,6 +105,7 @@ const user = {
           commit('SET_ROLES', [])
           commit('SET_PERMISSIONS', [])
           removeToken()
+          clearBusinessUserIdCache() // 清除业务用户ID缓存
           resolve()
         }).catch(error => {
           reject(error)
@@ -116,6 +118,7 @@ const user = {
       return new Promise(resolve => {
         commit('SET_TOKEN', '')
         removeToken()
+        clearBusinessUserIdCache() // 清除业务用户ID缓存
         resolve()
       })
     }

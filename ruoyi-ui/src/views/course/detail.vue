@@ -243,7 +243,7 @@
       <!-- 题库标签页 -->
       <el-tab-pane label="题库" name="questions">
         <div class="tab-content">
-          <el-empty description="题库建设中..."></el-empty>
+          <question-bank-manager :course-id="courseId" @openSmartPaper="handleOpenSmartPaper" />
         </div>
       </el-tab-pane>
 
@@ -1127,12 +1127,12 @@ import Discussion from "@/views/discussion/index.vue";
 import CourseResourceManagement from "@/views/course/components/CourseResourceManagement.vue";
 import CourseResourceUpload from "@/views/course/components/CourseResourceUpload.vue";
 import CourseStudentManagement from "@/views/course/components/CourseStudentManagement.vue";
+import QuestionBankManager from "@/components/SmartFeatures/QuestionBankManager.vue";
 import Sortable from 'sortablejs';
 import * as echarts from 'echarts';
 // ForceGraph3D从全局window对象获取(通过index.html引入)
 
 export default {
-  name: "CourseDetail",
   components: {
     ExamManagement,
     HomeworkManagement,
@@ -1142,7 +1142,8 @@ export default {
     Discussion,
     CourseResourceManagement,
     CourseResourceUpload,
-    CourseStudentManagement
+    CourseStudentManagement,
+    QuestionBankManager
   },
   data() {
     return {
@@ -1422,6 +1423,12 @@ export default {
     }
   },
   methods: {
+    /** 打开智能组卷 */
+    handleOpenSmartPaper() {
+      this.$message.info('智能组卷功能开发中...')
+      // 这里可以跳转到智能组卷页面或打开对话框
+    },
+    
     /** 刷新课程数据（用于页面激活时更新） */
     async refreshCourseData() {
       console.log('[刷新数据] 开始刷新课程数据...');
@@ -5251,15 +5258,19 @@ export default {
           }
           
           graphData = this.prepareKpRelationGraphData();
+          
+          // 转换为对方项目组期望的格式
+          const convertedData = this.convertToTargetFormat(graphData);
+          
           saveData = {
             title: this.courseInfo.title + ' - 知识点关系图谱',
             description: '知识点及其关系图谱（仅包含知识点节点和关系连线）',
             courseId: this.courseId,
             graphType: 'COURSE', // 知识点关系类型
-            graphData: JSON.stringify(graphData),
+            graphData: JSON.stringify(convertedData),
             status: 'active'
           };
-          console.log('[保存图谱] 关系模式 - 知识点数:', graphData.nodes.length, '关系数:', graphData.links.length);
+          console.log('[保存图谱] 关系模式 - 知识点数:', convertedData.nodes.length, '关系数:', convertedData.edges.length);
         }
 
         // 调用保存API
@@ -5278,6 +5289,55 @@ export default {
       } finally {
         this.savingGraph = false;
       }
+    },
+
+    /** 转换为对方项目组期望的数据格式 */
+    convertToTargetFormat(graphData) {
+      console.log('[格式转换] 开始转换为目标格式...');
+      
+      // 关系类型映射：将下划线小写格式转换为大写格式
+      const relationTypeMap = {
+        'prerequisite_of': 'PREREQUISITE',
+        'similar_to': 'SIMILAR',
+        'extension_of': 'EXTENSION',
+        'derived_from': 'DERIVED',
+        'counterexample_of': 'COUNTEREXAMPLE',
+        'belongs_to': 'BELONGS_TO',
+        'example': 'EXAMPLE'
+      };
+      
+      // 转换节点格式
+      const nodes = graphData.nodes.map(node => {
+        // 提取知识点ID（去掉 'kp-' 前缀）
+        const kpId = node.id.replace('kp-', '');
+        
+        return {
+          kpId: parseInt(kpId),
+          id: node.id,
+          label: node.name,
+          definition: node.kpData?.description || node.kpData?.title || ''
+        };
+      });
+      
+      // 转换边格式：links -> edges
+      const edges = graphData.links.map((link, index) => {
+        // 转换关系类型为大写格式
+        const convertedType = relationTypeMap[link.relationType] || link.relationType.toUpperCase();
+        
+        return {
+          id: `edge_${index + 1}`,
+          source: link.source,
+          target: link.target,
+          type: convertedType
+        };
+      });
+      
+      console.log('[格式转换] 转换完成 - 节点:', nodes.length, '边:', edges.length);
+      
+      return {
+        nodes: nodes,
+        edges: edges  // 使用 edges 替代 links
+      };
     },
 
     /** 处理显示模式切换 */
