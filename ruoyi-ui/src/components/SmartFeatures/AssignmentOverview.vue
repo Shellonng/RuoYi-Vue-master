@@ -133,6 +133,7 @@
 
 <script>
 import smartRequest from '@/utils/smartRequest'
+import request from '@/utils/request'
 
 export default {
   name: 'AssignmentOverview',
@@ -147,6 +148,7 @@ export default {
     return {
       submissions: [],
       overviewAssignments: [],
+      courseStudents: [], // 课程学生列表
       selectedStudent: null,
       overlayX: 100,
       overlayOpacity: 0,
@@ -176,9 +178,55 @@ export default {
     
     /** 学生列表 */
     studentsList() {
+      console.log('[热力图] studentsList 计算:', {
+        courseId: this.courseId,
+        courseStudentsCount: this.courseStudents.length,
+        courseStudents: this.courseStudents
+      })
+      
+      // 如果有课程学生数据（无论是否有courseId），都显示所有课程学生（包括没提交的）
+      if (this.courseStudents.length > 0) {
+        // 获取有提交记录的学生ID集合
+        const submittedStudentIds = new Set()
+        const currentAssignmentIds = new Set(this.assignmentsList.map(a => a.id))
+        this.hmRows.forEach(r => {
+          if (currentAssignmentIds.has(r.assignmentId)) {
+            submittedStudentIds.add(String(r.studentId))
+          }
+        })
+        
+        // 将学生分为两组：有提交记录的和没有提交记录的
+        const studentsWithSubmissions = []
+        const studentsWithoutSubmissions = []
+        
+        this.courseStudents.forEach(s => {
+          const studentId = String(s.studentUserId || s.id)
+          const studentName = String(s.studentName || s.name || studentId)
+          
+          if (submittedStudentIds.has(studentId)) {
+            studentsWithSubmissions.push(studentName)
+          } else {
+            studentsWithoutSubmissions.push(studentName)
+          }
+        })
+        
+        // 合并：有提交记录的在左，没有提交记录的在右
+        const students = [...studentsWithSubmissions, ...studentsWithoutSubmissions]
+        console.log('[热力图] 使用课程学生列表（有提交:', studentsWithSubmissions.length, ', 无提交:', studentsWithoutSubmissions.length, '）:', students)
+        return students
+      }
+      
+      // 否则只显示有提交记录的学生
       const set = new Set()
-      this.hmRows.forEach(r => set.add(String(r.studentName || r.studentId)))
-      return Array.from(set)
+      const currentAssignmentIds = new Set(this.assignmentsList.map(a => a.id))
+      this.hmRows.forEach(r => {
+        if (currentAssignmentIds.has(r.assignmentId)) {
+          set.add(String(r.studentName || r.studentId))
+        }
+      })
+      const students = Array.from(set)
+      console.log('[热力图] 使用提交记录学生列表:', students)
+      return students
     },
     
     /** 作业列表 */
@@ -322,7 +370,8 @@ export default {
     async fetchData() {
       await Promise.all([
         this.fetchOverviewSubmissions(),
-        this.fetchOverviewAssignments()
+        this.fetchOverviewAssignments(),
+        this.fetchCourseStudents()
       ])
     },
     
@@ -345,6 +394,98 @@ export default {
         }))
       } catch (error) {
         console.error('[作业概览] 获取提交数据失败:', error)
+      }
+    },
+    
+    /** 获取课程学生列表 */
+    async fetchCourseStudents() {
+      console.log('[热力图] fetchCourseStudents 开始, courseId:', this.courseId)
+      
+      try {
+        if (this.courseId) {
+          // 有指定课程ID，获取该课程的学生
+          console.log('[热力图] 获取指定课程学生, courseId:', this.courseId)
+          const res = await request({
+            url: '/system/class/student/list',
+            method: 'get',
+            params: {
+              courseId: this.courseId,
+              pageNum: 1,
+              pageSize: 1000
+            }
+          })
+          
+          console.log('[热力图] API 响应:', res)
+          
+          if (res.rows && res.rows.length > 0) {
+            this.courseStudents = res.rows.map(enrollment => ({
+              studentUserId: enrollment.studentUserId,
+              studentName: enrollment.studentName || `学生${enrollment.studentUserId}`
+            }))
+            console.log('[热力图] 成功获取课程学生:', this.courseStudents.length, '人', this.courseStudents)
+          } else {
+            console.log('[热力图] API 返回空数据')
+            this.courseStudents = []
+          }
+        } else {
+          // 没有指定课程ID，获取所有课程，再聚合所有学生
+          console.log('[热力图] 获取所有课程的所有学生')
+          
+          // 1. 先获取所有课程列表
+          const coursesRes = await request({
+            url: '/course/list',
+            method: 'get',
+            params: {
+              pageNum: 1,
+              pageSize: 1000
+            }
+          })
+          
+          console.log('[热力图] 获取到课程列表:', coursesRes)
+          
+          if (!coursesRes.rows || coursesRes.rows.length === 0) {
+            console.log('[热力图] 没有课程')
+            this.courseStudents = []
+            return
+          }
+          
+          // 2. 获取每门课的学生并聚合
+          const studentMap = new Map()
+          
+          for (const course of coursesRes.rows) {
+            try {
+              const studentsRes = await request({
+                url: '/system/class/student/list',
+                method: 'get',
+                params: {
+                  courseId: course.id,
+                  pageNum: 1,
+                  pageSize: 1000
+                }
+              })
+              
+              if (studentsRes.rows && studentsRes.rows.length > 0) {
+                studentsRes.rows.forEach(enrollment => {
+                  const studentId = enrollment.studentUserId
+                  if (!studentMap.has(studentId)) {
+                    studentMap.set(studentId, {
+                      studentUserId: enrollment.studentUserId,
+                      studentName: enrollment.studentName || `学生${enrollment.studentUserId}`
+                    })
+                  }
+                })
+              }
+            } catch (err) {
+              console.warn(`[热力图] 获取课程 ${course.id} 的学生失败:`, err)
+            }
+          }
+          
+          this.courseStudents = Array.from(studentMap.values())
+          console.log('[热力图] 成功聚合所有学生（去重后）:', this.courseStudents.length, '人', this.courseStudents)
+        }
+      } catch (error) {
+        console.error('[热力图] 获取课程学生列表失败，将只显示有提交记录的学生:', error)
+        this.courseStudents = []
       }
     },
     
@@ -747,10 +888,11 @@ export default {
   border-left: 1px solid var(--border);
   box-shadow: 0 2px 5px rgba(0,0,0,0.08);
   padding: 15px;
-  display: grid;
-  grid-template-rows: auto 1fr;
+  display: flex;
+  flex-direction: column;
   z-index: 20;
   border-radius: 10px;
+  overflow: hidden;
 }
 
 .overlay-title {
@@ -800,9 +942,8 @@ export default {
   border-radius: 10px;
   box-shadow: 0 8px 24px rgba(31,42,68,0.06);
   padding: 15px;
-  display: grid;
-  grid-template-rows: auto 1fr;
-  gap: 10px;
+  display: flex;
+  flex-direction: column;
   animation: cardFade 0.3s ease both;
   box-sizing: border-box;
 }
@@ -811,7 +952,10 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1;
+  min-height: 0;
   padding: 8px 0;
 }
 

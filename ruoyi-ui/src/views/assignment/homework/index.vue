@@ -31,6 +31,10 @@
             :filter-method="filterCourse"
           >
             <el-option
+              label="全部课程"
+              :value="null"
+            />
+            <el-option
               v-for="course in filteredCourseList"
               :key="course.id"
               :label="course.title"
