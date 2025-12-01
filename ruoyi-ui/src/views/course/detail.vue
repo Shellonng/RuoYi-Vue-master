@@ -5257,7 +5257,9 @@ export default {
         // 根据显示模式准备不同的图谱数据
         if (this.graphDisplayMode === 'hierarchy') {
           // 层级显示模式：保存完整的课程-章节-小节-知识点结构
-          graphData = this.prepareGraphData();
+          const rawGraphData = this.prepareGraphData();
+          // 转换为期望的保存格式
+          graphData = this.convertHierarchyToTargetFormat(rawGraphData);
           saveData = {
             title: this.courseInfo.title + ' - 课程层级图谱',
             description: '课程-章节-小节-知识点完整层级结构图谱',
@@ -5266,7 +5268,7 @@ export default {
             graphData: JSON.stringify(graphData),
             status: 'active'
           };
-          console.log('[保存图谱] 层级模式 - 节点数:', graphData.nodes.length, '连线数:', graphData.links.length);
+          console.log('[保存图谱] 层级模式 - 节点数:', graphData.nodes.length, '连线数:', graphData.edges ? graphData.edges.length : graphData.links.length);
         } else {
           // 知识点关系模式：仅保存知识点及其关系
           if (!this.kpRelations || this.kpRelations.length === 0) {
@@ -5356,6 +5358,110 @@ export default {
         nodes: nodes,
         edges: edges  // 使用 edges 替代 links
       };
+    },
+
+    /** 转换层级图谱为目标格式（用于保存） */
+    convertHierarchyToTargetFormat(graphData) {
+      console.log('[层级格式转换] 开始转换层级图谱为目标格式...');
+      
+      // 转换节点格式
+      const nodes = graphData.nodes.map(node => {
+        const nodeId = node.id;
+        const convertedNode = {
+          id: nodeId.replace(/-/g, '_'), // 将连字符转换为下划线
+          label: node.name, // 使用 label 代替 name
+          nodeType: this.getNodeType(nodeId), // 添加节点类型
+          category: node.category,
+          symbolSize: node.symbolSize
+        };
+
+        // 根据节点类型添加特定字段
+        if (nodeId.startsWith('chapter-')) {
+          const chapterIndex = this.getChapterIndexById(nodeId.replace('chapter-', ''));
+          convertedNode.chapterIndex = chapterIndex;
+          convertedNode.color = node.itemStyle?.color || '#5470c6';
+        } else if (nodeId.startsWith('section-')) {
+          convertedNode.color = node.itemStyle?.color || '#a1bdff';
+          // 保留小节数据引用（但简化）
+          if (node.sectionData) {
+            convertedNode.sectionData = {
+              id: node.sectionData.id,
+              title: node.sectionData.title,
+              chapterId: node.sectionData.chapterId,
+              knowledgePoints: node.sectionData.knowledgePoints?.map(kp => ({
+                id: kp.id,
+                title: kp.title || kp.name,
+                description: kp.description,
+                level: kp.level
+              }))
+            };
+          }
+        } else if (nodeId.startsWith('kp-')) {
+          const kpId = parseInt(nodeId.replace('kp-', ''));
+          convertedNode.kpId = kpId;
+          convertedNode.name = node.name; // 知识点保留 name 字段
+          convertedNode.color = node.itemStyle?.color || '#5470c6';
+          convertedNode.sectionIds = node.sectionIds || [];
+          
+          // 添加知识点详细信息
+          if (node.kpData) {
+            convertedNode.kpData = {
+              id: node.kpData.id,
+              title: node.kpData.title || node.kpData.name,
+              description: node.kpData.description,
+              level: node.kpData.level,
+              courseId: node.kpData.courseId
+            };
+          }
+        }
+
+        return convertedNode;
+      });
+
+      // 转换边格式：links -> edges（保持简洁）
+      const edges = graphData.links.map((link, index) => {
+        return {
+          source: link.source.replace(/-/g, '_'), // ID格式转换
+          target: link.target.replace(/-/g, '_'),
+          lineStyle: {
+            color: link.lineStyle?.color,
+            width: link.lineStyle?.width,
+            opacity: link.lineStyle?.opacity
+          }
+        };
+      });
+
+      // 添加分类信息
+      const categories = graphData.categories || [
+        { name: '课程' },
+        { name: '章节' },
+        { name: '小节' },
+        { name: '知识点' }
+      ];
+
+      console.log('[层级格式转换] 转换完成 - 节点:', nodes.length, '边:', edges.length);
+      
+      return {
+        nodes: nodes,
+        links: edges, // 层级模式使用 links，保持一致性
+        categories: categories
+      };
+    },
+
+    /** 根据节点ID判断节点类型 */
+    getNodeType(nodeId) {
+      if (nodeId.startsWith('course-')) return 'course';
+      if (nodeId.startsWith('chapter-')) return 'chapter';
+      if (nodeId.startsWith('section-')) return 'section';
+      if (nodeId.startsWith('kp-')) return 'kp';
+      return 'unknown';
+    },
+
+    /** 根据章节ID获取章节索引 */
+    getChapterIndexById(chapterId) {
+      const id = parseInt(chapterId);
+      const index = this.chapterList.findIndex(chapter => chapter.id === id);
+      return index >= 0 ? index : 0;
     },
 
     /** 处理显示模式切换 */
