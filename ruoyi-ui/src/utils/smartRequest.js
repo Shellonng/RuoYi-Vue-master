@@ -169,9 +169,9 @@ smartService.interceptors.response.use(
   }
 )
 
-// AI Agent 服务专用（调用8000端口）
+// AI Agent 服务专用（调用8001端口）
 const aiService = axios.create({
-  baseURL: process.env.NODE_ENV === 'production' ? 'http://localhost:8000' : '/ai-api',
+  baseURL: process.env.NODE_ENV === 'production' ? 'http://localhost:8001' : '/ai-api',
   timeout: 60000, // AI 请求可能较慢，设置更长的超时时间
   headers: {
     'Content-Type': 'application/json;charset=utf-8'

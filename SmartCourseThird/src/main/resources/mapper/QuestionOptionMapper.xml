@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.exampl.smartcourse.mapper.smartpaper.QuestionOptionMapper">
+
+    <resultMap id="QuestionOptionMap" type="com.exampl.smartcourse.entity.smartpaper.QuestionOption">
+        <id property="id" column="id"/>
+        <result property="questionId" column="question_id"/>
+        <result property="optionLabel" column="option_label"/>
+        <result property="optionText" column="option_text"/>
+    </resultMap>
+
+    <insert id="batchInsert">
+        INSERT INTO question_option (question_id, option_label, option_text)
+        VALUES
+        <foreach collection="options" item="option" separator=",">
+            (#{option.questionId}, #{option.optionLabel}, #{option.optionText})
+        </foreach>
+    </insert>
+
+    <delete id="deleteByQuestionId">
+        DELETE FROM question_option
+        WHERE question_id = #{questionId}
+    </delete>
+
+    <select id="selectByQuestionIds" resultMap="QuestionOptionMap">
+        SELECT id, question_id, option_label, option_text
+        FROM question_option
+        <where>
+            <if test="questionIds != null and questionIds.size > 0">
+                question_id IN
+                <foreach collection="questionIds" item="id" open="(" separator="," close=")">
+                    #{id}
+                </foreach>
+            </if>
+            <if test="questionIds == null or questionIds.size == 0">
+                1 = 0
+            </if>
+        </where>
+    </select>
+</mapper>

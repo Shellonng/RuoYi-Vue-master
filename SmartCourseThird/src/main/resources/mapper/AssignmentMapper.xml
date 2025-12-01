@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.exampl.smartcourse.mapper.smartpaper.AssignmentMapper">
+
+    <sql id="AssignmentBaseColumns">
+        id, title, course_id, publisher_user_id, type, description, start_time,
+        end_time, status, mode, time_limit, total_score, duration,
+        allowed_file_types, create_time, update_time, is_deleted, delete_time
+    </sql>
+
+    <select id="selectAssignmentPage" resultType="com.exampl.smartcourse.entity.smartpaper.Assignment">
+        SELECT
+        <include refid="AssignmentBaseColumns"/>
+        FROM assignment
+        <where>
+            is_deleted = 0
+            <if test="courseId != null">
+                AND course_id = #{courseId}
+            </if>
+            <if test="type != null and type != ''">
+                AND type = #{type}
+            </if>
+            <if test="status != null">
+                AND status = #{status}
+            </if>
+            <if test="publisherUserId != null">
+                AND publisher_user_id = #{publisherUserId}
+            </if>
+        </where>
+        ORDER BY create_time DESC
+    </select>
+
+    <select id="selectAssignmentDetail" resultType="com.exampl.smartcourse.entity.smartpaper.Assignment">
+        SELECT
+        <include refid="AssignmentBaseColumns"/>
+        FROM assignment
+        WHERE id = #{assignmentId}
+          AND is_deleted = 0
+    </select>
+</mapper>

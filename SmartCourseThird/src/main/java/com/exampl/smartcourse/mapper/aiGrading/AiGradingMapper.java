@@ -1,0 +1,38 @@
+package com.exampl.smartcourse.mapper.aiGrading;
+
+import com.exampl.smartcourse.entity.aiGrading.AiGrading;
+import org.apache.ibatis.annotations.*;
+import java.util.List;
+
+@Mapper
+public interface AiGradingMapper {
+
+    @Select("SELECT id, assignment_submission_id AS assignmentSubmissionId, content_score AS contentScore, logic_score AS logicScore, knowledge_score AS knowledgeScore, innovation_score AS innovationScore, total_score AS totalScore, ai_comment AS aiComment, improvement_suggestions AS improvementSuggestions, covered_knowledge_points AS coveredKnowledgePoints, missing_knowledge_points AS missingKnowledgePoints, llm_model AS llmModel, llm_tokens AS llmTokens, processing_time AS processingTime, status, error_message AS errorMessage, teacher_confirmed AS teacherConfirmed, teacher_modified_score AS teacherModifiedScore, teacher_comment AS teacherComment, confirmed_by AS confirmedBy, confirmed_at AS confirmedAt, created_at AS createdAt, updated_at AS updatedAt FROM ai_grading WHERE id = #{id}")
+    AiGrading selectById(@Param("id") Long id);
+
+    @Select("SELECT id, assignment_submission_id AS assignmentSubmissionId, content_score AS contentScore, logic_score AS logicScore, knowledge_score AS knowledgeScore, innovation_score AS innovationScore, total_score AS totalScore, ai_comment AS aiComment, improvement_suggestions AS improvementSuggestions, covered_knowledge_points AS coveredKnowledgePoints, missing_knowledge_points AS missingKnowledgePoints, llm_model AS llmModel, llm_tokens AS llmTokens, processing_time AS processingTime, status, error_message AS errorMessage, teacher_confirmed AS teacherConfirmed, teacher_modified_score AS teacherModifiedScore, teacher_comment AS teacherComment, confirmed_by AS confirmedBy, confirmed_at AS confirmedAt, created_at AS createdAt, updated_at AS updatedAt FROM ai_grading WHERE assignment_submission_id = #{submissionId}")
+    AiGrading selectBySubmissionId(@Param("submissionId") Long submissionId);
+
+    @Select("SELECT id, assignment_submission_id AS assignmentSubmissionId, content_score AS contentScore, logic_score AS logicScore, knowledge_score AS knowledgeScore, innovation_score AS innovationScore, total_score AS totalScore, ai_comment AS aiComment, improvement_suggestions AS improvementSuggestions, covered_knowledge_points AS coveredKnowledgePoints, missing_knowledge_points AS missingKnowledgePoints, llm_model AS llmModel, llm_tokens AS llmTokens, processing_time AS processingTime, status, error_message AS errorMessage, teacher_confirmed AS teacherConfirmed, teacher_modified_score AS teacherModifiedScore, teacher_comment AS teacherComment, confirmed_by AS confirmedBy, confirmed_at AS confirmedAt, created_at AS createdAt, updated_at AS updatedAt FROM ai_grading WHERE confirmed_by = #{teacherId}")
+    List<AiGrading> selectByConfirmedBy(@Param("teacherId") Long teacherId);
+
+    @Insert("INSERT INTO ai_grading(assignment_submission_id, content_score, logic_score, knowledge_score, innovation_score, total_score, ai_comment, improvement_suggestions, covered_knowledge_points, missing_knowledge_points, llm_model, llm_tokens, processing_time, status, error_message, teacher_confirmed, teacher_modified_score, teacher_comment, confirmed_by, confirmed_at, created_at, updated_at) " +
+            "VALUES(#{assignmentSubmissionId}, #{contentScore}, #{logicScore}, #{knowledgeScore}, #{innovationScore}, #{totalScore}, #{aiComment}, #{improvementSuggestions}, #{coveredKnowledgePoints}, #{missingKnowledgePoints}, #{llmModel}, #{llmTokens}, #{processingTime}, #{status}, #{errorMessage}, #{teacherConfirmed}, #{teacherModifiedScore}, #{teacherComment}, #{confirmedBy}, #{confirmedAt}, #{createdAt}, #{updatedAt})")
+    @Options(useGeneratedKeys = true, keyProperty = "id")
+    int insert(AiGrading grading);
+
+    @Update("UPDATE ai_grading SET assignment_submission_id=#{assignmentSubmissionId}, content_score=#{contentScore}, logic_score=#{logicScore}, knowledge_score=#{knowledgeScore}, innovation_score=#{innovationScore}, total_score=#{totalScore}, ai_comment=#{aiComment}, improvement_suggestions=#{improvementSuggestions}, covered_knowledge_points=#{coveredKnowledgePoints}, missing_knowledge_points=#{missingKnowledgePoints}, llm_model=#{llmModel}, llm_tokens=#{llmTokens}, processing_time=#{processingTime}, status=#{status}, error_message=#{errorMessage}, teacher_confirmed=#{teacherConfirmed}, teacher_modified_score=#{teacherModifiedScore}, teacher_comment=#{teacherComment}, confirmed_by=#{confirmedBy}, confirmed_at=#{confirmedAt}, created_at=#{createdAt}, updated_at=#{updatedAt} WHERE id=#{id}")
+    int update(AiGrading grading);
+
+    @Delete("DELETE FROM ai_grading WHERE id = #{id}")
+    int deleteById(@Param("id") Long id);
+
+    @Select("SELECT id, assignment_submission_id AS assignmentSubmissionId, content_score AS contentScore, logic_score AS logicScore, knowledge_score AS knowledgeScore, innovation_score AS innovationScore, total_score AS totalScore, ai_comment AS aiComment, improvement_suggestions AS improvementSuggestions, covered_knowledge_points AS coveredKnowledgePoints, missing_knowledge_points AS missingKnowledgePoints, llm_model AS llmModel, llm_tokens AS llmTokens, processing_time AS processingTime, status, error_message AS errorMessage, teacher_confirmed AS teacherConfirmed, teacher_modified_score AS teacherModifiedScore, teacher_comment AS teacherComment, confirmed_by AS confirmedBy, confirmed_at AS confirmedAt, created_at AS createdAt, updated_at AS updatedAt FROM ai_grading WHERE assignment_submission_id = #{submissionId} ORDER BY created_at ASC")
+    List<AiGrading> selectAllBySubmissionId(@Param("submissionId") Long submissionId);
+
+    @Select("SELECT id, assignment_submission_id AS assignmentSubmissionId, content_score AS contentScore, logic_score AS logicScore, knowledge_score AS knowledgeScore, innovation_score AS innovationScore, total_score AS totalScore, ai_comment AS aiComment, improvement_suggestions AS improvementSuggestions, covered_knowledge_points AS coveredKnowledgePoints, missing_knowledge_points AS missingKnowledgePoints, llm_model AS llmModel, llm_tokens AS llmTokens, processing_time AS processingTime, status, error_message AS errorMessage, teacher_confirmed AS teacherConfirmed, teacher_modified_score AS teacherModifiedScore, teacher_comment AS teacherComment, confirmed_by AS confirmedBy, confirmed_at AS confirmedAt, created_at AS createdAt, updated_at AS updatedAt FROM ai_grading WHERE assignment_submission_id = #{submissionId} ORDER BY created_at DESC LIMIT 1")
+    AiGrading selectLatestBySubmissionId(@Param("submissionId") Long submissionId);
+
+    @Select("SELECT g.id, g.assignment_submission_id AS assignmentSubmissionId, g.content_score AS contentScore, g.logic_score AS logicScore, g.knowledge_score AS knowledgeScore, g.innovation_score AS innovationScore, g.total_score AS totalScore, g.ai_comment AS aiComment, g.improvement_suggestions AS improvementSuggestions, g.covered_knowledge_points AS coveredKnowledgePoints, g.missing_knowledge_points AS missingKnowledgePoints, g.llm_model AS llmModel, g.llm_tokens AS llmTokens, g.processing_time AS processingTime, g.status AS status, g.error_message AS errorMessage, g.teacher_confirmed AS teacherConfirmed, g.teacher_modified_score AS teacherModifiedScore, g.teacher_comment AS teacherComment, g.confirmed_by AS confirmedBy, g.confirmed_at AS confirmedAt, g.created_at AS createdAt, g.updated_at AS updatedAt FROM ai_grading g JOIN (SELECT assignment_submission_id AS sid, MAX(created_at) AS mc FROM ai_grading GROUP BY assignment_submission_id) t ON g.assignment_submission_id = t.sid AND g.created_at = t.mc WHERE g.status IN ('processing','failed')")
+    List<AiGrading> selectLatestUnresolved();
+}

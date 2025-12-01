@@ -1,0 +1,161 @@
+spring:
+  application:
+    name: assessment-expert
+
+  # 环境配置（dev/test/prod）
+  profiles:
+    active: dev
+
+  # 数据源配置
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:assessment}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:123456}
+
+    # 连接池配置（HikariCP）
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      auto-commit: true
+      idle-timeout: 30000
+      pool-name: AssessmentHikariCP
+      max-lifetime: 1800000
+      connection-timeout: 30000
+
+  # Redis配置（可选）
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: 0
+      timeout: 5000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+          max-wait: -1ms
+
+  # 文件上传配置
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 50MB
+      max-request-size: 100MB
+      file-size-threshold: 2KB
+
+  # Jackson配置
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+    serialization:
+      write-dates-as-timestamps: false
+    default-property-inclusion: non_null
+
+# MyBatis Plus配置
+mybatis-plus:
+  # Mapper XML文件位置
+  mapper-locations: classpath*:mapper/**/*.xml
+
+  # 实体类扫描路径
+  type-aliases-package: com.assessment.entity
+
+  # 配置
+  configuration:
+    # 驼峰命名转换
+    map-underscore-to-camel-case: true
+    # 日志输出
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    # 缓存
+    cache-enabled: true
+
+  # 全局配置
+  global-config:
+    db-config:
+      # 主键类型（自增）
+      id-type: auto
+      # 逻辑删除字段
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+      # 表名前缀
+      table-prefix: ""
+
+# Swagger/OpenAPI配置
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+  info:
+    title: 评估专家 API文档
+    description: 智能化评估与学情分析引擎接口文档
+    version: 1.0.0
+    contact:
+      name: 开发团队
+      email: team@example.com
+
+# 服务器配置
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+# 日志配置
+logging:
+  level:
+    root: INFO
+    com.assessment: DEBUG
+    com.assessment.mapper: DEBUG
+  pattern:
+    console: '%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n'
+    file: '%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n'
+  file:
+    name: logs/assessment-expert.log
+    max-size: 10MB
+    max-history: 30
+
+# 自定义配置
+assessment:
+  # LLM配置
+  llm:
+    # 推荐使用阿里通义千问
+    provider: qwen  # qwen/openai/moonshot
+    api-key: ${LLM_API_KEY:your-api-key-here}
+    model: qwen-max
+    base-url: https://dashscope.aliyuncs.com/api/v1
+    timeout: 60000
+
+  # 文件存储配置
+  file:
+    upload-dir: ./uploads
+    allowed-extensions:
+      - pdf
+      - docx
+      - doc
+      - txt
+    max-size: 52428800  # 50MB
+
+  # 外部服务配置
+  external:
+    # 子项目一（课程大脑）接口地址
+    project-one-url: ${PROJECT_ONE_URL:http://localhost:8081/api}
+    # 子项目二（学习向导）接口地址
+    project-two-url: ${PROJECT_TWO_URL:http://localhost:8082/api}
+
+  # 分析配置
+  analysis:
+    # 薄弱知识点阈值
+    weak-threshold: 60
+    # 优秀知识点阈值
+    excellent-threshold: 85

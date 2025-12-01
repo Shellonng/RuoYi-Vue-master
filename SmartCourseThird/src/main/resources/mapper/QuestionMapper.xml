@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.exampl.smartcourse.mapper.smartpaper.QuestionMapper">
+
+    <sql id="QuestionBaseColumns">
+        id, title, question_type, difficulty, correct_answer, explanation,
+        knowledge_point, course_id, chapter_id, created_by,
+        create_time, update_time, is_deleted, delete_time
+    </sql>
+
+    <select id="selectQuestionPage" resultType="com.exampl.smartcourse.entity.smartpaper.Question">
+        SELECT
+        <include refid="QuestionBaseColumns"/>
+        FROM question
+        <where>
+            is_deleted = 0
+            <if test="req.courseId != null">
+                AND course_id = #{req.courseId}
+            </if>
+            <if test="req.chapterId != null">
+                AND chapter_id = #{req.chapterId}
+            </if>
+            <if test="req.questionType != null and req.questionType != ''">
+                AND question_type = #{req.questionType}
+            </if>
+            <if test="req.difficulty != null">
+                AND difficulty = #{req.difficulty}
+            </if>
+            <if test="req.knowledgePoint != null and req.knowledgePoint != ''">
+                AND knowledge_point LIKE CONCAT('%', #{req.knowledgePoint}, '%')
+            </if>
+            <if test="req.title != null and req.title != ''">
+                AND title LIKE CONCAT('%', #{req.title}, '%')
+            </if>
+            <if test="req.createdBy != null">
+                AND created_by = #{req.createdBy}
+            </if>
+        </where>
+        ORDER BY
+        <choose>
+            <when test="req.sortField == 'difficulty'">
+                difficulty
+            </when>
+            <when test="req.sortField == 'update_time'">
+                update_time
+            </when>
+            <otherwise>
+                create_time
+            </otherwise>
+        </choose>
+        <choose>
+            <when test="req.sortOrder != null and req.sortOrder.equalsIgnoreCase('asc')">
+                ASC
+            </when>
+            <otherwise>
+                DESC
+            </otherwise>
+        </choose>
+    </select>
+
+    <select id="selectRandomQuestions" resultType="com.exampl.smartcourse.entity.smartpaper.Question">
+        SELECT
+        <include refid="QuestionBaseColumns"/>
+        FROM question
+        <where>
+            is_deleted = 0
+            <if test="courseId != null">
+                AND course_id = #{courseId}
+            </if>
+            <if test="chapterIds != null and chapterIds.size > 0">
+                AND chapter_id IN
+                <foreach collection="chapterIds" item="chapterId" open="(" separator="," close=")">
+                    #{chapterId}
+                </foreach>
+            </if>
+            <if test="questionType != null and questionType != ''">
+                AND question_type = #{questionType}
+            </if>
+            <if test="difficulty != null">
+                AND difficulty = #{difficulty}
+            </if>
+            <if test="knowledgePoints != null and knowledgePoints.size > 0">
+                AND knowledge_point IN
+                <foreach collection="knowledgePoints" item="kp" open="(" separator="," close=")">
+                    #{kp}
+                </foreach>
+            </if>
+            <if test="excludeIds != null and excludeIds.size > 0">
+                AND id NOT IN
+                <foreach collection="excludeIds" item="qid" open="(" separator="," close=")">
+                    #{qid}
+                </foreach>
+            </if>
+        </where>
+        ORDER BY RAND()
+        LIMIT #{limit}
+    </select>
+
+    <select id="countByQuestionType" resultType="java.util.Map">
+        SELECT question_type AS questionType, COUNT(1) AS count
+        FROM question
+        <where>
+            is_deleted = 0
+            <if test="courseId != null">
+                AND course_id = #{courseId}
+            </if>
+            <if test="chapterIds != null and chapterIds.size > 0">
+                AND chapter_id IN
+                <foreach collection="chapterIds" item="cid" open="(" separator="," close=")">
+                    #{cid}
+                </foreach>
+            </if>
+        </where>
+        GROUP BY question_type
+    </select>
+
+    <select id="countByDifficulty" resultType="java.util.Map">
+        SELECT difficulty, COUNT(1) AS count
+        FROM question
+        <where>
+            is_deleted = 0
+            <if test="courseId != null">
+                AND course_id = #{courseId}
+            </if>
+            <if test="chapterIds != null and chapterIds.size > 0">
+                AND chapter_id IN
+                <foreach collection="chapterIds" item="cid" open="(" separator="," close=")">
+                    #{cid}
+                </foreach>
+            </if>
+        </where>
+        GROUP BY difficulty
+        ORDER BY difficulty
+    </select>
+
+    <select id="countByKnowledgePoint" resultType="java.util.Map">
+        SELECT 
+            q.knowledge_point AS knowledgePoint, 
+            IFNULL(kp.title, CONCAT('知识点 ', q.knowledge_point)) AS knowledgePointName,
+            COUNT(1) AS count
+        FROM question q
+        LEFT JOIN knowledge_point kp ON CAST(q.knowledge_point AS UNSIGNED) = kp.id
+        <where>
+            q.is_deleted = 0
+            <if test="courseId != null">
+                AND q.course_id = #{courseId}
+            </if>
+            <if test="chapterIds != null and chapterIds.size > 0">
+                AND q.chapter_id IN
+                <foreach collection="chapterIds" item="cid" open="(" separator="," close=")">
+                    #{cid}
+                </foreach>
+            </if>
+        </where>
+        GROUP BY q.knowledge_point, kp.title
+    </select>
+</mapper>

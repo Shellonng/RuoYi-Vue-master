@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>WebSocket 测试工具</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+    }
+    .container {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 20px;
+      background: #f9f9f9;
+    }
+    .input-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    input, textarea {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    button {
+      padding: 10px 20px;
+      margin-right: 10px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .btn-primary { background: #409eff; color: white; }
+    .btn-success { background: #67c23a; color: white; }
+    .btn-danger { background: #f56c6c; color: white; }
+    .btn-primary:hover { background: #66b1ff; }
+    .btn-success:hover { background: #85ce61; }
+    .btn-danger:hover { background: #f78989; }
+    .status {
+      padding: 10px;
+      margin: 15px 0;
+      border-radius: 4px;
+      font-weight: bold;
+    }
+    .status.connected { background: #f0f9ff; color: #409eff; }
+    .status.disconnected { background: #fef0f0; color: #f56c6c; }
+    .messages {
+      margin-top: 20px;
+      padding: 15px;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .message {
+      padding: 8px;
+      margin: 5px 0;
+      border-left: 3px solid #409eff;
+      background: #f0f9ff;
+    }
+    .message.sent {
+      border-left-color: #67c23a;
+      background: #f0f9ff;
+    }
+    .message.received {
+      border-left-color: #409eff;
+      background: #ecf5ff;
+    }
+    .message.error {
+      border-left-color: #f56c6c;
+      background: #fef0f0;
+    }
+    .timestamp {
+      font-size: 12px;
+      color: #909399;
+      margin-left: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🔌 WebSocket 测试工具</h1>
+  <p>用于测试 AI 智能组卷 WebSocket 连接</p>
+
+  <div class="container">
+    <div class="input-group">
+      <label>WebSocket URL:</label>
+      <input type="text" id="wsUrl" value="ws://localhost:8001/ws/workflow/conversations/test-conv-id/messages">
+    </div>
+
+    <div class="input-group">
+      <label>Conversation ID:</label>
+      <input type="text" id="convId" value="test-conv-id">
+    </div>
+
+    <div class="status" id="status" class="disconnected">
+      ⚫ 未连接
+    </div>
+
+    <div>
+      <button class="btn-primary" onclick="connect()">🔌 连接</button>
+      <button class="btn-danger" onclick="disconnect()">❌ 断开</button>
+      <button class="btn-success" onclick="clearMessages()">🗑️ 清空消息</button>
+    </div>
+
+    <div class="input-group" style="margin-top: 20px;">
+      <label>发送消息:</label>
+      <textarea id="message" rows="3" placeholder='{"message": "我需要一份神经网络测试"}'>{"message": "我需要一份神经网络测试，难度3"}</textarea>
+      <button class="btn-success" style="margin-top: 10px;" onclick="sendMessage()">📤 发送</button>
+    </div>
+
+    <div class="messages" id="messages">
+      <p style="color: #909399;">等待消息...</p>
+    </div>
+  </div>
+
+  <script>
+    let ws = null;
+
+    function connect() {
+      const url = document.getElementById('wsUrl').value;
+      const status = document.getElementById('status');
+      
+      try {
+        ws = new WebSocket(url);
+        
+        ws.onopen = () => {
+          status.className = 'status connected';
+          status.innerHTML = '🟢 已连接';
+          addMessage('系统', '✅ WebSocket 连接成功', 'received');
+        };
+        
+        ws.onmessage = (event) => {
+          addMessage('服务器', event.data, 'received');
+          
+          // 尝试解析 JSON
+          try {
+            const data = JSON.parse(event.data);
+            console.log('📨 收到消息:', data);
+            
+            // 显示解析后的结构
+            const formatted = JSON.stringify(data, null, 2);
+            addMessage('解析结果', `<pre style="margin:0">${formatted}</pre>`, 'received');
+          } catch (e) {
+            console.log('📨 收到纯文本:', event.data);
+          }
+        };
+        
+        ws.onerror = (error) => {
+          console.error('❌ WebSocket 错误:', error);
+          addMessage('错误', '连接错误', 'error');
+        };
+        
+        ws.onclose = (event) => {
+          status.className = 'status disconnected';
+          status.innerHTML = '⚫ 已断开';
+          addMessage('系统', `🔌 连接关闭 (code: ${event.code})`, 'error');
+          ws = null;
+        };
+      } catch (error) {
+        addMessage('错误', error.message, 'error');
+      }
+    }
+
+    function disconnect() {
+      if (ws) {
+        ws.close(1000, 'User closed');
+        ws = null;
+      }
+    }
+
+    function sendMessage() {
+      const messageInput = document.getElementById('message');
+      const message = messageInput.value.trim();
+      
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        alert('WebSocket 未连接！');
+        return;
+      }
+      
+      try {
+        ws.send(message);
+        addMessage('客户端', message, 'sent');
+        console.log('📤 发送消息:', message);
+      } catch (error) {
+        addMessage('错误', error.message, 'error');
+      }
+    }
+
+    function addMessage(from, content, type = 'received') {
+      const messagesDiv = document.getElementById('messages');
+      if (messagesDiv.children[0]?.textContent === '等待消息...') {
+        messagesDiv.innerHTML = '';
+      }
+      
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `message ${type}`;
+      
+      const timestamp = new Date().toLocaleTimeString();
+      messageDiv.innerHTML = `<strong>${from}</strong><span class="timestamp">${timestamp}</span><br>${content}`;
+      
+      messagesDiv.appendChild(messageDiv);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    function clearMessages() {
+      document.getElementById('messages').innerHTML = '<p style="color: #909399;">等待消息...</p>';
+    }
+
+    // 回车发送
+    document.getElementById('message').addEventListener('keypress', (e) => {
+      if (e.ctrlKey && e.key === 'Enter') {
+        sendMessage();
+      }
+    });
+  </script>
+</body>
+</html>

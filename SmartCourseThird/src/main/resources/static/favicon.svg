@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- 背景圆 -->
+  <circle cx="50" cy="50" r="48" fill="url(#grad1)"/>
+  
+  <!-- 毕业帽 -->
+  <g transform="translate(50, 50)">
+    <!-- 帽顶 -->
+    <polygon points="-25,-10 25,-10 30,-15 -30,-15" fill="#ffffff"/>
+    <!-- 帽身 -->
+    <ellipse cx="0" cy="-10" rx="25" ry="6" fill="#f0f0f0"/>
+    <!-- 流苏 -->
+    <line x1="25" y1="-15" x2="30" y2="-25" stroke="#ffd700" stroke-width="2"/>
+    <circle cx="30" cy="-25" r="3" fill="#ffd700"/>
+    
+    <!-- 书本 -->
+    <rect x="-20" y="0" width="40" height="25" rx="2" fill="#ffffff"/>
+    <line x1="-20" y1="5" x2="20" y2="5" stroke="#667eea" stroke-width="1.5"/>
+    <line x1="-20" y1="10" x2="20" y2="10" stroke="#667eea" stroke-width="1.5"/>
+    <line x1="-20" y1="15" x2="20" y2="15" stroke="#667eea" stroke-width="1.5"/>
+    <line x1="-20" y1="20" x2="20" y2="20" stroke="#667eea" stroke-width="1.5"/>
+  </g>
+</svg>

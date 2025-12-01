@@ -67,9 +67,9 @@ module.exports = {
           }
         }
       },
-      // AI Agent 服务代理 - 8000端口
+      // AI Agent 服务代理 - 8001端口
       '/ai-api': {
-        target: 'http://localhost:8000',
+        target: 'http://localhost:8001',
         changeOrigin: true,
         ws: true, // 支持 WebSocket
         pathRewrite: {

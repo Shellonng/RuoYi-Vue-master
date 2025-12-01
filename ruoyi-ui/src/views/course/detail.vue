@@ -1118,6 +1118,18 @@
       @close="examDialogVisible = false"
       @submit="handleExamSubmit"
     />
+
+    <!-- AI 智能组卷对话框 -->
+    <smart-paper-dialog
+      :visible.sync="smartPaperDialogVisible"
+      :course-id="courseId"
+    />
+
+    <!-- 快速配置组卷对话框 -->
+    <quick-paper-dialog
+      :visible.sync="quickPaperDialogVisible"
+      :course-id="courseId"
+    />
   </div>
 </template>
 
@@ -1142,6 +1154,8 @@ import CourseResourceManagement from "@/views/course/components/CourseResourceMa
 import CourseResourceUpload from "@/views/course/components/CourseResourceUpload.vue";
 import CourseStudentManagement from "@/views/course/components/CourseStudentManagement.vue";
 import QuestionBankManager from "@/components/SmartFeatures/QuestionBankManager.vue";
+import SmartPaperDialog from "@/components/SmartFeatures/SmartPaperDialog.vue";
+import QuickPaperDialog from "@/components/SmartFeatures/QuickPaperDialog.vue";
 import StudentAnalysisTab from "@/views/course/components/StudentAnalysisTab.vue";
 import VideoAnalysisTab from "@/views/course/components/VideoAnalysisTab.vue";
 import Sortable from 'sortablejs';
@@ -1160,6 +1174,8 @@ export default {
     CourseResourceUpload,
     CourseStudentManagement,
     QuestionBankManager,
+    SmartPaperDialog,
+    QuickPaperDialog,
     StudentAnalysisTab,
     VideoAnalysisTab
   },
@@ -1167,6 +1183,8 @@ export default {
     return {
       courseId: null,
       activeTab: 'chapters',
+      smartPaperDialogVisible: false, // AI 智能组卷对话框
+      quickPaperDialogVisible: false, // 快速配置组卷对话框
       courseInfo: {
         title: '',
         description: '',
@@ -1443,8 +1461,8 @@ export default {
   methods: {
     /** 打开智能组卷 */
     handleOpenSmartPaper() {
-      this.$message.info('智能组卷功能开发中...')
-      // 这里可以跳转到智能组卷页面或打开对话框
+      // 直接打开 AI 对话组卷
+      this.smartPaperDialogVisible = true
     },
     
     /** 刷新课程数据（用于页面激活时更新） */
